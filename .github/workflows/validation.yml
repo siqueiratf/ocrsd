@@ -1,0 +1,38 @@
+name: Validate synthetic documents
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --python 3.11
+      - run: uv run --no-sync python -m compileall -q src tests scripts
+      - run: make check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-validation
+          path: output/smoke/
+          if-no-files-found: error
+          retention-days: 14

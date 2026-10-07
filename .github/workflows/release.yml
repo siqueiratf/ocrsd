@@ -1,0 +1,69 @@
+name: Publish release
+
+on:
+  push:
+    tags: ['V*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --python 3.11
+      - run: make check
+      - name: Package source and synthetic documents
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          git archive HEAD --prefix="ocrsd-${RELEASE_TAG}/" -o "dist/ocrsd-${RELEASE_TAG}.tar.gz"
+          uv run --no-sync python - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path('output/smoke')
+          target = Path('dist') / f"synthetic-validation-{os.environ['RELEASE_TAG']}.zip"
+          with ZipFile(target, 'w', compression=ZIP_DEFLATED) as archive:
+              archive.write(root / 'validation.json', 'validation.json')
+              for folder in sorted(root.glob('*/dataset')):
+                  for path in sorted(folder.iterdir()):
+                      if path.is_file():
+                          archive.write(path, path.relative_to(root))
+          PY
+      - name: Publish changelog and assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: >-
+          uv run --no-sync python -m scripts.publish_release
+          --tag "$RELEASE_TAG"
+          --assets "dist/ocrsd-${RELEASE_TAG}.tar.gz"
+          "dist/synthetic-validation-${RELEASE_TAG}.zip" output/smoke/validation.json
+      - name: Record publication receipt
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin refs/notes/releases:refs/notes/releases || true
+          git notes --ref=releases add -f -F dist/release.json HEAD
+          git push origin refs/notes/releases
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-validation
+          path: |
+            dist/
+            output/smoke/validation.json
+          retention-days: 14
