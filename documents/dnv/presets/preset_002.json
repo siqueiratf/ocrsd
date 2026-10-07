@@ -1,0 +1,20 @@
+{
+  "preset_version": 1,
+  "mode": "traditional",
+  "parameters": {
+    "hue_range": [
+      80,
+      0
+    ],
+    "sat_min": 10,
+    "gray_max": 102,
+    "ink_threshold": 250,
+    "min_component_area": 4,
+    "close_kernel": 3,
+    "background_threshold": 245,
+    "brightness": -100,
+    "contrast": -45,
+    "exposure": 0.8,
+    "grayscale_only": true
+  }
+}

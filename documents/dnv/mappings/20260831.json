@@ -1,0 +1,3423 @@
+{
+  "template_id": "dnv_v1",
+  "dpi": 300,
+  "page_size_px": [
+    4330,
+    5717
+  ],
+  "source_template": "/home/ts/ocrsd/documents/dnv/template.pdf",
+  "fields": [
+    {
+      "field_id": "1",
+      "label": "nome_rn",
+      "description": "Nome do Recém-nascido (RN)",
+      "bbox": [
+        532,
+        406,
+        1652,
+        490
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "5",
+      "label": "Sexo",
+      "description": "",
+      "bbox": [
+        2276,
+        589,
+        3066,
+        742
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "sexo_ignorado",
+          "label": "Ignorado",
+          "bbox": [
+            2720,
+            596,
+            2778,
+            657
+          ]
+        },
+        {
+          "element_id": "sexo_masculino",
+          "label": "Masculino",
+          "bbox": [
+            2291,
+            598,
+            2356,
+            659
+          ]
+        },
+        {
+          "element_id": "sexo_feminino",
+          "label": "Feminino",
+          "bbox": [
+            2291,
+            672,
+            2356,
+            733
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "raca_cor",
+      "label": "Raça / cor do Recém-nascido",
+      "description": "",
+      "bbox": [
+        3134,
+        594,
+        4065,
+        727
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "raca_cor_0",
+          "label": "Raça / cor do Recém-nascido 0",
+          "bbox": [
+            3211,
+            601,
+            3261,
+            650
+          ]
+        },
+        {
+          "element_id": "raca_cor_1",
+          "label": "Raça / cor do Recém-nascido 1",
+          "bbox": [
+            3212,
+            672,
+            3262,
+            721
+          ]
+        },
+        {
+          "element_id": "raca_cor_2",
+          "label": "Raça / cor do Recém-nascido 2",
+          "bbox": [
+            3508,
+            598,
+            3558,
+            647
+          ]
+        },
+        {
+          "element_id": "raca_cor_3",
+          "label": "Raça / cor do Recém-nascido 3",
+          "bbox": [
+            3511,
+            670,
+            3561,
+            719
+          ]
+        },
+        {
+          "element_id": "raca_cor_4",
+          "label": "Raça / cor do Recém-nascido 4",
+          "bbox": [
+            3809,
+            597,
+            3859,
+            654
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "2",
+      "label": "Data e Hora do Nascimento",
+      "description": "",
+      "bbox": [
+        426,
+        617,
+        1672,
+        748
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "max_edit_distance": 1,
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "elements": [
+        {
+          "element_id": "data_d0",
+          "label": "Data D0",
+          "bbox": [
+            444,
+            622,
+            582,
+            734
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "data_d1",
+          "label": "Data D1",
+          "bbox": [
+            593,
+            621,
+            731,
+            733
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "data_m0",
+          "label": "Data M0",
+          "bbox": [
+            744,
+            618,
+            891,
+            732
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "data_m1",
+          "label": "Data M1",
+          "bbox": [
+            897,
+            617,
+            1044,
+            731
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "data_y0",
+          "label": "Data Y0",
+          "bbox": [
+            1053,
+            616,
+            1200,
+            730
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "data_y1",
+          "label": "Data Y1",
+          "bbox": [
+            1206,
+            615,
+            1353,
+            729
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "data_y2",
+          "label": "Data Y2",
+          "bbox": [
+            1359,
+            614,
+            1506,
+            732
+          ],
+          "index": 6
+        },
+        {
+          "element_id": "data_y3",
+          "label": "Data Y3",
+          "bbox": [
+            1515,
+            615,
+            1662,
+            733
+          ],
+          "index": 7
+        }
+      ]
+    },
+    {
+      "field_id": "12",
+      "label": "Perímetro cefálico",
+      "description": "",
+      "bbox": [
+        2481,
+        804,
+        2914,
+        954
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "perimetro_0",
+          "label": "Perimetro 0",
+          "bbox": [
+            2491,
+            819,
+            2701,
+            944
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "perimetro_1",
+          "label": "Perimetro 1",
+          "bbox": [
+            2739,
+            813,
+            2899,
+            941
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "7",
+      "label": "Peso ao nascer",
+      "description": "",
+      "bbox": [
+        435,
+        809,
+        906,
+        970
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "peso_0",
+          "label": "Peso 0",
+          "bbox": [
+            466,
+            847,
+            627,
+            957
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "peso_1",
+          "label": "Peso 1",
+          "bbox": [
+            657,
+            858,
+            772,
+            962
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "peso_2",
+          "label": "Peso 2",
+          "bbox": [
+            798,
+            856,
+            896,
+            959
+          ],
+          "index": 2
+        }
+      ]
+    },
+    {
+      "field_id": "comprimento",
+      "label": "Comprimento",
+      "description": "",
+      "bbox": [
+        1894,
+        817,
+        2312,
+        967
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "comprimento_0",
+          "label": "Comprimento 0",
+          "bbox": [
+            1900,
+            821,
+            2026,
+            941
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "comprimento_1",
+          "label": "Comprimento 1",
+          "bbox": [
+            2034,
+            823,
+            2160,
+            943
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "comprimento_2",
+          "label": "Comprimento 2",
+          "bbox": [
+            2174,
+            825,
+            2300,
+            945
+          ],
+          "index": 2
+        }
+      ]
+    },
+    {
+      "field_id": "8",
+      "label": "Índice de Apgar 1",
+      "description": "",
+      "bbox": [
+        1092,
+        823,
+        1472,
+        955
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "Apgar 0",
+          "label": "apgar_0",
+          "bbox": [
+            1109,
+            842,
+            1272,
+            938
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "Apgar 1",
+          "label": "apgar_1",
+          "bbox": [
+            1297,
+            841,
+            1460,
+            937
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "Apgar 2",
+          "label": "apgar_2",
+          "bbox": [
+            1509,
+            863,
+            1653,
+            955
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "Apgar 3",
+          "label": "apgar_3",
+          "bbox": [
+            1693,
+            860,
+            1837,
+            952
+          ],
+          "index": 3
+        }
+      ]
+    },
+    {
+      "field_id": "9",
+      "label": "Índice de Apgar 2",
+      "description": "",
+      "bbox": [
+        1506,
+        858,
+        1870,
+        961
+      ]
+    },
+    {
+      "field_id": "anomalia",
+      "label": "Detectada alguma anomalia?",
+      "description": "",
+      "bbox": [
+        3120,
+        861,
+        4055,
+        962
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "anomalia_0",
+          "label": "Detectada alguma anomalia? 0",
+          "bbox": [
+            3183,
+            896,
+            3235,
+            945
+          ]
+        },
+        {
+          "element_id": "anomalia_1",
+          "label": "Detectada alguma anomalia? 1",
+          "bbox": [
+            3472,
+            893,
+            3524,
+            942
+          ]
+        },
+        {
+          "element_id": "anomalia_2",
+          "label": "Detectada alguma anomalia? 2",
+          "bbox": [
+            3766,
+            892,
+            3818,
+            941
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "10",
+      "label": "Local da ocorrência",
+      "description": "",
+      "bbox": [
+        445,
+        1050,
+        1565,
+        1204
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "10_0",
+          "label": "Local da ocorrência 0",
+          "bbox": [
+            508,
+            1069,
+            557,
+            1118
+          ]
+        },
+        {
+          "element_id": "10_1",
+          "label": "Local da ocorrência 1",
+          "bbox": [
+            509,
+            1131,
+            558,
+            1180
+          ]
+        },
+        {
+          "element_id": "10_2",
+          "label": "Local da ocorrência 2",
+          "bbox": [
+            920,
+            1064,
+            969,
+            1113
+          ]
+        },
+        {
+          "element_id": "10_3",
+          "label": "Local da ocorrência 3",
+          "bbox": [
+            919,
+            1135,
+            968,
+            1184
+          ]
+        },
+        {
+          "element_id": "10_4",
+          "label": "Local da ocorrência 4",
+          "bbox": [
+            1192,
+            1064,
+            1241,
+            1113
+          ]
+        },
+        {
+          "element_id": "10_5",
+          "label": "Local da ocorrência 5",
+          "bbox": [
+            1451,
+            1086,
+            1500,
+            1135
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "11",
+      "label": "Estabelecimento",
+      "description": "",
+      "bbox": [
+        1591,
+        1082,
+        2348,
+        1190
+      ]
+    },
+    {
+      "field_id": "14",
+      "label": "Endereço da ocorrência, se fora do estab. ou da resid. da(o) parturiente (rua, praça, avenida, etc)",
+      "description": "",
+      "bbox": [
+        439,
+        1295,
+        1457,
+        1394
+      ]
+    },
+    {
+      "field_id": "15",
+      "label": "Número",
+      "description": "",
+      "bbox": [
+        2511,
+        1287,
+        2814,
+        1391
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "15_0",
+          "label": "Número 0",
+          "bbox": [
+            2518,
+            1293,
+            2599,
+            1384
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "15_1",
+          "label": "Número 1",
+          "bbox": [
+            2622,
+            1294,
+            2703,
+            1385
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "15_2",
+          "label": "Número 2",
+          "bbox": [
+            2722,
+            1294,
+            2803,
+            1385
+          ],
+          "index": 2
+        }
+      ]
+    },
+    {
+      "field_id": "uf",
+      "label": "UF",
+      "description": "",
+      "bbox": [
+        3859,
+        1499,
+        4069,
+        1597
+      ],
+      "data_type": "uf",
+      "validation": {
+        "allowed_values": [
+          "AC",
+          "AL",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          "MA",
+          "MT",
+          "MS",
+          "MG",
+          "PA",
+          "PB",
+          "PR",
+          "PE",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SC",
+          "SP",
+          "SE",
+          "TO"
+        ],
+        "max_edit_distance": 1,
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "17",
+      "label": "Município de ocorrência",
+      "description": "",
+      "bbox": [
+        1827,
+        1475,
+        3120,
+        1591
+      ]
+    },
+    {
+      "field_id": "16",
+      "label": "Bairro/Distrito",
+      "description": "",
+      "bbox": [
+        442,
+        1492,
+        1457,
+        1576
+      ]
+    },
+    {
+      "field_id": "61",
+      "label": "Cartão SUS",
+      "description": "",
+      "bbox": [
+        2695,
+        1668,
+        4069,
+        1760
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "61_0",
+          "label": "Cartão SUS 0",
+          "bbox": [
+            2698,
+            1676,
+            2772,
+            1749
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "61_1",
+          "label": "Cartão SUS 1",
+          "bbox": [
+            2792,
+            1674,
+            2866,
+            1747
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "61_2",
+          "label": "Cartão SUS 2",
+          "bbox": [
+            2887,
+            1671,
+            2961,
+            1744
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "61_3",
+          "label": "Cartão SUS 3",
+          "bbox": [
+            2978,
+            1671,
+            3052,
+            1744
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "61_4",
+          "label": "Cartão SUS 4",
+          "bbox": [
+            3074,
+            1671,
+            3148,
+            1744
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "61_5",
+          "label": "Cartão SUS 5",
+          "bbox": [
+            3166,
+            1672,
+            3240,
+            1745
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "61_6",
+          "label": "Cartão SUS 6",
+          "bbox": [
+            3257,
+            1672,
+            3331,
+            1745
+          ],
+          "index": 6
+        },
+        {
+          "element_id": "61_7",
+          "label": "Cartão SUS 7",
+          "bbox": [
+            3346,
+            1670,
+            3420,
+            1743
+          ],
+          "index": 7
+        },
+        {
+          "element_id": "61_8",
+          "label": "Cartão SUS 8",
+          "bbox": [
+            3442,
+            1668,
+            3516,
+            1741
+          ],
+          "index": 8
+        },
+        {
+          "element_id": "61_9",
+          "label": "Cartão SUS 9",
+          "bbox": [
+            3538,
+            1672,
+            3612,
+            1745
+          ],
+          "index": 9
+        },
+        {
+          "element_id": "61_10",
+          "label": "Cartão SUS 10",
+          "bbox": [
+            3627,
+            1672,
+            3701,
+            1745
+          ],
+          "index": 10
+        },
+        {
+          "element_id": "61_11",
+          "label": "Cartão SUS 11",
+          "bbox": [
+            3721,
+            1668,
+            3795,
+            1741
+          ],
+          "index": 11
+        },
+        {
+          "element_id": "61_12",
+          "label": "Cartão SUS 12",
+          "bbox": [
+            3812,
+            1668,
+            3886,
+            1741
+          ],
+          "index": 12
+        },
+        {
+          "element_id": "61_13",
+          "label": "Cartão SUS 13",
+          "bbox": [
+            3903,
+            1672,
+            3977,
+            1745
+          ],
+          "index": 13
+        },
+        {
+          "element_id": "61_14",
+          "label": "Cartão SUS 14",
+          "bbox": [
+            3992,
+            1672,
+            4066,
+            1745
+          ],
+          "index": 14
+        }
+      ]
+    },
+    {
+      "field_id": "18",
+      "label": "Nome",
+      "description": "",
+      "bbox": [
+        531,
+        1733,
+        2243,
+        1852
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "66",
+      "label": "Código CBO 2002",
+      "description": "",
+      "bbox": [
+        3510,
+        2121,
+        4064,
+        2205
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "66_0",
+          "label": "Código CBO 2002 0",
+          "bbox": [
+            3613,
+            2126,
+            3688,
+            2194
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "66_1",
+          "label": "Código CBO 2002 1",
+          "bbox": [
+            3516,
+            2125,
+            3591,
+            2193
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "66_2",
+          "label": "Código CBO 2002 2",
+          "bbox": [
+            3706,
+            2125,
+            3781,
+            2193
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "66_3",
+          "label": "Código CBO 2002 3",
+          "bbox": [
+            3803,
+            2126,
+            3878,
+            2194
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "66_4",
+          "label": "Código CBO 2002 4",
+          "bbox": [
+            3893,
+            2127,
+            3968,
+            2195
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "66_5",
+          "label": "Código CBO 2002 5",
+          "bbox": [
+            3983,
+            2128,
+            4058,
+            2196
+          ],
+          "index": 5
+        }
+      ]
+    },
+    {
+      "field_id": "19",
+      "label": "Escolaridade",
+      "description": "",
+      "bbox": [
+        473,
+        1980,
+        2038,
+        2203
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "19_0",
+          "label": "Escolaridade 0",
+          "bbox": [
+            505,
+            1995,
+            557,
+            2044
+          ]
+        },
+        {
+          "element_id": "19_1",
+          "label": "Escolaridade 1",
+          "bbox": [
+            502,
+            2066,
+            554,
+            2115
+          ]
+        },
+        {
+          "element_id": "19_2",
+          "label": "Escolaridade 2",
+          "bbox": [
+            508,
+            2128,
+            560,
+            2177
+          ]
+        },
+        {
+          "element_id": "19_3",
+          "label": "Escolaridade 3",
+          "bbox": [
+            1265,
+            1989,
+            1317,
+            2038
+          ]
+        },
+        {
+          "element_id": "19_4",
+          "label": "Escolaridade 4",
+          "bbox": [
+            1262,
+            2063,
+            1314,
+            2112
+          ]
+        },
+        {
+          "element_id": "19_5",
+          "label": "Escolaridade 5",
+          "bbox": [
+            1263,
+            2134,
+            1315,
+            2183
+          ]
+        },
+        {
+          "element_id": "19_6",
+          "label": "Escolaridade 6",
+          "bbox": [
+            1893,
+            2091,
+            1945,
+            2140
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "64",
+      "label": "Ocupação habitual",
+      "description": "",
+      "bbox": [
+        2421,
+        2032,
+        3351,
+        2140
+      ]
+    },
+    {
+      "field_id": "22",
+      "label": "Naturalidade",
+      "description": "",
+      "bbox": [
+        1324,
+        2330,
+        2285,
+        2458
+      ]
+    },
+    {
+      "field_id": "23",
+      "label": "Situação conjugal",
+      "description": "",
+      "bbox": [
+        2445,
+        2275,
+        3395,
+        2506
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "23_0",
+          "label": "Situação conjugal 0",
+          "bbox": [
+            2485,
+            2305,
+            2535,
+            2354
+          ]
+        },
+        {
+          "element_id": "23_1",
+          "label": "Situação conjugal 1",
+          "bbox": [
+            2488,
+            2376,
+            2538,
+            2425
+          ]
+        },
+        {
+          "element_id": "23_2",
+          "label": "Situação conjugal 2",
+          "bbox": [
+            2487,
+            2447,
+            2537,
+            2496
+          ]
+        },
+        {
+          "element_id": "23_3",
+          "label": "Situação conjugal 3",
+          "bbox": [
+            2883,
+            2297,
+            2933,
+            2346
+          ]
+        },
+        {
+          "element_id": "23_4",
+          "label": "Situação conjugal 4",
+          "bbox": [
+            2886,
+            2373,
+            2936,
+            2422
+          ]
+        },
+        {
+          "element_id": "23_5",
+          "label": "Situação conjugal 5",
+          "bbox": [
+            2887,
+            2447,
+            2937,
+            2496
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "raca_cor_22",
+      "label": "Raça / Cor",
+      "description": "",
+      "bbox": [
+        3426,
+        2280,
+        4064,
+        2503
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "multiple",
+      "elements": [
+        {
+          "element_id": "raca_cor_22_0",
+          "label": "Raça / Cor 0",
+          "bbox": [
+            3467,
+            2307,
+            3514,
+            2357
+          ]
+        },
+        {
+          "element_id": "raca_cor_22_1",
+          "label": "Raça / Cor 1",
+          "bbox": [
+            3468,
+            2374,
+            3515,
+            2424
+          ]
+        },
+        {
+          "element_id": "raca_cor_22_2",
+          "label": "Raça / Cor 2",
+          "bbox": [
+            3466,
+            2445,
+            3513,
+            2495
+          ]
+        },
+        {
+          "element_id": "raca_cor_22_3",
+          "label": "Raça / Cor 3",
+          "bbox": [
+            3817,
+            2304,
+            3864,
+            2354
+          ]
+        },
+        {
+          "element_id": "raca_cor_22_4",
+          "label": "Raça / Cor 4",
+          "bbox": [
+            3818,
+            2375,
+            3865,
+            2425
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "20",
+      "label": "Data de Nascimento",
+      "description": "",
+      "bbox": [
+        445,
+        2318,
+        970,
+        2477
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "20_0",
+          "label": "Data de Nascimento 0",
+          "bbox": [
+            449,
+            2357,
+            509,
+            2454
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "20_1",
+          "label": "Data de Nascimento 1",
+          "bbox": [
+            512,
+            2360,
+            572,
+            2457
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "20_2",
+          "label": "Data de Nascimento 2",
+          "bbox": [
+            574,
+            2356,
+            625,
+            2453
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "20_3",
+          "label": "Data de Nascimento 3",
+          "bbox": [
+            631,
+            2355,
+            691,
+            2452
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "20_4",
+          "label": "Data de Nascimento 4",
+          "bbox": [
+            694,
+            2355,
+            754,
+            2452
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "20_5",
+          "label": "Data de Nascimento 5",
+          "bbox": [
+            760,
+            2354,
+            820,
+            2451
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "20_6",
+          "label": "Data de Nascimento 6",
+          "bbox": [
+            825,
+            2357,
+            885,
+            2454
+          ],
+          "index": 6
+        },
+        {
+          "element_id": "20_7",
+          "label": "Data de Nascimento 7",
+          "bbox": [
+            888,
+            2360,
+            948,
+            2457
+          ],
+          "index": 7
+        }
+      ]
+    },
+    {
+      "field_id": "21",
+      "label": "Idade",
+      "description": "",
+      "bbox": [
+        996,
+        2336,
+        1218,
+        2462
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "21_0",
+          "label": "Idade 0",
+          "bbox": [
+            1006,
+            2346,
+            1092,
+            2442
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "21_1",
+          "label": "Idade 1",
+          "bbox": [
+            1117,
+            2345,
+            1203,
+            2441
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "25",
+      "label": "Logradouro",
+      "description": "",
+      "bbox": [
+        439,
+        2643,
+        1911,
+        2737
+      ]
+    },
+    {
+      "field_id": "59",
+      "label": "Complemento",
+      "description": "",
+      "bbox": [
+        2848,
+        2640,
+        3239,
+        2736
+      ]
+    },
+    {
+      "field_id": "26",
+      "label": "Número",
+      "description": "",
+      "bbox": [
+        2455,
+        2621,
+        2810,
+        2737
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "26_0",
+          "label": "Número 0",
+          "bbox": [
+            2473,
+            2636,
+            2562,
+            2728
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "26_1",
+          "label": "Número 1",
+          "bbox": [
+            2575,
+            2635,
+            2660,
+            2727
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "26_2",
+          "label": "Número 2",
+          "bbox": [
+            2680,
+            2634,
+            2771,
+            2730
+          ],
+          "index": 2
+        }
+      ]
+    },
+    {
+      "field_id": "60",
+      "label": "CEP",
+      "description": "",
+      "bbox": [
+        3269,
+        2626,
+        4065,
+        2733
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "60_0",
+          "label": "CEP 0",
+          "bbox": [
+            3271,
+            2640,
+            3352,
+            2726
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "60_1",
+          "label": "CEP 1",
+          "bbox": [
+            3366,
+            2642,
+            3447,
+            2728
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "60_2",
+          "label": "CEP 2",
+          "bbox": [
+            3474,
+            2639,
+            3555,
+            2725
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "60_3",
+          "label": "CEP 3",
+          "bbox": [
+            3580,
+            2643,
+            3661,
+            2729
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "60_4",
+          "label": "CEP 4",
+          "bbox": [
+            3677,
+            2643,
+            3758,
+            2729
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "60_5",
+          "label": "CEP 5",
+          "bbox": [
+            3779,
+            2643,
+            3860,
+            2729
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "60_6",
+          "label": "CEP 6",
+          "bbox": [
+            3881,
+            2640,
+            3962,
+            2726
+          ],
+          "index": 6
+        },
+        {
+          "element_id": "60_7",
+          "label": "CEP 7",
+          "bbox": [
+            3985,
+            2644,
+            4066,
+            2730
+          ],
+          "index": 7
+        }
+      ]
+    },
+    {
+      "field_id": "27",
+      "label": "Bairro/Distrito",
+      "description": "",
+      "bbox": [
+        486,
+        2825,
+        1401,
+        2918
+      ]
+    },
+    {
+      "field_id": "municipio",
+      "label": "Município",
+      "description": "",
+      "bbox": [
+        2092,
+        2824,
+        2780,
+        2904
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "29",
+      "label": "UF",
+      "description": "",
+      "bbox": [
+        3891,
+        2824,
+        4064,
+        2921
+      ],
+      "data_type": "uf",
+      "validation": {
+        "allowed_values": [
+          "AC",
+          "AL",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          "MA",
+          "MT",
+          "MS",
+          "MG",
+          "PA",
+          "PB",
+          "PR",
+          "PE",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SC",
+          "SP",
+          "SE",
+          "TO"
+        ],
+        "max_edit_distance": 1
+      }
+    },
+    {
+      "field_id": "57",
+      "label": "Nome Responsável legal",
+      "description": "",
+      "bbox": [
+        438,
+        2971,
+        3645,
+        3118
+      ]
+    },
+    {
+      "field_id": "idade",
+      "label": "Idade responsável legal",
+      "description": "",
+      "bbox": [
+        3657,
+        3024,
+        4055,
+        3122
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "58_0",
+          "label": "Idade responsável legal 0",
+          "bbox": [
+            3694,
+            3031,
+            3821,
+            3111
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "58_1",
+          "label": "Idade responsável legal 1",
+          "bbox": [
+            3908,
+            3030,
+            4035,
+            3110
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "n_perdas_fetais_abortos",
+      "label": "N perdas fetais / abortos",
+      "description": "",
+      "bbox": [
+        3776,
+        3349,
+        4024,
+        3458
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "n_perdas_fetais_abortos_0",
+          "label": "N perdas fetais / abortos 0",
+          "bbox": [
+            3791,
+            3358,
+            3887,
+            3436
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "n_perdas_fetais_abortos_1",
+          "label": "N perdas fetais / abortos 1",
+          "bbox": [
+            3914,
+            3357,
+            4010,
+            3435
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "n_partos_vaginais",
+      "label": "N partos vaginais",
+      "description": "",
+      "bbox": [
+        1504,
+        3335,
+        1749,
+        3458
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "n_partos_vaginais_0",
+          "label": "N partos vaginais 0",
+          "bbox": [
+            1521,
+            3349,
+            1616,
+            3435
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "n_partos_vaginais_1",
+          "label": "N partos vaginais 1",
+          "bbox": [
+            1639,
+            3351,
+            1734,
+            3437
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "n_cesareas",
+      "label": "N cesáreas",
+      "description": "",
+      "bbox": [
+        2229,
+        3340,
+        2458,
+        3450
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "n_cesareas_0",
+          "label": "N cesáreas 0",
+          "bbox": [
+            2245,
+            3354,
+            2320,
+            3431
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "n_cesareas_1",
+          "label": "N cesáreas 1",
+          "bbox": [
+            2352,
+            3354,
+            2444,
+            3435
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "n_nascidos_vivos",
+      "label": "N nascidos vivos",
+      "description": "",
+      "bbox": [
+        2927,
+        3342,
+        3178,
+        3454
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "n_nascidos_vivos_0",
+          "label": "N nascidos vivos 0",
+          "bbox": [
+            2937,
+            3349,
+            3035,
+            3433
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "n_nascidos_vivos_1",
+          "label": "N nascidos vivos 1",
+          "bbox": [
+            3069,
+            3350,
+            3167,
+            3434
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "gestacoes_anteriores",
+      "label": "N gestações anteriores",
+      "description": "",
+      "bbox": [
+        843,
+        3357,
+        1088,
+        3458
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "gestacoes_anteriores_0",
+          "label": "N gestações anteriores 0",
+          "bbox": [
+            859,
+            3364,
+            957,
+            3440
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "gestacoes_anteriores_1",
+          "label": "N gestações anteriores 1",
+          "bbox": [
+            972,
+            3364,
+            1078,
+            3440
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "40",
+      "label": "Apresentação",
+      "description": "",
+      "bbox": [
+        2373,
+        3705,
+        2650,
+        4079
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "40_0",
+          "label": "Apresentação 0",
+          "bbox": [
+            2409,
+            3737,
+            2460,
+            3789
+          ]
+        },
+        {
+          "element_id": "40_1",
+          "label": "Apresentação 1",
+          "bbox": [
+            2410,
+            3822,
+            2461,
+            3874
+          ]
+        },
+        {
+          "element_id": "40_2",
+          "label": "Apresentação 2",
+          "bbox": [
+            2411,
+            3910,
+            2462,
+            3962
+          ]
+        },
+        {
+          "element_id": "40_3",
+          "label": "Apresentação 3",
+          "bbox": [
+            2408,
+            4000,
+            2459,
+            4052
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "nascimento_assistido_por",
+      "label": "Nascimento assistido por",
+      "description": "",
+      "bbox": [
+        3669,
+        3674,
+        4059,
+        4073
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "nascimento_assistido_por_0",
+          "label": "Nascimento assistido por 0",
+          "bbox": [
+            3705,
+            3695,
+            3761,
+            3742
+          ]
+        },
+        {
+          "element_id": "nascimento_assistido_por_1",
+          "label": "Nascimento assistido por 1",
+          "bbox": [
+            3704,
+            3778,
+            3760,
+            3825
+          ]
+        },
+        {
+          "element_id": "nascimento_assistido_por_2",
+          "label": "Nascimento assistido por 2",
+          "bbox": [
+            3703,
+            3856,
+            3759,
+            3903
+          ]
+        },
+        {
+          "element_id": "nascimento_assistido_por_3",
+          "label": "Nascimento assistido por 3",
+          "bbox": [
+            3699,
+            3937,
+            3755,
+            3984
+          ]
+        },
+        {
+          "element_id": "nascimento_assistido_por_4",
+          "label": "Nascimento assistido por 4",
+          "bbox": [
+            3703,
+            4011,
+            3759,
+            4058
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "tipo_gravidez",
+      "label": "Tipo de gravidez",
+      "description": "",
+      "bbox": [
+        2044,
+        3698,
+        2327,
+        4070
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "tipo_gravidez_0",
+          "label": "Tipo de gravidez 0",
+          "bbox": [
+            2084,
+            3737,
+            2135,
+            3782
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "tipo_gravidez_1",
+          "label": "Tipo de gravidez 1",
+          "bbox": [
+            2081,
+            3827,
+            2132,
+            3872
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "tipo_gravidez_2",
+          "label": "Tipo de gravidez 2",
+          "bbox": [
+            2087,
+            3917,
+            2138,
+            3962
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "tipo_gravidez_3",
+          "label": "Tipo de gravidez 3",
+          "bbox": [
+            2081,
+            4004,
+            2132,
+            4049
+          ],
+          "index": 3
+        }
+      ]
+    },
+    {
+      "field_id": "tipo_parto",
+      "label": "Tipo de parto",
+      "description": "",
+      "bbox": [
+        3014,
+        3782,
+        3259,
+        4085
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "tipo_parto_0",
+          "label": "Tipo de parto 0",
+          "bbox": [
+            3057,
+            3824,
+            3101,
+            3875
+          ]
+        },
+        {
+          "element_id": "tipo_parto_1",
+          "label": "Tipo de parto 1",
+          "bbox": [
+            3054,
+            3905,
+            3098,
+            3956
+          ]
+        },
+        {
+          "element_id": "tipo_parto_2",
+          "label": "Tipo de parto 2",
+          "bbox": [
+            3055,
+            4000,
+            3099,
+            4051
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "parto_induzido",
+      "label": "O trabalho de parto foi induzido?",
+      "description": "",
+      "bbox": [
+        2690,
+        3791,
+        2970,
+        4076
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "parto_induzido_0",
+          "label": "O trabalho de parto foi induzido? 0",
+          "bbox": [
+            2729,
+            3822,
+            2787,
+            3873
+          ]
+        },
+        {
+          "element_id": "parto_induzido_1",
+          "label": "O trabalho de parto foi induzido? 1",
+          "bbox": [
+            2735,
+            3910,
+            2793,
+            3961
+          ]
+        },
+        {
+          "element_id": "parto_induzido_2",
+          "label": "O trabalho de parto foi induzido? 2",
+          "bbox": [
+            2732,
+            4000,
+            2790,
+            4051
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar",
+      "label": "Cesárea ocorreu antes do trabalho de parto iniciar?",
+      "description": "",
+      "bbox": [
+        3308,
+        3756,
+        3629,
+        4070
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_0",
+          "label": "Cesárea ocorreu antes do trabalho de parto iniciar? 0",
+          "bbox": [
+            3365,
+            3772,
+            3417,
+            3819
+          ]
+        },
+        {
+          "element_id": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_1",
+          "label": "Cesárea ocorreu antes do trabalho de parto iniciar? 1",
+          "bbox": [
+            3366,
+            3846,
+            3418,
+            3893
+          ]
+        },
+        {
+          "element_id": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_2",
+          "label": "Cesárea ocorreu antes do trabalho de parto iniciar? 2",
+          "bbox": [
+            3370,
+            3924,
+            3422,
+            3971
+          ]
+        },
+        {
+          "element_id": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_3",
+          "label": "Cesárea ocorreu antes do trabalho de parto iniciar? 3",
+          "bbox": [
+            3362,
+            4000,
+            3414,
+            4047
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "n_semanas_gestacao",
+      "label": "N semanas de gestação",
+      "description": "",
+      "bbox": [
+        1036,
+        3756,
+        1293,
+        3875
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "n_semanas_gestacao_0",
+          "label": "N semanas de gestação 0",
+          "bbox": [
+            1050,
+            3761,
+            1146,
+            3857
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "n_semanas_gestacao_1",
+          "label": "N semanas de gestação 1",
+          "bbox": [
+            1172,
+            3762,
+            1276,
+            3858
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "n_consultas_pre_natal",
+      "label": "N de consultas de pré-natal",
+      "description": "",
+      "bbox": [
+        1366,
+        3810,
+        1655,
+        3974
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "n_consultas_pre_natal_0",
+          "label": "N de consultas de pré-natal 0",
+          "bbox": [
+            1380,
+            3826,
+            1494,
+            3945
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "n_consultas_pre_natal_1",
+          "label": "N de consultas de pré-natal 1",
+          "bbox": [
+            1526,
+            3827,
+            1640,
+            3946
+          ],
+          "index": 1
+        }
+      ]
+    },
+    {
+      "field_id": "mes_que_comecou_pre_natal",
+      "label": "Mes de gestação que iniciou o pré-natal",
+      "description": "",
+      "bbox": [
+        1720,
+        3786,
+        1986,
+        3978
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "mes_que_comecou_pre_natal_0",
+          "label": "Mes de gestação que iniciou o pré-natal 0",
+          "bbox": [
+            1787,
+            3831,
+            1915,
+            3948
+          ],
+          "index": 0
+        }
+      ]
+    },
+    {
+      "field_id": "metodo_utilizado_para_estimar",
+      "label": "Método utilizado para estimar",
+      "description": "",
+      "bbox": [
+        442,
+        3981,
+        1319,
+        4073
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "metodo_utilizado_para_estimar_0",
+          "label": "Método utilizado para estimar 0",
+          "bbox": [
+            475,
+            4006,
+            524,
+            4053
+          ]
+        },
+        {
+          "element_id": "metodo_utilizado_para_estimar_1",
+          "label": "Método utilizado para estimar 1",
+          "bbox": [
+            778,
+            4000,
+            827,
+            4053
+          ]
+        },
+        {
+          "element_id": "metodo_utilizado_para_estimar_2",
+          "label": "Método utilizado para estimar 2",
+          "bbox": [
+            1088,
+            4001,
+            1137,
+            4048
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "47",
+      "label": "Nome do responsável pelo preenchimento",
+      "description": "",
+      "bbox": [
+        1175,
+        4631,
+        2552,
+        4754
+      ]
+    },
+    {
+      "field_id": "48",
+      "label": "Função",
+      "description": "",
+      "bbox": [
+        2851,
+        4625,
+        4055,
+        4763
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "48_0",
+          "label": "Função 0",
+          "bbox": [
+            2894,
+            4636,
+            2947,
+            4679
+          ]
+        },
+        {
+          "element_id": "48_1",
+          "label": "Função 1",
+          "bbox": [
+            3148,
+            4632,
+            3201,
+            4675
+          ]
+        },
+        {
+          "element_id": "48_2",
+          "label": "Função 2",
+          "bbox": [
+            3469,
+            4637,
+            3522,
+            4680
+          ]
+        },
+        {
+          "element_id": "48_3",
+          "label": "Função 3",
+          "bbox": [
+            3745,
+            4632,
+            3798,
+            4675
+          ]
+        },
+        {
+          "element_id": "48_4",
+          "label": "Função 4",
+          "bbox": [
+            2899,
+            4701,
+            2952,
+            4744
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "46",
+      "label": "Data do preenchimento",
+      "description": "",
+      "bbox": [
+        440,
+        4649,
+        1020,
+        4762
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "46_0",
+          "label": "Data do preenchimento 0",
+          "bbox": [
+            449,
+            4654,
+            493,
+            4736
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "46_1",
+          "label": "Data do preenchimento 1",
+          "bbox": [
+            498,
+            4655,
+            545,
+            4742
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "46_2",
+          "label": "Data do preenchimento 2",
+          "bbox": [
+            700,
+            4652,
+            746,
+            4741
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "46_3",
+          "label": "Data do preenchimento 3",
+          "bbox": [
+            567,
+            4654,
+            614,
+            4741
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "46_4",
+          "label": "Data do preenchimento 4",
+          "bbox": [
+            622,
+            4655,
+            669,
+            4742
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "46_5",
+          "label": "Data do preenchimento 5",
+          "bbox": [
+            762,
+            4651,
+            808,
+            4740
+          ],
+          "index": 5
+        }
+      ]
+    },
+    {
+      "field_id": "51",
+      "label": "Órgão emissor",
+      "description": "",
+      "bbox": [
+        3220,
+        4808,
+        3538,
+        4921
+      ]
+    },
+    {
+      "field_id": "50",
+      "label": "N do documento",
+      "description": "",
+      "bbox": [
+        1912,
+        4822,
+        2756,
+        4926
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "50_0",
+          "label": "N do documento 0",
+          "bbox": [
+            2034,
+            4840,
+            2112,
+            4915
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "50_1",
+          "label": "N do documento 1",
+          "bbox": [
+            2122,
+            4838,
+            2200,
+            4913
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "50_2",
+          "label": "N do documento 2",
+          "bbox": [
+            2213,
+            4839,
+            2291,
+            4914
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "50_3",
+          "label": "N do documento 3",
+          "bbox": [
+            2302,
+            4838,
+            2380,
+            4913
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "50_4",
+          "label": "N do documento 4",
+          "bbox": [
+            2393,
+            4841,
+            2471,
+            4916
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "50_5",
+          "label": "N do documento 5",
+          "bbox": [
+            2488,
+            4840,
+            2566,
+            4915
+          ],
+          "index": 5
+        }
+      ]
+    },
+    {
+      "field_id": "49",
+      "label": "Tipo de documento",
+      "description": "",
+      "bbox": [
+        429,
+        4853,
+        1451,
+        4928
+      ],
+      "data_type": "checkbox",
+      "selection_mode": "single",
+      "elements": [
+        {
+          "element_id": "49_0",
+          "label": "Tipo de documento 0",
+          "bbox": [
+            464,
+            4872,
+            513,
+            4921
+          ]
+        },
+        {
+          "element_id": "49_1",
+          "label": "Tipo de documento 1",
+          "bbox": [
+            680,
+            4870,
+            729,
+            4919
+          ]
+        },
+        {
+          "element_id": "49_2",
+          "label": "Tipo de documento 2",
+          "bbox": [
+            881,
+            4871,
+            930,
+            4920
+          ]
+        },
+        {
+          "element_id": "49_3",
+          "label": "Tipo de documento 3",
+          "bbox": [
+            1118,
+            4870,
+            1167,
+            4919
+          ]
+        },
+        {
+          "element_id": "49_4",
+          "label": "Tipo de documento 4",
+          "bbox": [
+            1301,
+            4868,
+            1350,
+            4917
+          ]
+        }
+      ]
+    },
+    {
+      "field_id": "52",
+      "label": "Cartório",
+      "description": "",
+      "bbox": [
+        786,
+        4996,
+        1587,
+        5133
+      ]
+    },
+    {
+      "field_id": "registro",
+      "label": "Registro",
+      "description": "",
+      "bbox": [
+        2620,
+        5035,
+        3241,
+        5133
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "registro_0",
+          "label": "Registro 0",
+          "bbox": [
+            2631,
+            5047,
+            2706,
+            5124
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "registro_1",
+          "label": "Registro 1",
+          "bbox": [
+            2738,
+            5049,
+            2806,
+            5126
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "registro_2",
+          "label": "Registro 2",
+          "bbox": [
+            2837,
+            5050,
+            2905,
+            5127
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "registro_3",
+          "label": "Registro 3",
+          "bbox": [
+            2944,
+            5051,
+            3012,
+            5128
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "registro_4",
+          "label": "Registro 4",
+          "bbox": [
+            3043,
+            5050,
+            3111,
+            5127
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "registro_5",
+          "label": "Registro 5",
+          "bbox": [
+            3149,
+            5049,
+            3217,
+            5126
+          ],
+          "index": 5
+        }
+      ]
+    },
+    {
+      "field_id": "54",
+      "label": "Data",
+      "description": "",
+      "bbox": [
+        3254,
+        5035,
+        4052,
+        5138
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "54_0",
+          "label": "Data 0",
+          "bbox": [
+            3257,
+            5048,
+            3336,
+            5128
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "54_1",
+          "label": "Data 1",
+          "bbox": [
+            3356,
+            5051,
+            3435,
+            5131
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "54_2",
+          "label": "Data 2",
+          "bbox": [
+            3458,
+            5052,
+            3537,
+            5132
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "54_3",
+          "label": "Data 3",
+          "bbox": [
+            3560,
+            5050,
+            3639,
+            5130
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "54_4",
+          "label": "Data 4",
+          "bbox": [
+            3660,
+            5053,
+            3739,
+            5133
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "54_5",
+          "label": "Data 5",
+          "bbox": [
+            3760,
+            5051,
+            3839,
+            5131
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "54_6",
+          "label": "Data 6",
+          "bbox": [
+            3860,
+            5050,
+            3939,
+            5130
+          ],
+          "index": 6
+        },
+        {
+          "element_id": "54_7",
+          "label": "Data 7",
+          "bbox": [
+            3964,
+            5053,
+            4043,
+            5133
+          ],
+          "index": 7
+        }
+      ]
+    },
+    {
+      "field_id": "55",
+      "label": "Município",
+      "description": "",
+      "bbox": [
+        778,
+        5188,
+        2013,
+        5293
+      ]
+    },
+    {
+      "field_id": "56",
+      "label": "UF",
+      "description": "",
+      "bbox": [
+        3847,
+        5214,
+        4052,
+        5293
+      ],
+      "data_type": "uf",
+      "validation": {
+        "allowed_values": [
+          "AC",
+          "AL",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          "MA",
+          "MT",
+          "MS",
+          "MG",
+          "PA",
+          "PB",
+          "PR",
+          "PE",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SC",
+          "SP",
+          "SE",
+          "TO"
+        ],
+        "max_edit_distance": 1
+      }
+    },
+    {
+      "field_id": "67",
+      "label": "Hora",
+      "description": "",
+      "bbox": [
+        1684,
+        617,
+        2212,
+        741
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "hora_0",
+          "label": "Hora 0",
+          "bbox": [
+            1675,
+            615,
+            1791,
+            739
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "hora_1",
+          "label": "Hora 1",
+          "bbox": [
+            1800,
+            615,
+            1923,
+            741
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "hora_2",
+          "label": "Hora 2",
+          "bbox": [
+            1957,
+            622,
+            2077,
+            745
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "hora_3",
+          "label": "Hora 3",
+          "bbox": [
+            2086,
+            621,
+            2208,
+            739
+          ],
+          "index": 3
+        }
+      ]
+    },
+    {
+      "field_id": "codigo_cnes",
+      "label": "Codigo CNES",
+      "description": "",
+      "bbox": [
+        3372,
+        1095,
+        4067,
+        1205
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "codigo_cnes_0",
+          "label": "Codigo CNES 0",
+          "bbox": [
+            3379,
+            1112,
+            3463,
+            1197
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "codigo_cnes_1",
+          "label": "Codigo CNES 1",
+          "bbox": [
+            3481,
+            1112,
+            3565,
+            1196
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "codigo_cnes_2",
+          "label": "Codigo CNES 2",
+          "bbox": [
+            3584,
+            1112,
+            3668,
+            1200
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "codigo_cnes_3",
+          "label": "Codigo CNES 3",
+          "bbox": [
+            3679,
+            1112,
+            3763,
+            1201
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "codigo_cnes_4",
+          "label": "Codigo CNES 4",
+          "bbox": [
+            3781,
+            1109,
+            3865,
+            1200
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "codigo_cnes_5",
+          "label": "Codigo CNES 5",
+          "bbox": [
+            3883,
+            1114,
+            3967,
+            1199
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "codigo_cnes_6",
+          "label": "Codigo CNES 6",
+          "bbox": [
+            3976,
+            1114,
+            4060,
+            1198
+          ],
+          "index": 6
+        }
+      ]
+    },
+    {
+      "field_id": "data_ultima_menstruacao",
+      "label": "Data da Ultima Menstruação (DUM)",
+      "description": "",
+      "bbox": [
+        917,
+        3611,
+        1300,
+        3723
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "data_ultima_menstruacao_0",
+          "label": "Data da Ultima Menstruação (DUM) 0",
+          "bbox": [
+            921,
+            3630,
+            970,
+            3711
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "data_ultima_menstruacao_1",
+          "label": "Data da Ultima Menstruação (DUM) 1",
+          "bbox": [
+            983,
+            3629,
+            1032,
+            3710
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "data_ultima_menstruacao_2",
+          "label": "Data da Ultima Menstruação (DUM) 2",
+          "bbox": [
+            1044,
+            3630,
+            1093,
+            3711
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "data_ultima_menstruacao_3",
+          "label": "Data da Ultima Menstruação (DUM) 3",
+          "bbox": [
+            1107,
+            3632,
+            1156,
+            3713
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "data_ultima_menstruacao_4",
+          "label": "Data da Ultima Menstruação (DUM) 4",
+          "bbox": [
+            1176,
+            3638,
+            1225,
+            3719
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "data_ultima_menstruacao_5",
+          "label": "Data da Ultima Menstruação (DUM) 5",
+          "bbox": [
+            1240,
+            3634,
+            1292,
+            3718
+          ],
+          "index": 5
+        }
+      ]
+    },
+    {
+      "field_id": "cpf",
+      "label": "CPF",
+      "description": "",
+      "bbox": [
+        2689,
+        1759,
+        4069,
+        1869
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "cpf_0",
+          "label": "CPF 0",
+          "bbox": [
+            2717,
+            1798,
+            2801,
+            1860
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "cpf_1",
+          "label": "CPF 1",
+          "bbox": [
+            2838,
+            1797,
+            2922,
+            1859
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "cpf_2",
+          "label": "CPF 2",
+          "bbox": [
+            2967,
+            1796,
+            3051,
+            1858
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "cpf_3",
+          "label": "CPF 3",
+          "bbox": [
+            3092,
+            1797,
+            3176,
+            1859
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "cpf_4",
+          "label": "CPF 4",
+          "bbox": [
+            3221,
+            1796,
+            3305,
+            1862
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "cpf_5",
+          "label": "CPF 5",
+          "bbox": [
+            3346,
+            1799,
+            3430,
+            1861
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "cpf_6",
+          "label": "CPF 6",
+          "bbox": [
+            3473,
+            1797,
+            3557,
+            1859
+          ],
+          "index": 6
+        },
+        {
+          "element_id": "cpf_7",
+          "label": "CPF 7",
+          "bbox": [
+            3598,
+            1795,
+            3682,
+            1862
+          ],
+          "index": 7
+        },
+        {
+          "element_id": "cpf_8",
+          "label": "CPF 8",
+          "bbox": [
+            3725,
+            1796,
+            3809,
+            1862
+          ],
+          "index": 8
+        },
+        {
+          "element_id": "cpf_9",
+          "label": "CPF 9",
+          "bbox": [
+            3848,
+            1795,
+            3932,
+            1862
+          ],
+          "index": 9
+        },
+        {
+          "element_id": "cpf_10",
+          "label": "CPF 10",
+          "bbox": [
+            3971,
+            1798,
+            4055,
+            1860
+          ],
+          "index": 10
+        }
+      ]
+    },
+    {
+      "field_id": "CEP",
+      "label": "CEP",
+      "description": "",
+      "bbox": [
+        3267,
+        1287,
+        4073,
+        1386
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "pattern": "^[A-Z]+$"
+      },
+      "elements": [
+        {
+          "element_id": "CEP_0",
+          "label": "CEP 0",
+          "bbox": [
+            3281,
+            1302,
+            3355,
+            1377
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "CEP_1",
+          "label": "CEP 1",
+          "bbox": [
+            3377,
+            1300,
+            3459,
+            1379
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "CEP_2",
+          "label": "CEP 2",
+          "bbox": [
+            3480,
+            1297,
+            3562,
+            1377
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "CEP_3",
+          "label": "CEP 3",
+          "bbox": [
+            3578,
+            1299,
+            3660,
+            1378
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "CEP_4",
+          "label": "CEP 4",
+          "bbox": [
+            3683,
+            1301,
+            3765,
+            1380
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "CEP_5",
+          "label": "CEP 5",
+          "bbox": [
+            3786,
+            1300,
+            3868,
+            1379
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "CEP_6",
+          "label": "CEP 6",
+          "bbox": [
+            3888,
+            1302,
+            3970,
+            1381
+          ],
+          "index": 6
+        },
+        {
+          "element_id": "CEP_7",
+          "label": "CEP 7",
+          "bbox": [
+            3984,
+            1307,
+            4066,
+            1386
+          ],
+          "index": 7
+        }
+      ]
+    },
+    {
+      "field_id": "codigo_cnes_copy",
+      "label": "Codigo CNES_copia",
+      "description": "",
+      "bbox": [
+        3130,
+        1484,
+        3825,
+        1594
+      ],
+      "data_type": "digit_sequence",
+      "elements": [
+        {
+          "element_id": "codigo_cnes_0",
+          "label": "Codigo CNES 0",
+          "bbox": [
+            3137,
+            1501,
+            3221,
+            1586
+          ],
+          "index": 0
+        },
+        {
+          "element_id": "codigo_cnes_1",
+          "label": "Codigo CNES 1",
+          "bbox": [
+            3239,
+            1501,
+            3323,
+            1585
+          ],
+          "index": 1
+        },
+        {
+          "element_id": "codigo_cnes_2",
+          "label": "Codigo CNES 2",
+          "bbox": [
+            3342,
+            1501,
+            3426,
+            1589
+          ],
+          "index": 2
+        },
+        {
+          "element_id": "codigo_cnes_3",
+          "label": "Codigo CNES 3",
+          "bbox": [
+            3437,
+            1501,
+            3521,
+            1590
+          ],
+          "index": 3
+        },
+        {
+          "element_id": "codigo_cnes_4",
+          "label": "Codigo CNES 4",
+          "bbox": [
+            3539,
+            1498,
+            3623,
+            1589
+          ],
+          "index": 4
+        },
+        {
+          "element_id": "codigo_cnes_5",
+          "label": "Codigo CNES 5",
+          "bbox": [
+            3641,
+            1503,
+            3725,
+            1588
+          ],
+          "index": 5
+        },
+        {
+          "element_id": "codigo_cnes_6",
+          "label": "Codigo CNES 6",
+          "bbox": [
+            3734,
+            1503,
+            3818,
+            1587
+          ],
+          "index": 6
+        }
+      ]
+    }
+  ]
+}

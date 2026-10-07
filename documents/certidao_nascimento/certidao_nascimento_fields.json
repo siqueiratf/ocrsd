@@ -1,0 +1,368 @@
+{
+  "template_id": "certidao_nascimento",
+  "dpi": 300,
+  "page_size_px": [
+    2481,
+    3508
+  ],
+  "source_template": "/home/ts/ocrsd/documents/certidao_nascimento/certidao_nascimento.pdf",
+  "fields": [
+    {
+      "field_id": "cpf",
+      "label": "CPF",
+      "description": "CPF no formato 000.000.000-00.",
+      "bbox": [
+        206,
+        766,
+        2245,
+        829
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "123.456.789-09",
+          "987.654.321-00",
+          "456.789.123-10"
+        ],
+        "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "matricula",
+      "label": "Matrícula",
+      "description": "Matrícula do registro civil no formato 000000.00.00.0000.0.00000.000.0000000-00.",
+      "bbox": [
+        733,
+        982,
+        1703,
+        1039
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "999999.99.99.9999.9.99999.999.9999999-99",
+          "123456.01.55.2026.1.00001.001.0000001-10",
+          "654321.02.55.2025.1.00002.002.0000002-20"
+        ],
+        "pattern": "^[0-9]{6}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}\\.[0-9]\\.[0-9]{5}\\.[0-9]{3}\\.[0-9]{7}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "data_nascimento_por_extenso",
+      "label": "Data de nascimento por extenso",
+      "description": "Data de nascimento escrita por extenso.",
+      "bbox": [
+        206,
+        1085,
+        1676,
+        1139
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "dia_nascimento",
+      "label": "Dia",
+      "description": "Dia numérico do nascimento.",
+      "bbox": [
+        1744,
+        1092,
+        1857,
+        1135
+      ],
+      "render_as_printed": true,
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 31,
+        "pattern": "^[0-9]{1,2}$"
+      }
+    },
+    {
+      "field_id": "mes_nascimento",
+      "label": "Mês",
+      "description": "Mês numérico do nascimento.",
+      "bbox": [
+        1918,
+        1087,
+        2036,
+        1137
+      ],
+      "render_as_printed": true,
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 12,
+        "pattern": "^[0-9]{1,2}$"
+      }
+    },
+    {
+      "field_id": "ano_nascimento",
+      "label": "Ano",
+      "description": "Ano numérico do nascimento.",
+      "bbox": [
+        2101,
+        1087,
+        2240,
+        1139
+      ],
+      "render_as_printed": true,
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1900,
+        "max_value": 2100,
+        "pattern": "^[0-9]{4}$"
+      }
+    },
+    {
+      "field_id": "hora_nascimento",
+      "label": "Hora de nascimento",
+      "description": "Horário de nascimento no formato HH:MM.",
+      "bbox": [
+        206,
+        1176,
+        797,
+        1230
+      ],
+      "render_as_printed": true,
+      "data_type": "time",
+      "validation": {
+        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+      }
+    },
+    {
+      "field_id": "naturalidade",
+      "label": "Naturalidade",
+      "description": "Naturalidade da pessoa registrada.",
+      "bbox": [
+        858,
+        1176,
+        2242,
+        1230
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' /.,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "municipio_registro_uf",
+      "label": "Município de registro e unidade da federação",
+      "description": "Município de registro seguido da UF.",
+      "bbox": [
+        206,
+        1266,
+        940,
+        1318
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' /.,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "local_municipio_nascimento_uf",
+      "label": "Local, município de nascimento e UF",
+      "description": "Local de nascimento, município e unidade da federação.",
+      "bbox": [
+        999,
+        1268,
+        1889,
+        1325
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "sexo",
+      "label": "Sexo",
+      "description": "Sexo informado na certidão.",
+      "bbox": [
+        1948,
+        1268,
+        2245,
+        1320
+      ],
+      "render_as_printed": true,
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "MASCULINO",
+          "FEMININO"
+        ]
+      }
+    },
+    {
+      "field_id": "filiacao",
+      "label": "Filiação",
+      "description": "Nome dos genitores.",
+      "bbox": [
+        206,
+        1393,
+        2242,
+        1653
+      ],
+      "render_as_printed": true,
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "avos",
+      "label": "Avós",
+      "description": "Nomes dos avós respectivos.",
+      "bbox": [
+        204,
+        1708,
+        2242,
+        1771
+      ],
+      "render_as_printed": true,
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "gemeos",
+      "label": "Gêmeos",
+      "description": "Indicação se há gêmeos.",
+      "bbox": [
+        206,
+        1847,
+        413,
+        1901
+      ],
+      "render_as_printed": true,
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "SIM",
+          "NÃO"
+        ]
+      }
+    },
+    {
+      "field_id": "nome_matricula_gemeos",
+      "label": "Nome e matrícula dos gêmeos",
+      "description": "Nome e matrícula dos gêmeos, quando houver.",
+      "bbox": [
+        430,
+        1847,
+        2242,
+        1901
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' .,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "data_registro_por_extenso",
+      "label": "Data do registro por extenso",
+      "description": "Data do registro escrita por extenso.",
+      "bbox": [
+        208,
+        1984,
+        1300,
+        2029
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "numero_dnv",
+      "label": "Número da DNV/Declaração de Nascido Vivo",
+      "description": "Número da DNV ou Declaração de Nascido Vivo.",
+      "bbox": [
+        1350,
+        1977,
+        2242,
+        2032
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "12345678",
+          "87654321",
+          "20260000123"
+        ],
+        "pattern": "^[0-9]{8,15}$"
+      }
+    },
+    {
+      "field_id": "averbacoes_anotacoes_acrescer",
+      "label": "Averbações/anotações a acrescer",
+      "description": "Averbações ou anotações a acrescer.",
+      "bbox": [
+        206,
+        2070,
+        2247,
+        2122
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "max_length": 120,
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "anotacoes_cadastro",
+      "label": "Anotações de cadastro",
+      "description": "Anotações de cadastro.",
+      "bbox": [
+        206,
+        2249,
+        2247,
+        2373
+      ],
+      "render_as_printed": true,
+      "data_type": "text",
+      "validation": {
+        "max_length": 180,
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    }
+  ]
+}

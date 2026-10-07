@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocrsd"
+version = "1.0.0"
+description = "Template-based document detection, redaction and OCR tools"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "numpy<3",
+    "scipy",
+    "opencv-python-headless",
+    "PyMuPDF",
+    "easyocr",
+    "reportlab",
+    "Pillow",
+    "torch",
+    "torchvision",
+]
+
+[project.optional-dependencies]
+benchmark = ["transformers==4.44.2", "sentencepiece", "pytesseract"]
+paddle = ["paddlepaddle==3.2.0", "paddleocr>=3,<4"]
+handwriting = ["tensorflow-cpu>=2.20,<2.21"]
+
+[project.scripts]
+ocrsd = "src.cli:main"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

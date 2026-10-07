@@ -1,0 +1,749 @@
+{
+  "template_id": "dnv_v1",
+  "dpi": 300,
+  "page_size_px": [
+    4330,
+    5717
+  ],
+  "source_template": "documents/dnv/template.pdf",
+  "fields": [
+    {
+      "field_id": "id_documento",
+      "label": "numero_documento",
+      "description": "Número do documento (canto superior direito)",
+      "bbox": [
+        2790,
+        60,
+        3920,
+        250
+      ]
+    },
+    {
+      "field_id": "1",
+      "label": "nome_rn",
+      "description": "Nome do Recém-nascido (RN)",
+      "bbox": [
+        445,
+        390,
+        2715,
+        504
+      ]
+    },
+    {
+      "field_id": "3",
+      "label": "Número do Cartão Nacional de Saúde do RN",
+      "description": "",
+      "bbox": [
+        2742,
+        367,
+        4070,
+        499
+      ]
+    },
+    {
+      "field_id": "2",
+      "label": "Data e Hora do Nascimento",
+      "description": "",
+      "bbox": [
+        436,
+        612,
+        2214,
+        751
+      ]
+    },
+    {
+      "field_id": "5",
+      "label": "Sexo",
+      "description": "",
+      "bbox": [
+        2226,
+        598,
+        3132,
+        742
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "6",
+      "label": "Raça / cor do Recém-nascido",
+      "description": "",
+      "bbox": [
+        3141,
+        598,
+        4067,
+        745
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "7",
+      "label": "Peso ao nascer",
+      "description": "",
+      "bbox": [
+        439,
+        814,
+        906,
+        970
+      ]
+    },
+    {
+      "field_id": "8",
+      "label": "Índice de Apgar 1",
+      "description": "",
+      "bbox": [
+        1108,
+        860,
+        1472,
+        955
+      ]
+    },
+    {
+      "field_id": "9",
+      "label": "Índice de Apgar 2",
+      "description": "",
+      "bbox": [
+        1501,
+        860,
+        1865,
+        955
+      ]
+    },
+    {
+      "field_id": "10",
+      "label": "Local da ocorrência",
+      "description": "",
+      "bbox": [
+        445,
+        1039,
+        1565,
+        1204
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "11",
+      "label": "Estabelecimento",
+      "description": "",
+      "bbox": [
+        1591,
+        1045,
+        3369,
+        1204
+      ]
+    },
+    {
+      "field_id": "12",
+      "label": "Perímetro cefálico",
+      "description": "",
+      "bbox": [
+        2485,
+        811,
+        2918,
+        961
+      ]
+    },
+    {
+      "field_id": "13",
+      "label": "Comprimento",
+      "description": "",
+      "bbox": [
+        1894,
+        817,
+        2312,
+        967
+      ]
+    },
+    {
+      "field_id": "14",
+      "label": "Endereço da ocorrência, se fora do estab. ou da resid. da(o) parturiente (rua, praça, avenida, etc)",
+      "description": "",
+      "bbox": [
+        439,
+        1285,
+        2500,
+        1394
+      ]
+    },
+    {
+      "field_id": "15",
+      "label": "Número",
+      "description": "",
+      "bbox": [
+        2509,
+        1287,
+        2812,
+        1391
+      ]
+    },
+    {
+      "field_id": "16",
+      "label": "Bairro/Distrito",
+      "description": "",
+      "bbox": [
+        442,
+        1478,
+        1478,
+        1588
+      ]
+    },
+    {
+      "field_id": "17",
+      "label": "Município de ocorrência",
+      "description": "",
+      "bbox": [
+        1827,
+        1475,
+        3120,
+        1591
+      ]
+    },
+    {
+      "field_id": "18",
+      "label": "Nome",
+      "description": "",
+      "bbox": [
+        442,
+        1694,
+        2679,
+        1868
+      ]
+    },
+    {
+      "field_id": "19",
+      "label": "Escolaridade",
+      "description": "",
+      "bbox": [
+        473,
+        1980,
+        2038,
+        2203
+      ]
+    },
+    {
+      "field_id": "20",
+      "label": "Data de Nascimento",
+      "description": "",
+      "bbox": [
+        445,
+        2318,
+        970,
+        2488
+      ]
+    },
+    {
+      "field_id": "21",
+      "label": "Idade",
+      "description": "",
+      "bbox": [
+        1002,
+        2341,
+        1218,
+        2462
+      ]
+    },
+    {
+      "field_id": "22",
+      "label": "Naturalidade",
+      "description": "",
+      "bbox": [
+        1235,
+        2218,
+        2405,
+        2462
+      ]
+    },
+    {
+      "field_id": "23",
+      "label": "Situação conjugal",
+      "description": "",
+      "bbox": [
+        2445,
+        2275,
+        3395,
+        2506
+      ]
+    },
+    {
+      "field_id": "24",
+      "label": "Raça / Cor",
+      "description": "",
+      "bbox": [
+        3426,
+        2280,
+        4064,
+        2503
+      ]
+    },
+    {
+      "field_id": "25",
+      "label": "Logradouro",
+      "description": "",
+      "bbox": [
+        439,
+        2570,
+        2416,
+        2737
+      ]
+    },
+    {
+      "field_id": "26",
+      "label": "Número",
+      "description": "",
+      "bbox": [
+        2422,
+        2621,
+        2838,
+        2737
+      ]
+    },
+    {
+      "field_id": "27",
+      "label": "Bairro/Distrito",
+      "description": "",
+      "bbox": [
+        439,
+        2755,
+        1536,
+        2918
+      ]
+    },
+    {
+      "field_id": "28",
+      "label": "Município",
+      "description": "",
+      "bbox": [
+        1873,
+        2760,
+        3138,
+        2916
+      ]
+    },
+    {
+      "field_id": "29",
+      "label": "UF",
+      "description": "",
+      "bbox": [
+        3891,
+        2806,
+        4064,
+        2921
+      ]
+    },
+    {
+      "field_id": "30",
+      "label": "N gestações anteriores",
+      "description": "",
+      "bbox": [
+        843,
+        3357,
+        1088,
+        3458
+      ]
+    },
+    {
+      "field_id": "31",
+      "label": "N partos vaginais",
+      "description": "",
+      "bbox": [
+        1490,
+        3351,
+        1749,
+        3458
+      ]
+    },
+    {
+      "field_id": "32",
+      "label": "N cesáreas",
+      "description": "",
+      "bbox": [
+        2205,
+        3354,
+        2465,
+        3458
+      ]
+    },
+    {
+      "field_id": "33",
+      "label": "N nascidos vivos",
+      "description": "",
+      "bbox": [
+        2927,
+        3354,
+        3178,
+        3455
+      ]
+    },
+    {
+      "field_id": "34",
+      "label": "N perdas fetais / abortos",
+      "description": "",
+      "bbox": [
+        3776,
+        3349,
+        4024,
+        3458
+      ]
+    },
+    {
+      "field_id": "35",
+      "label": "N semanas de gestação",
+      "description": "",
+      "bbox": [
+        1033,
+        3756,
+        1293,
+        3888
+      ]
+    },
+    {
+      "field_id": "36",
+      "label": "Método utilizado para estimar",
+      "description": "",
+      "bbox": [
+        442,
+        3981,
+        1319,
+        4073
+      ]
+    },
+    {
+      "field_id": "37",
+      "label": "N de consultas de pré-natal",
+      "description": "",
+      "bbox": [
+        1368,
+        3767,
+        1657,
+        3998
+      ]
+    },
+    {
+      "field_id": "38",
+      "label": "Mes de gestação que iniciou o pré-natal",
+      "description": "",
+      "bbox": [
+        1720,
+        3782,
+        1986,
+        3989
+      ]
+    },
+    {
+      "field_id": "39",
+      "label": "Tipo de gravidez",
+      "description": "",
+      "bbox": [
+        2044,
+        3686,
+        2327,
+        4070
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "40",
+      "label": "Apresentação",
+      "description": "",
+      "bbox": [
+        2373,
+        3646,
+        2650,
+        4079
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "41",
+      "label": "O trabalho de parto foi induzido?",
+      "description": "",
+      "bbox": [
+        2690,
+        3741,
+        2970,
+        4076
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "42",
+      "label": "Tipo de parto",
+      "description": "",
+      "bbox": [
+        3014,
+        3709,
+        3259,
+        4085
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "43",
+      "label": "Cesárea ocorreu antes do trabalho de parto iniciar?",
+      "description": "",
+      "bbox": [
+        3308,
+        3741,
+        3629,
+        4070
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "44",
+      "label": "Nascimento assistido por",
+      "description": "",
+      "bbox": [
+        3669,
+        3666,
+        4059,
+        4073
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "45",
+      "label": "Anomalias congênitas observadas",
+      "description": "",
+      "bbox": [
+        424,
+        4114,
+        4049,
+        4535
+      ]
+    },
+    {
+      "field_id": "46",
+      "label": "Data do preenchimento",
+      "description": "",
+      "bbox": [
+        421,
+        4631,
+        1015,
+        4756
+      ]
+    },
+    {
+      "field_id": "47",
+      "label": "Nome do responsável pelo preenchimento",
+      "description": "",
+      "bbox": [
+        1027,
+        4561,
+        2834,
+        4760
+      ]
+    },
+    {
+      "field_id": "48",
+      "label": "Função",
+      "description": "",
+      "bbox": [
+        2851,
+        4625,
+        4055,
+        4763
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "49",
+      "label": "Tipo de documento",
+      "description": "",
+      "bbox": [
+        429,
+        4853,
+        1451,
+        4928
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "50",
+      "label": "N do documento",
+      "description": "",
+      "bbox": [
+        1466,
+        4786,
+        2765,
+        4934
+      ]
+    },
+    {
+      "field_id": "51",
+      "label": "Órgão emissor",
+      "description": "",
+      "bbox": [
+        2779,
+        4778,
+        4055,
+        4931
+      ]
+    },
+    {
+      "field_id": "52",
+      "label": "Cartório",
+      "description": "",
+      "bbox": [
+        432,
+        4974,
+        2089,
+        5133
+      ]
+    },
+    {
+      "field_id": "53",
+      "label": "Registro",
+      "description": "",
+      "bbox": [
+        2620,
+        5035,
+        3241,
+        5133
+      ]
+    },
+    {
+      "field_id": "54",
+      "label": "Data",
+      "description": "",
+      "bbox": [
+        3253,
+        5035,
+        4052,
+        5133
+      ]
+    },
+    {
+      "field_id": "55",
+      "label": "Município",
+      "description": "",
+      "bbox": [
+        424,
+        5155,
+        3810,
+        5293
+      ]
+    },
+    {
+      "field_id": "56",
+      "label": "UF",
+      "description": "",
+      "bbox": [
+        3847,
+        5207,
+        4052,
+        5293
+      ]
+    },
+    {
+      "field_id": "57",
+      "label": "Nome Responsável legal",
+      "description": "",
+      "bbox": [
+        438,
+        2971,
+        3645,
+        3118
+      ]
+    },
+    {
+      "field_id": "58",
+      "label": "Idade responsável legal",
+      "description": "",
+      "bbox": [
+        3657,
+        2971,
+        4055,
+        3124
+      ]
+    },
+    {
+      "field_id": "59",
+      "label": "Complemento",
+      "description": "",
+      "bbox": [
+        2848,
+        2614,
+        3264,
+        2736
+      ]
+    },
+    {
+      "field_id": "60",
+      "label": "CEP",
+      "description": "",
+      "bbox": [
+        3273,
+        2626,
+        4069,
+        2733
+      ]
+    },
+    {
+      "field_id": "61",
+      "label": "Cartão SUS",
+      "description": "",
+      "bbox": [
+        2695,
+        1663,
+        4069,
+        1744
+      ]
+    },
+    {
+      "field_id": "62",
+      "label": "UF",
+      "description": "",
+      "bbox": [
+        3859,
+        1473,
+        4069,
+        1597
+      ]
+    },
+    {
+      "field_id": "63",
+      "label": "Detectada alguma anomalia?",
+      "description": "",
+      "bbox": [
+        3120,
+        861,
+        4055,
+        962
+      ],
+      "always_redact": true
+    },
+    {
+      "field_id": "64",
+      "label": "Ocupação habitual",
+      "description": "",
+      "bbox": [
+        2366,
+        1997,
+        3495,
+        2190
+      ]
+    },
+    {
+      "field_id": "65",
+      "label": "Série",
+      "description": "",
+      "bbox": [
+        2044,
+        1980,
+        2312,
+        2197
+      ]
+    },
+    {
+      "field_id": "66",
+      "label": "Código CBO 2002",
+      "description": "",
+      "bbox": [
+        3510,
+        1949,
+        4064,
+        2194
+      ]
+    }
+  ]
+}
