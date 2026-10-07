@@ -1,0 +1,157 @@
+# OCRSD — V1
+
+Ferramentas para gerar documentos civis sintéticos, localizar conteúdo preenchido,
+comparar motores OCR e ocultar campos em PDFs. O alinhamento e a detecção usam
+visão computacional; o reconhecimento OCR fornece texto e confiança no manifesto.
+
+## Instalação
+
+Requer Python 3.11. As dependências e suas versões estão em `pyproject.toml` e `uv.lock`.
+
+```bash
+git clone git@github.com:siqueiratf/ocrsd.git
+cd ocrsd
+uv sync --locked
+uv run ocrsd doctor
+uv run ocrsd --help
+```
+
+PyTorch usa o índice de CPU configurado no projeto. Os extras podem ser instalados
+com `uv sync --locked --extra benchmark`, `--extra paddle` ou `--extra handwriting`.
+`benchmark` inclui TrOCR e a integração com Tesseract; o executável Tesseract e os
+idiomas `por` e `eng` precisam ser instalados pelo gerenciador do sistema.
+`handwriting` inclui TensorFlow para converter o checkpoint do modelo sjvasquez.
+Os modelos OCR podem baixar pesos no primeiro uso.
+
+## Geração e validação
+
+Os templates e os mapas usados pela aplicação ficam em `documents/`. O mapa
+oficial da DNV tem 69 campos e o da certidão de nascimento tem 19.
+
+```bash
+make dataset COUNT=1 SEED=42
+make check
+```
+
+`make dataset` cria PDFs, JSONs com os valores esperados e `dataset.json` em
+`documents/<tipo>/dataset/aaaammdd_hhmm-<tipo>-<quantidade>/`. Esses resultados
+são locais e ignorados pelo Git. Use `TEMPLATE=... MAPPING=...` para outro
+modelo ou `FIELDS="ID1 ID2"` para selecionar campos.
+
+`make check` executa os testes e gera uma DNV e uma certidão novas. A validação
+confere a renderização de cada campo, o alinhamento, a detecção, os recortes e o
+PDF com os campos ocultados. Seus resultados ficam em `output/smoke/`.
+
+```bash
+uv run python -m scripts.smoke_generate --output output/validacao --seed 123
+```
+
+O GitHub Actions executa essa validação em pushes, pull requests e semanalmente,
+às segundas-feiras às 06:00 UTC. Os documentos sintéticos e o relatório da
+validação ficam disponíveis como artefatos da execução.
+
+## Processamento de documentos
+
+```bash
+uv run ocrsd run \
+  --document output/smoke/dnv/dataset/synthetic_0001.pdf \
+  --template documents/dnv/template.pdf \
+  --field-map documents/dnv/mappings/mapeamento_seguindo_norma.json \
+  --output output/processamento \
+  --skip-ocr
+```
+
+Remova `--skip-ocr` para reconhecer texto. `--ocr-engine` seleciona o backend;
+`uv run ocrsd models` lista as opções. `--dpi` deve coincidir com o mapa.
+`--stop-after raster`, `align` ou `diff` permite inspecionar uma etapa.
+
+A saída contém o PDF reconstruído com os campos ocultados, a imagem em
+`masked/`, o manifesto JSON, os recortes originais em `crops/` e imagens de
+diagnóstico em `debug/`. O PDF reconstruído contém somente a imagem processada.
+Os recortes e o documento original conservam o conteúdo preenchido.
+
+## Interface desktop
+
+```bash
+make gui
+```
+
+A interface Tkinter reúne editor de imagem, mapeador de campos, execução de
+documentos, comparação OCR, geração de datasets, visualização de PDFs,
+galeria de escrita e filtros de digitalização. Tkinter requer uma sessão gráfica
+e as bibliotecas Tcl/Tk do sistema.
+
+O mapeador permite criar e editar caixas, campos compostos, tipos de dados e
+validações. A interface descobre templates e mapas no catálogo `documents/`.
+Os presets de pré-processamento ficam em `documents/<tipo>/presets/`, e a
+biblioteca de estilos de escrita fica em `documents/writing_presets.json`.
+
+## Escrita e filtros
+
+O renderizador padrão `font` funciona sem baixar modelos neurais. Também estão
+integrados `sjvasquez`, `aaron1259` e `wpvnteam`.
+
+```bash
+make download-sjvasquez
+make dataset-sjvasquez COUNT=1 WRITER=9
+make download-aaron1259
+make dataset-aaron1259 COUNT=1
+```
+
+Os ajustes disponíveis incluem `BIAS`, `PEN_COLOR`, `PEN_WIDTH`, `PEN_PRESSURE`,
+`PEN_DROPOUT`, `TEXT_POLICY`, `INTENSITY` e `THREADS`. Por padrão, o Makefile usa
+`TEXT_POLICY=normalize`; os alfabetos neurais têm restrições para acentos e
+símbolos. As origens e limitações estão em [assets/handwriting/README.md](assets/handwriting/README.md).
+
+Na CLI, `ocrsd generate --printed` usa texto impresso. `--realistic-filters`
+ativa efeitos de iluminação, sombra, ruído e compressão; `--filter-preset`
+aceita `light`, `medium` e `strong`.
+
+## Comparação e pré-processamento OCR
+
+```bash
+uv run --extra benchmark ocrsd benchmark \
+  --input output/smoke/dnv/pipeline/crops \
+  --models easyocr,tesseract \
+  --output output/comparacao.json
+uv run ocrsd preprocess \
+  --input output/smoke/dnv/pipeline/crops \
+  --output output/recortes-processados \
+  --preset documents/dnv/presets/preset_001.json
+```
+
+Os backends implementados são EasyOCR, TrOCR manuscrito, TrOCR impresso,
+TrOCR manuscrito grande, Tesseract e PaddleOCR. O pré-processamento aceita
+`traditional` e `vlm`. A pasta de saída deve ficar fora da entrada; use
+`--overwrite` para substituir arquivos já existentes.
+
+## Organização
+
+| Pasta ou arquivo | Conteúdo |
+| --- | --- |
+| `src/` | Aplicação, CLI, interfaces e configuração em `src/config.py` |
+| `tests/` | Testes automatizados |
+| `scripts/` | Validação sintética e publicação de releases |
+| `documents/` | Templates, mapas e presets |
+| `assets/` | Fonte e informações dos modelos de escrita |
+| `docs/` | Relatório técnico e documentação de desenvolvimento |
+| `.github/workflows/` | Validação contínua e publicação |
+| `CHANGELOG.md` | Alterações por versão |
+
+As configurações da IDE, os datasets gerados, as saídas e os pesos locais dos
+modelos são ignorados. A pasta local `examples/` permanece vazia.
+
+## Limitações
+
+O processamento usa somente a primeira página e exige um template do mesmo
+layout. A detecção por campos é preferível para documentos digitalizados;
+a detecção por palavras é mais suscetível a ruído. A qualidade do OCR de texto
+manuscrito depende do modelo. A validação sintética usa o renderizador padrão
+e dispensa o download de pesos OCR ou neurais.
+
+## Release
+
+O release [V1](https://github.com/siqueiratf/ocrsd/releases/tag/V1) corresponde à
+versão Python `1.0.0`. Seu changelog está em [CHANGELOG.md](CHANGELOG.md).
+O workflow de publicação valida os documentos e publica as notas, o arquivo do
+código-fonte e documentos sintéticos de validação quando uma tag `V*` é enviada.

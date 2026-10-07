@@ -1,0 +1,603 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
+\DeclareUnicodeCharacter{2190}{\ensuremath{\leftarrow}}
+\DeclareUnicodeCharacter{2194}{\ensuremath{\leftrightarrow}}
+\DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
+\DeclareUnicodeCharacter{2265}{\ensuremath{\geq}}
+\DeclareUnicodeCharacter{2264}{\ensuremath{\leq}}
+\DeclareUnicodeCharacter{00B1}{\ensuremath{\pm}}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{times}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=1.5em}
+\setlist[enumerate]{leftmargin=1.5em}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{csquotes}
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+    citecolor=blue,
+    pdftitle={Relatório de PoC - INE5448},
+    pdfpagemode=FullScreen,
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny,
+    tabsize=2,
+    commentstyle=\color{gray},
+    keywordstyle=\color{blue},
+    stringstyle=\color{red},
+    literate=
+        {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+        {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+        {à}{{\`a}}1 {è}{{\`e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{\`u}}1
+        {À}{{\`A}}1 {È}{{\'E}}1 {Ì}{{\`I}}1 {Ò}{{\`O}}1 {Ù}{{\`U}}1
+        {ä}{{\"a}}1 {ë}{{\"e}}1 {ï}{{\"i}}1 {ö}{{\"o}}1 {ü}{{\"u}}1
+        {Ä}{{\"A}}1 {Ë}{{\"E}}1 {Ï}{{\"I}}1 {Ö}{{\"O}}1 {Ü}{{\"U}}1
+        {â}{{\^a}}1 {ê}{{\^e}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {û}{{\^u}}1
+        {Â}{{\^A}}1 {Ê}{{\^E}}1 {Î}{{\^I}}1 {Ô}{{\^O}}1 {Û}{{\^U}}1
+        {ã}{{\~a}}1 {õ}{{\~o}}1 {Ã}{{\~A}}1 {Õ}{{\~O}}1
+        {ç}{{\c{c}}}1 {Ç}{{\c{C}}}1
+        {ñ}{{\~n}}1 {Ñ}{{\~N}}1
+}
+
+\lstdefinelanguage{yaml}{
+  keywords={true,false,null,y,n},
+  keywordstyle=\color{blue}\bfseries,
+  basicstyle=\ttfamily\small,
+  sensitive=false,
+  comment=[l]{\#},
+  morecomment=[s]{/*}{*/},
+  commentstyle=\color{gray}\ttfamily,
+  stringstyle=\color{red}\ttfamily,
+  moredelim=[l][\color{orange}]{\&},
+  moredelim=[l][\color{magenta}]{*},
+  moredelim=**[il][\color{green}]{:},
+  morestring=[b]',
+  morestring=[b]",
+  literate=
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {â}{{\^a}}1 {ê}{{\^e}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {û}{{\^u}}1
+    {ã}{{\~a}}1 {õ}{{\~o}}1 {ç}{{\c{c}}}1 {Ç}{{\c{C}}}1
+}
+
+\usepackage[table]{xcolor}
+
+\usepackage[backend=bibtex,style=numeric,sorting=nyt,maxbibnames=99]{biblatex}
+\addbibresource{ref.bib}
+
+\title{\textbf{OCRSD: Detecção, Redação e Síntese de Documentos de Registro Civil com IA}}
+\author{Tiago Siqueira}
+
+\date{\small \today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Este relatório apresenta a prova de conceito OCRSD, um protótipo para detectar, segmentar, anonimizar e apoiar o reconhecimento textual de campos preenchidos em documentos de registro civil brasileiros. O problema tratado é sensível: documentos como a Declaração de Nascido Vivo (DNV) e certidões civis contêm dados pessoais e, em alguns casos, dados pessoais sensíveis, exigindo minimização, rastreabilidade e redução do risco de exposição indevida. A solução combina visão computacional clássica, alinhamento por homografia, diferença de imagens, máscaras por campos mapeados, reconstrução rasterizada de PDFs anonimizados, comparação de motores OCR e geração de dados sintéticos com escrita manual por fonte ou modelos neurais locais. O mapeamento principal da DNV contém 69 campos a 300 DPI, com regras para UF, datas, CEP, nomes, dígitos e caixas de seleção. A avaliação experimental considera os artefatos do repositório, incluindo 93 PDFs sintéticos de DNV, 60 PDFs sintéticos de certidão de nascimento, uma comparação de quatro motores OCR em recortes manuscritos difíceis e 91 testes automatizados executados com sucesso. Os resultados indicam que a detecção e a redação devem depender primariamente da comparação visual orientada por template, enquanto OCR deve ser tratado como metadado auxiliar. A PoC demonstra viabilidade técnica, mas ainda requer validação com bases reais controladas, métricas formais de detecção e governança de produção.
+\end{abstract}
+
+\textbf{Palavras-chave:} OCR, redação de documentos, registro civil, LGPD, dados sintéticos, visão computacional.
+
+\tableofcontents
+
+\section{Introdução}
+\label{sec:introducao}
+
+Serviços públicos, cartórios, hospitais e equipes de pesquisa lidam com formulários digitalizados que combinam campos impressos, escrita manual, texto digitado e marcações em caixas de seleção. A digitalização desses documentos cria oportunidades de automação, mas também aumenta a superfície de exposição de dados pessoais. O projeto OCRSD atua nesse contexto: detectar conteúdo acrescentado a um formulário conhecido, produzir uma versão redigida em que o conteúdo original não possa ser recuperado e gerar metadados auditáveis para inspeção humana. A proposta é particularmente relevante para documentos de registro civil e saúde, como a Declaração de Nascido Vivo, em que dados de recém-nascidos, responsáveis, parturientes, endereço e atendimento devem ser tratados conforme princípios de finalidade, minimização e segurança da LGPD \cite{brasil2018lgpd}.
+
+\subsection{Motivação}
+
+A motivação central é reduzir o trabalho manual e o risco de vazamento durante manipulação de documentos civis digitalizados. Um recorte de imagem ou PDF com camada textual preservada pode expor informações pessoais mesmo quando caixas visuais parecem cobrir o conteúdo. Por isso, a PoC reconstrói PDFs a partir da imagem rasterizada já redigida, evitando uma camada subjacente recuperável. Além disso, o repositório mostra que OCR de escrita cursiva ainda é irregular: na amostra de quatro recortes difíceis, PaddleOCR obteve confiança média de 0,781, enquanto EasyOCR, TrOCR manuscrito e Tesseract ficaram, respectivamente, em 0,240, 0,478 e 0,085. Assim, a arquitetura separa duas responsabilidades: a redação deve ser correta mesmo quando OCR falha; OCR serve como apoio, comparação e triagem.
+
+\subsection{Objetivos}
+
+O objetivo deste estudo é avaliar a viabilidade de um pipeline local para detectar, anonimizar e sintetizar documentos de registro civil baseados em template. Buscamos responder às seguintes perguntas centrais:
+
+\begin{itemize}
+    \item{} É possível redigir campos preenchidos de um documento conhecido sem depender da acurácia do OCR?
+    \item{} Mapas de campos reduzem falsos positivos em documentos escaneados em comparação com diferença de página inteira?
+    \item{} Dados sintéticos com escrita manual são suficientes para validar o fluxo de desenvolvimento e comparar motores OCR antes de testes com dados reais?
+\end{itemize}
+
+\subsection{Descrição do Problema}
+
+O problema técnico envolve alinhar um documento preenchido ao seu template em branco, compensando rotação, escala, translação, diferenças de DPI e ruídos de impressão/digitalização. Após o alinhamento, o sistema deve distinguir tinta nova de linhas, rótulos, bordas e artefatos do formulário. Essa separação é difícil porque bordas impressas e tinta manuscrita podem ter intensidades próximas, e pequenas diferenças de reamostragem geram pixels residuais em toda a página. A PoC resolve parte desse problema restringindo a busca aos campos mapeados, usando morfologia adaptativa, registrando imagens de depuração e permitindo inspeção visual dos recortes.
+
+\section{Fundamentação Teórica e Estado da Arte}
+\label{sec:fundamentacao}
+
+O trabalho combina técnicas clássicas de visão computacional, OCR e geração sintética. Embora redes profundas tenham avançado em reconhecimento visual \cite{goodfellow2016deep,he2016deep,dosovitskiy2020image}, a PoC adota uma decisão de segurança pragmática: a tarefa crítica de redação não depende de classificação semântica por modelo, mas de comparação controlada com template e campos previamente mapeados.
+
+\subsection{Técnicas Relevantes para o Problema}
+
+As técnicas mais relevantes são rasterização de PDF, registro geométrico, detecção de diferenças, operações morfológicas, segmentação de componentes conectados, OCR e reconstrução segura do documento redigido. Em documentos estruturados, a existência de um template conhecido permite substituir parte do problema geral de compreensão documental por um problema mais restrito: identificar regiões preenchidas em coordenadas conhecidas. O repositório materializa essa estratégia por meio de mapas JSON com coordenadas, tipos de campo, regras de validação e metadados normativos.
+
+\subsubsection{Abordagens Clássicas}
+
+Abordagens clássicas incluem alinhamento por pontos de interesse, homografia com RANSAC, subtração de imagens, limiarização e filtros morfológicos. No OCRSD, o alinhamento usa características ORB distribuídas pela página e estima escala, rotação e perspectiva. A etapa de diferença calcula uma máscara binária do conteúdo que diverge do template e aplica abertura morfológica para reduzir artefatos. Quando há mapa de campos, a máscara de busca é limitada à união das caixas anotadas, o que reduz ruído de regiões não preenchíveis.
+
+\subsubsection{Abordagens Baseadas em ML/DL}
+
+Abordagens baseadas em aprendizado profundo aparecem em duas partes da PoC. Primeiro, motores OCR como EasyOCR, TrOCR, PaddleOCR e Tesseract são comparados como backends de reconhecimento, ainda que o texto reconhecido seja metadado e não condição para redigir. Segundo, modelos neurais de escrita manual, como \texttt{sjvasquez} e \texttt{aaron1259}, são usados para gerar documentos sintéticos com variação de estilo, pressão, cor, largura de traço e normalização de caracteres. Essa escolha permite avaliar o pipeline sem expor dados reais e dialoga com a literatura de visão computacional moderna \cite{goodfellow2016deep,dosovitskiy2020image}.
+
+\subsection{Explicabilidade em Modelos de IA}
+
+Como a decisão de redação é baseada em evidências visuais e não em uma única predição opaca, a explicabilidade é operacional. O sistema salva imagens intermediárias: página rasterizada, template rasterizado, correspondências do alinhamento, documento alinhado, diferença em tons de cinza, máscara binária, máscara de campos e sobreposição dos campos. Esses artefatos permitem auditar por que uma região foi redigida ou ignorada. Para os componentes de IA, a explicabilidade é limitada à comparação entre texto previsto, confiança e latência por motor; técnicas como Grad-CAM \cite{selvaraju2017grad}, LIME \cite{ribeiro2016should} ou SHAP \cite{lundberg2017unified} podem ser incorporadas futuramente se o projeto passar a treinar modelos próprios.
+
+\subsection{Segurança e Privacidade em Sistemas de IA}
+
+O domínio envolve dados pessoais identificáveis, dados de saúde e informações familiares. Portanto, segurança e privacidade são requisitos centrais, não apenas atributos desejáveis. A PoC reduz exposição ao processar localmente, ao permitir datasets sintéticos e ao reconstruir o PDF redigido como raster, mas ainda exige controles de acesso, descarte, auditoria e validação antes de uso em produção.
+
+\subsubsection{Ataques Adversariais}
+
+As ameaças adversariais incluem manipulação do formulário para escapar da diferença visual, preenchimento fora das caixas mapeadas, baixa qualidade de digitalização, inserção de ruídos para causar falsos positivos e tentativas de recuperar conteúdo sob tarjas. Em modelos OCR, ataques adversariais podem induzir transcrições incorretas \cite{goodfellow2014explaining,madry2017towards}. A defesa adotada nesta PoC é não usar OCR como fonte de decisão de ocultação; a redação deriva da imagem e do mapa de campos.
+
+\subsubsection{Conformidade com a LGPD}
+
+A LGPD exige finalidade, adequação, necessidade, transparência, segurança e prevenção \cite{brasil2018lgpd}. No contexto desta PoC, a finalidade deve ser explicitada como proteção e processamento técnico de documentos civis; a necessidade recomenda restringir recortes e manifests ao mínimo; e a segurança exige que PDFs finais não contenham conteúdo recuperável. Como a PoC ainda manipula dados sensíveis durante o processamento, uma implantação real deve prever base legal, controle de acesso, logs, retenção limitada, revisão humana e avaliação de impacto.
+
+\subsection{Gaps e Oportunidades}
+
+\begin{enumerate}
+    \item \textbf{OCR manuscrito em português} — os resultados do repositório indicam desempenho instável em escrita cursiva, especialmente em nomes e endereços.
+    \item \textbf{Datasets sensíveis} — bases reais de documentos civis são difíceis de compartilhar; dados sintéticos ajudam, mas não substituem validação controlada.
+    \item \textbf{Segurança de redação em PDFs} — cobrir visualmente texto em PDF não basta; é necessário reconstruir ou remover camadas recuperáveis.
+\end{enumerate}
+
+\section{Objetivos e Métricas de Sucesso}
+\label{sec:objetivos}
+
+A avaliação foi organizada em torno de três capacidades: mapear campos, gerar documentos sintéticos e executar um pipeline auditável de detecção/redação/OCR. As métricas priorizam segurança de ocultação, reprodutibilidade e utilidade prática.
+
+\subsection{Objetivos do Estudo}
+
+\begin{itemize}
+    \item{} Implementar um pipeline local que alinhe documento preenchido e template, detecte alterações e gere PDF redigido.
+    \item{} Construir mapas de campos reutilizáveis para documentos civis, com validações e metadados por campo.
+    \item{} Gerar datasets sintéticos reproduzíveis para testar OCR, redação e variações de escrita sem expor dados reais.
+\end{itemize}
+
+\subsection{Métricas de Sucesso}
+
+\begin{enumerate}
+    \item \textbf{Cobertura de campos mapeados}
+    Quantidade e diversidade de campos declarados no mapa. O mapa principal da DNV possui 69 campos, incluindo 31 sequências de dígitos, 16 checkboxes, 3 UFs, 3 nomes de pessoa, 1 campo de texto livre e 15 campos sem tipo explícito.
+
+    \item \textbf{Reprodutibilidade experimental}
+    Número de testes automatizados e manifests com seeds. A suíte local executou 91 testes com sucesso, cobrindo CLI, geração sintética, mapas de campo, GUI, pré-processamento, PDF e modelos neurais.
+
+    \item \textbf{Qualidade auxiliar do OCR}
+    Confiança média e latência por motor em recortes difíceis. OCR não decide a redação, mas sua qualidade afeta triagem, revisão e metadados.
+\end{enumerate}
+
+\section{Escopo da Solução e Requisitos}
+\label{sec:escopo}
+
+O escopo da PoC é deliberadamente restrito: documentos de uma página, template conhecido e execução local. Essa delimitação favorece controle, auditabilidade e segurança, em vez de tentar resolver genericamente qualquer documento.
+
+\subsection{Escopo da Solução}
+
+O escopo da solução abrange:
+\begin{itemize}
+    \item{} DNV e certidões civis organizadas em catálogo \texttt{documents/<tipo>/}.
+    \item{} Alinhamento, diferença, segmentação por campo, recortes, manifests JSON e PDF redigido rasterizado.
+    \item{} Geração de datasets sintéticos com escrita por fonte ou modelos neurais locais.
+\end{itemize}
+
+Não fazem parte do escopo atual:
+\begin{itemize}
+    \item{} Validação jurídica completa para implantação em ambiente de produção.
+    \item{} Garantia de OCR perfeito em escrita cursiva ou reconhecimento sem template conhecido.
+\end{itemize}
+
+\subsection{Requisitos Funcionais}
+
+\begin{enumerate}
+    \item{} Carregar documento preenchido, template vazio, mapa de campos e configuração de DPI.
+    \item{} Alinhar a página preenchida ao template e salvar artefatos de depuração.
+    \item{} Detectar conteúdo por campo ou por palavra, salvar recortes e gerar manifesto JSON.
+    \item{} Gerar PDF final redigido sem camada textual recuperável.
+\end{enumerate}
+
+\subsection{Requisitos Não-Funcionais}
+
+\begin{itemize}
+    \item \textbf{Desempenho:} permitir execução local e iteração rápida com \texttt{--skip-ocr} e \texttt{--stop-after}.
+    \item \textbf{Segurança:} evitar dependência de serviços externos e reconstruir PDFs redigidos como raster.
+    \item \textbf{Extensibilidade:} aceitar novos documentos, mapas, presets de imagem e motores OCR.
+    \item \textbf{Reprodutibilidade:} registrar seeds, parâmetros de escrita, modelo usado, template e mapa em manifests JSON.
+\end{itemize}
+
+\section{Ameaças, Riscos e Controles}
+\label{sec:threat-model}
+
+A análise de riscos segue a lógica de modelagem de ameaças: identificar ativos, entradas não confiáveis, falhas possíveis e controles proporcionais \cite{shostack2014threat}. Os ativos principais são o documento original, os recortes não redigidos, os manifests e os pesos/modelos usados localmente.
+
+\subsection{Principais Ameaças Identificadas}
+
+\begin{itemize}
+    \item \textbf{Recuperação de conteúdo oculto:} risco de tarjas visuais sobre camada textual ou vetorial preservada.
+    \item \textbf{Falha de detecção:} campos preenchidos podem ser ignorados por baixo contraste, preenchimento fora da caixa ou mapa incorreto.
+    \item \textbf{Exposição de recortes:} crops e arquivos de depuração contêm dados antes da redação.
+    \item \textbf{Dependência de OCR:} transcrições erradas podem induzir revisão humana ou automações posteriores a erro.
+\end{itemize}
+
+\subsection{Riscos Associados ao Projeto}
+
+\begin{enumerate}
+    \item \textbf{Vazamento de dados pessoais:} exposição de nomes, endereços, datas e dados de saúde.
+    \item \textbf{Falso senso de anonimização:} aceitação de PDF visualmente redigido, mas tecnicamente recuperável.
+    \item \textbf{Viés de avaliação:} dados sintéticos podem não representar toda a variabilidade de documentos reais.
+\end{enumerate}
+
+\subsection{Controles e Medidas de Mitigação}
+
+\begin{itemize}
+    \item{} Processamento local e uso de modelos de escrita executados em CPU, sem envio obrigatório a serviços externos.
+    \item{} Reconstrução do PDF final a partir do raster redigido.
+    \item{} Separação explícita entre detecção/redação e OCR auxiliar.
+    \item{} Artefatos de depuração para auditoria visual do alinhamento, diferença e máscara final.
+\end{itemize}
+
+\section{Metodologia de Desenvolvimento da PoC}
+\label{sec:metodologia}
+
+A PoC foi desenvolvida como um pacote Python com CLI, módulos independentes e interfaces Tkinter de apoio. O fluxo priorizou primeiro a corretude visual e a auditabilidade, depois a comparação de OCR e a geração sintética para acelerar avaliação.
+
+\subsection{Fases de Implementação}
+
+\begin{enumerate}
+    \item \textbf{Pipeline base} — rasterização, alinhamento, diferença, segmentação, redaction e manifesto.
+    \item \textbf{Mapeamento de campos} — criação de mapas JSON para DNV e suporte a caixas compostas, validações e checkboxes.
+    \item \textbf{Geração sintética} — PDFs e ground truth com fonte Caveat e modelos neurais de escrita.
+    \item \textbf{Avaliação e ferramentas} — benchmark de OCR, pré-processamento, GUI, presets e testes automatizados.
+\end{enumerate}
+
+\subsection{Pipelines / Módulos Desenvolvidos}
+
+\begin{itemize}
+    \item \textbf{\texttt{src/pipeline.py}:} orquestra a execução fim a fim, valida entradas, gera debug, chama alinhamento, diferença, OCR e redação.
+    \item \textbf{\texttt{src/alignment.py} e \texttt{src/difference.py}:} tratam registro geométrico, escala e máscara de diferenças.
+    \item \textbf{\texttt{src/fields.py}:} carrega mapas, constrói máscara de busca e associa componentes detectados a campos.
+    \item \textbf{\texttt{src/synthetic\_dataset.py}:} gera valores coerentes, renderiza escrita e produz PDFs sintéticos com ground truth.
+    \item \textbf{\texttt{src/ocr\_bench.py}:} compara motores OCR e registra texto, confiança e tempo por imagem.
+\end{itemize}
+
+\subsection{Ferramentas e Tecnologias Utilizadas}
+
+\begin{itemize}
+    \item \textbf{Python 3.11 e uv:} empacotamento reprodutível, CLI e testes automatizados.
+    \item \textbf{OpenCV e NumPy:} alinhamento, morfologia, diferença de imagens e máscaras.
+    \item \textbf{PyMuPDF, Pillow e ReportLab:} rasterização, manipulação de imagens e reconstrução de PDFs.
+    \item \textbf{JSON:} mapas de campos, manifests, datasets e presets legíveis e versionáveis.
+\end{itemize}
+
+\subsection{Critérios de Aceitação da PoC}
+
+\begin{enumerate}
+    \item{} Gerar saída redigida, crops, manifesto e debug para um documento de uma página.
+    \item{} Executar com mapa de campos e recusar DPI incompatível.
+    \item{} Gerar datasets sintéticos com seed e ground truth.
+    \item{} Passar a suíte automatizada local sem falhas.
+\end{enumerate}
+
+\section{Avaliação Experimental}
+\label{sec:avaliacao}
+
+A avaliação usa três cenários extraídos do repositório: inventário dos dados sintéticos, comparação de OCR em recortes difíceis e verificação automatizada da implementação. Esses cenários avaliam capacidade de geração, utilidade do OCR e estabilidade do software.
+
+\subsection{Experimento 1 — Geração Sintética e Cobertura de Campos}
+
+O mapa \texttt{documents/dnv/mappings/mapeamento\_seguindo\_norma.json} foi usado como referência principal. Ele descreve a DNV a 300 DPI, com página de 4330 $\times$ 5717 pixels, 69 campos e 6 regras compartilhadas. O repositório contém 93 PDFs sintéticos de DNV e 60 PDFs sintéticos de certidão de nascimento em pastas de dataset.
+
+\begin{itemize}
+    \item{} Quantidade e tipos dos campos mapeados.
+    \item{} Quantidade de PDFs sintéticos e presença de manifests com seed, modelo de escrita e filtros visuais.
+\end{itemize}
+
+\begin{table}[H]
+    \centering
+    \caption{Composição do mapa principal da DNV.}
+    \begin{tabular}{lc}
+        \toprule
+        \textbf{Tipo de campo} & \textbf{Quantidade} \\
+        \midrule
+        Sequência de dígitos & 31 \\
+        Checkbox & 16 \\
+        UF & 3 \\
+        Nome de pessoa & 3 \\
+        Texto livre & 1 \\
+        Sem tipo explícito & 15 \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:mapa-dnv}
+\end{table}
+
+O experimento mostra que a PoC já cobre campos estruturados e semiestruturados típicos de formulários civis. A existência de regras de validação por campo permite gerar valores plausíveis e restringir futuras checagens de OCR. A principal limitação é que quantidade de documento sintético não equivale a diversidade real de digitalização, preenchimento e qualidade de papel.
+
+\subsection{Experimento 2 — Comparação de OCR em Recortes Manuscritos}
+
+Foi analisado um manifesto experimental de comparação OCR, contendo quatro recortes manuscritos difíceis e quatro motores: EasyOCR, TrOCR manuscrito, Tesseract e PaddleOCR. Para cada predição, foram registrados texto, confiança e latência.
+
+\begin{itemize}
+    \item{} Confiança média por motor nos quatro recortes.
+    \item{} Latência média por motor em milissegundos.
+\end{itemize}
+
+\begin{table}[H]
+    \centering
+    \caption{Resumo da comparação de OCR em quatro recortes manuscritos.}
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Motor} & \textbf{Confiança média} & \textbf{Latência média (ms)} \\
+        \midrule
+        PaddleOCR & 0,781 & 2448 \\
+        TrOCR manuscrito & 0,478 & 2806 \\
+        EasyOCR & 0,240 & 1664 \\
+        Tesseract & 0,085 & 681 \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:ocr}
+\end{table}
+
+PaddleOCR apresentou maior confiança média na amostra, mas ainda com erros textuais relevantes, como nomes parcialmente incorretos. O resultado reforça a decisão arquitetural de não condicionar a redação à transcrição. OCR é útil para revisão e busca, mas não deve ser o controle de segurança primário.
+
+\subsection{Experimento 3 — Verificação Automatizada}
+
+A suíte de testes foi executada com \texttt{make check}. Foram executados 91 testes em 18,8 segundos, todos com sucesso. Os testes cobrem geração sintética, CLI, manipulação de PDFs, seleção de campos, pré-processamento, modelos neurais de escrita, GUI e presets. Esse resultado não substitui avaliação com documentos reais, mas indica estabilidade funcional dos componentes implementados.
+
+\section{Discussão}
+\label{sec:discussao}
+
+Os resultados sustentam a viabilidade da abordagem orientada por template para PoC, especialmente quando a prioridade é proteção de dados e não transcrição perfeita. A escolha de visão computacional clássica para a etapa crítica é coerente com o risco de OCR instável em escrita manual.
+
+\subsection{Alcance dos Objetivos}
+
+Os objetivos foram parcialmente atingidos. O pipeline local existe, os mapas de campos estão implementados e há datasets sintéticos reproduzíveis. A suíte automatizada passou integralmente. O ponto ainda não atingido é a mensuração formal de precisão, revocação e taxa de falso positivo em uma base real anotada, necessária para afirmar desempenho operacional.
+
+\subsection{Limitações Identificadas}
+
+\subsubsection{Limitações Técnicas}
+As principais limitações técnicas são dependência de template conhecido, restrição a uma página, sensibilidade a mapas incorretos e falta de métricas quantitativas de detecção em ground truth real. O OCR de cursiva permanece frágil e variável entre motores. A geração sintética ajuda no desenvolvimento, mas pode não capturar carimbos, dobras, baixa resolução, canetas muito claras, fotos oblíquas e variações regionais de formulários.
+
+\subsubsection{Limitações de Segurança}
+As limitações de segurança incluem retenção de crops não redigidos, imagens de debug contendo dados pessoais e necessidade de políticas de acesso fora do código. Também é preciso proteger pesos, manifests e pastas de saída contra acesso indevido. Em produção, a PoC exigiria trilhas de auditoria, criptografia em repouso, segregação de permissões e descarte automático.
+
+\subsection{Comparação com o Estado da Arte}
+
+Frente a soluções puramente baseadas em OCR ou modelos de compreensão documental, a PoC é menos genérica, porém mais auditável para formulários fixos. Redes profundas são fortes em reconhecimento, mas podem falhar de forma opaca; a abordagem de template fornece evidências visuais e artefatos intermediários. O uso de OCR como metadado combina o melhor dos dois mundos: automação onde há confiança, revisão humana onde há incerteza.
+
+\subsection{Trade-offs Segurança vs. Usabilidade}
+
+O principal trade-off é exigir mapeamento manual de campos para ganhar segurança e reduzir ruído. Isso aumenta o esforço inicial por tipo documental, mas torna a detecção mais previsível. Outro trade-off é reconstruir PDFs rasterizados: perde-se texto pesquisável no documento redigido, mas reduz-se o risco de conteúdo recuperável sob tarjas.
+
+\subsection{Implicações Práticas}
+
+\subsubsection{Para Usuários e Stakeholders}
+Usuários finais ganham uma ferramenta para revisar documentos com apoio visual, crops e metadados. Stakeholders institucionais podem usar a PoC para definir fluxos de anonimização antes de compartilhar documentos em pesquisa, treinamento ou auditoria. Ainda assim, qualquer uso real deve manter revisão humana, pois falhas de mapa ou digitalização podem ter impacto direto na privacidade.
+
+\subsubsection{Para Políticas Públicas}
+A PoC aponta para uma política pública prática: antes de liberar bases documentais, órgãos devem exigir anonimização tecnicamente verificável, manifests de processamento e avaliação de risco. Dados sintéticos podem complementar capacitação e desenvolvimento sem ampliar exposição de cidadãos.
+
+\section{Conclusões e Próximos Passos}
+\label{sec:conclusoes}
+
+O OCRSD demonstra que uma solução local, baseada em template e apoiada por dados sintéticos, é uma direção promissora para proteger documentos civis digitalizados. A contribuição mais importante é separar claramente segurança de redação e qualidade de OCR.
+
+\subsection{Síntese das Evidências}
+
+\begin{itemize}
+    \item{} O mapa DNV possui 69 campos e regras suficientes para guiar geração e detecção por região.
+    \item{} Foram encontrados 93 PDFs sintéticos de DNV e 60 de certidão de nascimento no repositório.
+    \item{} PaddleOCR foi o melhor motor na amostra manuscrita difícil, mas ainda não elimina necessidade de revisão.
+    \item{} A suíte local executou 91 testes com sucesso, indicando maturidade inicial da implementação.
+\end{itemize}
+
+\subsection{Contribuições}
+
+\begin{enumerate}
+    \item{} Pipeline auditável de detecção, crop, manifesto e PDF redigido.
+    \item{} Catálogo extensível de documentos, mapas de campos e presets.
+    \item{} Gerador sintético com escrita manual e manifests reproduzíveis.
+\end{enumerate}
+
+\subsection{Trabalhos Futuros}
+
+\subsubsection{Curto Prazo (3–6 meses)}
+\begin{itemize}
+    \item{} Medir precisão, revocação e falso positivo em uma base real anotada e controlada.
+    \item{} Criar testes de regressão visuais para mapas de campo e qualidade da redação.
+\end{itemize}
+
+\subsubsection{Médio Prazo (6–12 meses)}
+\begin{itemize}
+    \item{} Implementar política de retenção e limpeza automática de crops/debug sensíveis.
+    \item{} Integrar validações semânticas de campos, como datas plausíveis, CEP e UF.
+\end{itemize}
+
+\subsubsection{Longo Prazo (1–2 anos)}
+\begin{itemize}
+    \item{} Treinar ou ajustar modelos OCR específicos para português manuscrito em formulários civis.
+    \item{} Avaliar certificação, governança e implantação segura em fluxo institucional.
+\end{itemize}
+
+\subsection{Recomendações}
+
+Recomenda-se usar a PoC inicialmente em ambiente isolado, com dados sintéticos ou anonimizados, mantendo revisão humana obrigatória. Para novos documentos, deve-se criar um template canônico, mapear campos a 300 DPI, versionar o JSON do mapa e registrar métricas de detecção antes de qualquer compartilhamento de saída.
+
+\section{Checklist de Conformidade (LGPD / Ética / Segurança)}
+\label{sec:checklist}
+
+O checklist resume o estado atual da PoC frente a LGPD, segurança e ética. O objetivo é explicitar controles existentes e lacunas, não declarar conformidade plena.
+
+\subsection{Lei Geral de Proteção de Dados (LGPD)}
+
+\begin{itemize}
+    \item \textbf{Minimização de dados (Art. 6º, III)} \\
+    Atendimento: Parcial; mapas de campo permitem limitar processamento às regiões relevantes. \\
+    Lacuna: crops e debug ainda podem armazenar conteúdo sensível temporariamente.
+
+    \item \textbf{Finalidade específica (Art. 6º, I)} \\
+    Atendimento: Parcial; a finalidade técnica é redação e avaliação de OCR. \\
+    Lacuna: implantação real precisa documentar base legal e finalidade institucional.
+
+    \item \textbf{Transparência (Art. 6º, VI)} \\
+    Atendimento: Bom no nível técnico, com manifests e artefatos de debug. \\
+    Lacuna: falta documentação para titulares e operadores não técnicos.
+
+    \item \textbf{Segurança (Art. 46)} \\
+    Atendimento: Parcial; processamento local e PDF rasterizado reduzem riscos. \\
+    Lacuna: faltam criptografia, controle de acesso, logs e política de retenção.
+
+    \item \textbf{Não discriminação (Art. 6º, IX)} \\
+    Atendimento: Inicial; a redação não depende de atributos pessoais inferidos. \\
+    Lacuna: OCR e geração sintética podem ter desempenho desigual em grafias, nomes e estilos de escrita.
+\end{itemize}
+
+\subsection{Segurança da Informação}
+
+\begin{itemize}
+    \item \textbf{Acesso e Controle} \\
+    Atendimento: Fora do escopo atual do código. \\
+    Lacuna: necessário integrar autenticação, permissões e segregação de pastas.
+
+    \item \textbf{Integridade e Reprodutibilidade} \\
+    Atendimento: Bom; manifests registram seeds, template, mapa e parâmetros. \\
+    Lacuna: falta assinar artefatos e registrar hashes de entradas/saídas.
+
+    \item \textbf{Proteções Técnicas} \\
+    Atendimento: Parcial; PDF final é reconstruído como raster redigido. \\
+    Lacuna: debug e crops exigem descarte seguro.
+\end{itemize}
+
+\subsection{Ética e IA Responsável}
+
+\begin{itemize}
+    \item \textbf{Transparência Experimental} \\
+    Atendimento: Bom; há README, exemplos, testes e manifests. \\
+    Lacuna: métricas formais de detecção ainda precisam ser publicadas.
+
+    \item \textbf{Responsabilidade} \\
+    Atendimento: Parcial; o sistema produz evidências para revisão. \\
+    Lacuna: falta fluxo formal de aprovação humana.
+
+    \item \textbf{Impacto Social} \\
+    Atendimento: Positivo em potencial, ao reduzir exposição de documentos civis. \\
+    Lacuna: deve-se evitar uso para decisões automatizadas sobre pessoas.
+\end{itemize}
+
+\subsection{Ações Necessárias para Maturidade em Produção}
+
+\begin{itemize}
+    \item{} Criar política de retenção e limpeza segura de arquivos intermediários.
+    \item{} Medir precisão e revocação com base real anotada.
+    \item{} Implementar controle de acesso, logs e criptografia em repouso.
+    \item{} Formalizar revisão humana e critérios de rejeição de documentos.
+\end{itemize}
+
+\section*{Agradecimentos}
+
+Agradecemos ao LabREC/UFSC e à disciplina INE5448 pelo contexto acadêmico e pelos critérios de avaliação de PoC em IA e segurança.
+
+\nocite{*}
+\printbibliography
+
+\appendix
+
+\section{Detalhes de Implementação}
+\label{app:implementacao}
+
+A implementação está organizada como pacote Python \texttt{ocrsd}. A CLI \texttt{ocrsd} chama módulos especializados para PDF, alinhamento, diferença, campos, OCR, redação, pré-processamento e geração sintética. As interfaces Tkinter ajudam a mapear campos, visualizar PDFs gerados, testar modelos OCR e ajustar filtros sem alterar código.
+
+\subsection{Estrutura de Diretórios}
+
+\begin{verbatim}
+.
+|-- README.md
+|-- pyproject.toml
+|-- Makefile
+|-- src/
+|   |-- pipeline.py
+|   |-- alignment.py
+|   |-- difference.py
+|   |-- fields.py
+|   |-- redaction.py
+|   |-- synthetic_dataset.py
+|   |-- ocr_bench.py
+|   `-- preprocess.py
+|-- documents/
+|   |-- dnv/
+|   |   |-- template.pdf
+|   |   |-- mappings/
+|   |   |-- presets/
+|   |   `-- dataset/
+|   `-- certidao_nascimento/
+|-- scripts/
+|-- docs/
+|-- tests/
+`-- output/
+\end{verbatim}
+
+\subsection{Comandos para Reprodução}
+
+\subsubsection*{1) Instalação de Dependências}
+\begin{verbatim}
+uv sync --locked --all-extras
+uv run ocrsd doctor
+make check
+\end{verbatim}
+
+\subsubsection*{2) Execução do Experimento Principal}
+\begin{verbatim}
+uv run ocrsd run \
+  --document output/smoke/dnv/dataset/synthetic_0001.pdf \
+  --template documents/dnv/template.pdf \
+  --field-map documents/dnv/mappings/mapeamento_seguindo_norma.json \
+  --output output/relatorio-demo \
+  --skip-ocr
+\end{verbatim}
+
+\subsubsection*{3) Geração de Dataset Sintético}
+\begin{verbatim}
+make dataset COUNT=10 SEED=42
+make dataset-sjvasquez WRITER=9
+uv run ocrsd benchmark \
+  --input output/relatorio-demo/crops \
+  --models easyocr,tesseract,paddleocr \
+  --output output/ocr_comparison.json
+\end{verbatim}
+
+\section{Exemplos Adicionais de Resultados}
+\label{app:exemplos}
+
+Os resultados de validação são gerados por \texttt{make check} em \texttt{output/smoke/}, incluindo PDFs sintéticos, valores esperados, recortes, imagens de diagnóstico e manifestos de processamento. Datasets adicionais podem ser gerados sob \texttt{documents/dnv/dataset/} e \texttt{documents/certidao\_nascimento/dataset/}. Os resultados locais não são versionados; o GitHub Actions disponibiliza os documentos da validação como artefatos.
+
+\section{Código-fonte}
+\label{app:codigo}
+
+Repositório do projeto: \url{https://github.com/siqueiratf/ocrsd}
+
+\end{document}
