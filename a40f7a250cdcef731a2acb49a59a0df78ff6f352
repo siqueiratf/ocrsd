@@ -7,17 +7,17 @@
     {
       "name": "ocrsd-V1.tar.gz",
       "size": 2759199,
-      "url": "https://github.com/siqueiratf/ocrsd/releases/download/untagged-c26f23d42587611c3e04/ocrsd-V1.tar.gz"
+      "url": "https://github.com/siqueiratf/ocrsd/releases/download/V1/ocrsd-V1.tar.gz"
     },
     {
       "name": "synthetic-validation-V1.zip",
       "size": 2051785,
-      "url": "https://github.com/siqueiratf/ocrsd/releases/download/untagged-c26f23d42587611c3e04/synthetic-validation-V1.zip"
+      "url": "https://github.com/siqueiratf/ocrsd/releases/download/V1/synthetic-validation-V1.zip"
     },
     {
       "name": "validation.json",
       "size": 313,
-      "url": "https://github.com/siqueiratf/ocrsd/releases/download/untagged-c26f23d42587611c3e04/validation.json"
+      "url": "https://github.com/siqueiratf/ocrsd/releases/download/V1/validation.json"
     }
   ]
 }
