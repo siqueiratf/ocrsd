@@ -1,5 +1,43 @@
 # Changelog
 
+## [V1.1.0] — 2026-10-10
+
+Evolução do OCRSD para uma plataforma web modular, preservando a CLI, a interface
+desktop e o motor existente de geração sintética.
+
+### Plataforma web
+
+- Interface responsiva em React e TypeScript para escolher documento, mapa, campos,
+  quantidade, semente, escrita e filtros, acompanhar progresso e visualizar PDFs.
+- API FastAPI versionada com catálogo, templates, mapas, capacidades, presets,
+  validação, jobs, cancelamento, resultados e artefatos protegidos por chave.
+- Downloads de datasets em ZIP com PDFs, ground truth e manifesto, além de links
+  temporários de compartilhamento que expiram junto com o job.
+- Modelos locais por fonte, sjvasquez, aaron1259 e wpvnteam disponíveis quando seus
+  pesos completos são instalados pelo administrador.
+
+### Processamento e segurança
+
+- Serviço reutilizável de geração que chama o motor existente sem depender de
+  Tkinter ou do protocolo HTTP.
+- Worker separado com fila SQLite, progresso persistente, cancelamento, timeout,
+  recuperação após reinício, cotas, retenção e isolamento dos artefatos por job.
+- Identificadores administrados no lugar de caminhos fornecidos pelo cliente,
+  validação estrita, limites de corpo, memória, armazenamento e requisições.
+- Documentos públicos marcados como sintéticos e sem validade legal no PDF, no
+  ground truth e no manifesto.
+
+### Operação e qualidade
+
+- Docker Compose com frontend Nginx, API, worker, volume persistente, health checks,
+  filesystems somente leitura, limites de recursos e políticas de reinício.
+- Configurações para Nginx com HTTPS, unidades systemd e alternativa de implantação
+  sem Docker, com procedimentos de atualização, backup e diagnóstico.
+- Collection Postman v2.1 gerada a partir do OpenAPI, ambientes local e remoto e
+  fluxo completo de geração, consulta, preview, download e cancelamento.
+- Testes de serviço e contrato da API, concorrência, falhas, isolamento,
+  determinismo e fluxos essenciais do frontend incorporados ao CI e ao release.
+
 ## [V1] — 2026-10-07
 
 Primeira versão organizada do OCRSD, identificada no pacote Python como `1.0.0`.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocrsd"
-version = "1.0.0"
+version = "1.1.0"
 description = "Template-based document detection, redaction and OCR tools"
 requires-python = ">=3.11,<3.12"
 dependencies = [
@@ -20,6 +20,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "pydantic-settings>=2.8,<3"]
+test = ["httpx>=0.28,<1", "jsonschema>=4.23,<5"]
 benchmark = ["transformers==4.44.2", "sentencepiece", "pytesseract"]
 paddle = ["paddlepaddle==3.2.0", "paddleocr>=3,<4"]
 handwriting = ["tensorflow-cpu>=2.20,<2.21"]
@@ -28,7 +30,7 @@ handwriting = ["tensorflow-cpu>=2.20,<2.21"]
 ocrsd = "src.cli:main"
 
 [tool.setuptools]
-packages = ["src"]
+packages = ["src", "src.web"]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }

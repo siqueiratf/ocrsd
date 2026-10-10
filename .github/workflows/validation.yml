@@ -26,9 +26,19 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv sync --locked --python 3.11
+      - run: uv sync --locked --python 3.11 --extra web --extra test
       - run: uv run --no-sync python -m compileall -q src tests scripts
-      - run: make check
+      - run: uv run --no-sync python -m unittest discover -s tests -q
+      - run: uv run --no-sync python -m scripts.smoke_generate --output output/smoke --seed 123
+      - run: uv run --no-sync python -m scripts.export_postman --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: npm test --prefix frontend
+      - run: npm run build --prefix frontend
       - uses: actions/upload-artifact@v4
         if: always()
         with:

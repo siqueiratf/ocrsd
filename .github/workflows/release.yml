@@ -22,8 +22,17 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv sync --locked --python 3.11
+      - run: uv sync --locked --python 3.11 --extra web --extra test
       - run: make check
+      - run: uv run --no-sync python -m scripts.export_postman --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: npm test --prefix frontend
+      - run: npm run build --prefix frontend
       - name: Package source and synthetic documents
         env:
           RELEASE_TAG: ${{ github.ref_name }}

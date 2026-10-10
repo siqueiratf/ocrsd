@@ -1,8 +1,90 @@
-# OCRSD — V1
+# OCRSD
 
 Ferramentas para gerar documentos civis sintéticos, localizar conteúdo preenchido,
 comparar motores OCR e ocultar campos em PDFs. O alinhamento e a detecção usam
 visão computacional; o reconhecimento OCR fornece texto e confiança no manifesto.
+
+## Plataforma web
+
+A primeira versão web oferece catálogo de documentos e mapas, seleção de campos,
+presets, escrita, filtros, quantidade e semente; criação de jobs; progresso,
+cancelamento, prévia PDF e download de ZIP com PDFs, ground truth e manifesto.
+O motor Python, a CLI e o desktop continuam disponíveis. Os documentos gerados
+pela web recebem marca visível **SINTÉTICO — SEM VALIDADE LEGAL**.
+
+Para testar a pilha completa com Docker Engine e Compose instalados:
+
+```bash
+cp deploy/.env.example deploy/.env
+docker compose --env-file deploy/.env up -d --build
+docker compose --env-file deploy/.env ps
+curl --fail http://127.0.0.1:8080/api/v1/health
+```
+
+Abra **http://127.0.0.1:8080**. A publicação fica restrita ao computador local.
+O Compose monta `assets/handwriting` somente para leitura e habilita os modelos
+neurais quando os pesos completos estão presentes. Ajuste
+`OCRSD_HANDWRITING_ASSETS` se os pesos forem mantidos fora do checkout.
+`OCRSD_BIND_ADDRESS` controla a interface publicada; mantenha `127.0.0.1` quando
+houver proxy no host e use um endereço privado específico para acesso por VPN.
+Resultados concluídos podem ser baixados ou compartilhados por link temporário.
+A chave fica no fragmento da URL, não é enviada ao proxy, e o acesso expira junto
+com o job. Uma biblioteca permanente exigirá identidade e permissões próprias.
+O OpenAPI está em `/api/openapi.json` e a documentação interativa em `/api/docs`.
+`docker compose --env-file deploy/.env logs -f api worker web` mostra os logs; `docker compose --env-file deploy/.env stop`
+interrompe os serviços preservando os dados. Não use `down -v` se precisar
+preservar jobs e resultados.
+
+Para desenvolver sem Docker, use Linux, Python 3.11, uv e Node.js 22.12 ou superior:
+
+```bash
+uv sync --locked --extra web --extra test
+npm ci --prefix frontend
+```
+
+Execute em três terminais, todos na raiz do repositório:
+
+```bash
+uv run --no-sync uvicorn src.web.api:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+```bash
+uv run --no-sync python -m src.web.worker
+```
+
+```bash
+npm run dev --prefix frontend
+```
+
+Abra **http://127.0.0.1:5173**. O Vite encaminha `/api/` para a API. Os jobs ficam
+em `var/web/`; feche o worker com Ctrl+C, aguardando o job atual terminar.
+API e worker devem usar as mesmas variáveis `OCRSD_*`; a execução direta não lê
+`deploy/.env` automaticamente. Para carregá-las no shell, use
+`set -a; . deploy/.env; set +a` antes de iniciar cada processo.
+
+Importe [a coleção Postman](postman/ocrsd.postman_collection.json) e
+[o ambiente local](postman/local.postman_environment.json). Ajuste `baseUrl`
+para `http://127.0.0.1:8080` ao usar Compose. Execute a coleção no Collection
+Runner: ela seleciona recursos, gera um dataset, aguarda a conclusão, baixa
+artefatos e testa o cancelamento de outro job. Requisições individuais podem ser
+executadas na mesma ordem; repita “Aguardar conclusão” até `succeeded`. Para salvar
+o ZIP em disco no Postman, use **Send and Download**. A chave retornada na criação
+é privada, não aparece novamente e não deve ser incluída em exports compartilhados.
+
+```bash
+uv run --no-sync python -m unittest discover -s tests -q
+uv run --no-sync python -m scripts.smoke_generate --output output/smoke --seed 123
+uv run --no-sync python -m scripts.export_postman --check
+npm test --prefix frontend
+npm run build --prefix frontend
+```
+
+Após alterar contratos, regenere a coleção com
+`uv run --no-sync python -m scripts.export_postman` e execute os testes.
+[Desenvolvimento e operação](docs/development.md) concentra a análise da arquitetura,
+os limites, os comandos para instalar em Linux, HTTPS, systemd, atualizações e
+recuperação. O deploy institucional exige revisão de rede, domínio, recursos e
+permissões pela equipe responsável; os arquivos não publicam serviços internos.
 
 ## Instalação
 
@@ -12,6 +94,9 @@ Requer Python 3.11. As dependências e suas versões estão em `pyproject.toml` 
 git clone git@github.com:siqueiratf/ocrsd.git
 cd ocrsd
 uv sync --locked
+uv sync --locked --extra benchmark
+uv sync --locked --extra paddle
+uv sync --locked --extra handwriting
 uv run ocrsd doctor
 uv run ocrsd --help
 ```
