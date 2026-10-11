@@ -1,0 +1,32 @@
+{% from "macros.html" import icon, status as status_chip %}
+<section id="tabela-jobs" class="card table-card" {% if polling %}hx-get="/resultados/lista" hx-trigger="every 2s" hx-include="#filtros" hx-target="this" hx-swap="outerHTML" hx-disinherit="*"{% endif %} {% if oob %}hx-swap-oob="true"{% endif %}>
+  {% if jobs %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr><th scope="col">Geração</th><th scope="col">Modelo</th><th scope="col" class="num">Documentos</th><th scope="col" class="num">Seed</th><th scope="col">Status</th><th scope="col">Criado em</th><th scope="col"><span class="sr-only">Ações</span></th></tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr {% if job.id == selected %}class="is-selected" aria-current="true"{% endif %}>
+          <td><b>{{ job.name }}</b><small class="mono">{{ job.id[:10] }}</small></td>
+          <td>{{ job.options.document_type if job.options else "—" }}</td>
+          <td class="num">{{ job.completed if job.status in ACTIVE else job.total }}{% if job.status in ACTIVE %}/{{ job.total }}{% endif %}</td>
+          <td class="num">{{ job.options.seed if job.options else "—" }}</td>
+          <td>{{ status_chip(job.status) }}</td>
+          <td><time>{{ job.created_at|data }}</time></td>
+          <td class="row-action"><button type="button" class="btn btn-sm" hx-get="/resultados/{{ job.id }}" hx-target="#detalhe" hx-include="#filtros" hx-push-url="/resultados?job={{ job.id }}">Visualizar</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <span class="empty-icon">{{ icon('results') }}</span>
+    <h3>Nenhuma geração encontrada</h3>
+    <p>{{ "Ajuste a busca ou o filtro de status." if search or status else "Os jobs enviados pelo seu espaço de trabalho aparecem aqui." }}</p>
+    <a class="btn btn-primary" href="/geracao">{{ icon('generate') }}Nova geração</a>
+  </div>
+  {% endif %}
+</section>

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, page_header %}
+{% block title %}Geração{% endblock %}
+{% block content %}
+{% call page_header("Etapa 2 · Produção", "Nova geração de dataset", "Configure documentos sintéticos, estilos de escrita e efeitos de digitalização.") %}
+  <div id="configuracoes" class="config-bar">{% include "partials/configurations.html" %}</div>
+{% endcall %}
+<form id="form-geracao" class="generation" hx-post="/geracao/jobs" hx-target="#job" hx-disabled-elt="#enviar" hx-disinherit="*">
+  <div id="secoes" class="generation-main" hx-include="[name='busca']" hx-sync="#form-geracao:queue last">
+    {% include "partials/generation_sections.html" %}
+  </div>
+  <aside class="generation-side">
+    <section class="card preview-card">
+      <header class="card-head">
+        <div><h2>Pré-visualização</h2><p>Template sintético · sem validade legal</p></div>
+        <span class="tag tag-blue">PDF</span>
+      </header>
+      <div id="previa" class="preview-stage">{% include "partials/preview.html" %}</div>
+    </section>
+    <section class="card cta-card">
+      <div id="resumo" hx-target="this" hx-post="/geracao/resumo" hx-trigger="change from:#form-geracao, realismo-aplicado from:body" hx-include="#form-geracao" hx-sync="#form-geracao:queue last">
+        {% include "partials/summary.html" %}
+      </div>
+      {% include "partials/submit_button.html" %}
+    </section>
+    <div id="job" aria-live="polite"></div>
+  </aside>
+</form>
+{% endblock %}

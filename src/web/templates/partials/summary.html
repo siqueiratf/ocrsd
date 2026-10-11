@@ -1,0 +1,11 @@
+{% set total_fields = options.fields|length %}
+<div class="summary">
+  <p class="summary-main"><b>{{ options.count }}</b> documentos · seed <b>{{ options.seed }}</b></p>
+  <ul class="summary-list">
+    <li class="{{ 'is-warning' if not total_fields }}">{{ total_fields }} {{ "campo" if total_fields == 1 else "campos" }} selecionados</li>
+    <li>Escrita: {{ options.writing.model }}</li>
+    <li>Realismo: {{ FILTERS.get(options.filter_preset, options.filter_preset) }}</li>
+    <li>Saída: PDF + JSON + ZIP</li>
+  </ul>
+</div>
+{% if count_oob %}<b id="contagem-campos" hx-swap-oob="true">{{ total_fields }} selecionados</b>{% endif %}

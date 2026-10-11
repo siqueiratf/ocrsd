@@ -1,0 +1,8 @@
+{% from "macros.html" import icon, toast %}
+<select name="configuracao" aria-label="Configurações salvas" hx-post="/geracao/formulario" hx-target="#secoes" hx-vals='{"acao": "configuracao"}' hx-include="this" {% if not configs %}disabled{% endif %}>
+  <option value="">{{ "Configurações salvas (" ~ configs|length ~ ")" if configs else "Sem configurações salvas" }}</option>
+  {% for config in configs %}<option value="{{ config.id }}">{{ config.name }}</option>{% endfor %}
+</select>
+<input name="nome_configuracao" maxlength="120" placeholder="Nome da configuração" aria-label="Nome da configuração">
+<button type="button" class="btn" hx-post="/geracao/configuracoes" hx-include="#form-geracao, [name='nome_configuracao']" hx-target="#configuracoes">{{ icon('save') }}Salvar configuração</button>
+{% if message %}{{ toast(message, 'sucesso', True) }}{% endif %}

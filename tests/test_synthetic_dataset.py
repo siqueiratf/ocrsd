@@ -11,8 +11,9 @@ import numpy as np
 from src.synthetic_dataset import (
     _apply_ballpoint_texture, apply_shared_rules, generate_dataset, is_numeric_text,
     random_handwriting_style, random_value, render_checkbox_mark,
-    render_handwritten_numeric, render_handwritten_text,
+    render_handwritten_numeric, render_handwritten_text, render_neural_text,
 )
+from src.neural_handwriting import NeuralPen
 
 
 class SyntheticValueTests(unittest.TestCase):
@@ -124,6 +125,19 @@ class SyntheticValueTests(unittest.TestCase):
         self.assertEqual(image.size, (48, 48))
         self.assertGreater(np.asarray(image.getchannel("A")).sum(), 0)
         self.assertIn(metadata["rendering"]["mark_variant"], {"middle_stroke", "upper_stroke", "vertical_stroke", "x"})
+
+    def test_neural_render_retries_transient_model_failure(self):
+        model = unittest.mock.Mock()
+        points = np.array([[0, 0, 0], [10, 1, 0], [20, 0, 1]], dtype=float)
+        model.sample.side_effect = [ValueError("falha transitória"), points]
+
+        image, metadata = render_neural_text(
+            "15092026", 220, 48, NeuralPen(model="sjvasquez", writer=1), model, random.Random(7),
+        )
+
+        self.assertEqual(image.size, (220, 48))
+        self.assertEqual(metadata["backend"], "sjvasquez")
+        self.assertEqual(model.sample.call_count, 2)
 
 
 class SyntheticDatasetTests(unittest.TestCase):

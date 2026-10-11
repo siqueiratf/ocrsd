@@ -1,0 +1,15 @@
+<p class="field-count"><b id="contagem-campos">{{ options.fields|length }} selecionados</b> <span>de {{ fields|length }} campos</span></p>
+{% if fields %}
+<div class="field-grid">
+  {% for field in fields %}
+  <label class="check" {% if field.hidden %}hidden{% endif %}>
+    <input type="checkbox" name="fields" value="{{ field.id }}" {% if field.id in options.fields %}checked{% endif %}>
+    <span>{{ field.label }}<small>{{ field.id }} · {{ field.data_type }}</small></span>
+  </label>
+  {% endfor %}
+</div>
+{% if search and fields|rejectattr('hidden')|list|length == 0 %}<p class="empty-hint">Nenhum campo corresponde a “{{ search }}”.</p>{% endif %}
+{% else %}
+<p class="empty-hint">Este mapeamento ainda não possui campos. Abra o editor do modelo para criar os campos.</p>
+{% endif %}
+{% if oob %}<div id="resumo" hx-swap-oob="innerHTML">{% include "partials/summary.html" %}</div>{% endif %}

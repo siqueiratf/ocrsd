@@ -32,6 +32,7 @@ class Writing(StrictModel):
 
 
 class GenerationOptions(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)] = "Dataset sintético"
     document_type: Identifier
     mapping_id: Identifier
     fields: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(min_length=1, max_length=200)
@@ -101,6 +102,119 @@ class JobResponse(BaseModel):
     expires_at: float
     cancel_requested: bool
     error: str | None
+
+
+class JobDetail(JobResponse):
+    name: str
+    options: GenerationOptions | None
+
+
+class WorkspaceResponse(BaseModel):
+    id: str
+    token: str
+
+
+class DocumentModelResponse(BaseModel):
+    id: str
+    label: str
+    description: str
+    status: Literal["draft", "published"]
+    version: int
+    field_count: int
+    mapping_id: str
+    builtin: bool
+    editable: bool
+    created_at: float | None = None
+    updated_at: float | None = None
+
+
+class ModelCreate(StrictModel):
+    label: Annotated[str, Field(min_length=1, max_length=120)]
+    description: Annotated[str, Field(max_length=500)] = ""
+    filename: Annotated[str, Field(min_length=1, max_length=180)]
+    pdf_base64: Annotated[str, Field(min_length=8)]
+    mapping_id: Identifier = "default"
+    mapping: dict[str, Any] | None = None
+
+
+class ModelUpdate(StrictModel):
+    label: Annotated[str, Field(min_length=1, max_length=120)]
+    description: Annotated[str, Field(max_length=500)] = ""
+    status: Literal["draft", "published"] = "draft"
+
+
+class MappingUpdate(StrictModel):
+    definition: dict[str, Any]
+
+
+class WritingPresetCreate(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    writing: Writing
+    filter_preset: Literal["none", "light", "medium", "strong"] = "none"
+    shareable: bool = False
+
+
+class WritingPresetStored(PresetResponse):
+    builtin: bool = False
+    shareable: bool = False
+    created_at: float | None = None
+    updated_at: float | None = None
+
+
+class GenerationConfigCreate(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    options: GenerationOptions
+
+
+class GenerationConfigResponse(GenerationConfigCreate):
+    id: str
+    created_at: float
+    updated_at: float
+
+
+class ShareCreate(StrictModel):
+    allow_download: bool = True
+    expires_in_hours: int = Field(default=24, ge=1, le=720, strict=True)
+
+
+class ShareResponse(BaseModel):
+    id: str
+    job_id: str
+    allow_download: bool
+    created_at: float
+    expires_at: float
+    revoked_at: float | None
+
+
+class ShareCreated(ShareResponse):
+    token: str
+
+
+class SharedResult(BaseModel):
+    share: ShareResponse
+    job: JobDetail
+    artifacts: list[Artifact]
+
+
+class HandwritingPreviewRequest(StrictModel):
+    writing: Writing
+    texts: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(default=["Ana Silva Santos", "15092026", "SP"], min_length=1, max_length=6)
+
+
+class HandwritingPreviewResponse(BaseModel):
+    images: list[str]
+
+
+class RealismPreviewRequest(StrictModel):
+    document_type: Identifier
+    preset: Literal["light", "medium", "strong"] = "medium"
+    seed: int = Field(default=42, ge=0, le=2**32 - 1, strict=True)
+
+
+class RealismPreviewResponse(BaseModel):
+    original: str
+    filtered: str
+    metadata: dict[str, Any]
 
 
 class SubmittedJob(JobResponse):

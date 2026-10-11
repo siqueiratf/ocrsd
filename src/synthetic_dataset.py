@@ -413,6 +413,40 @@ def _fit_mark_image(image: Image.Image, width: int, height: int, variant: str) -
     return canvas
 
 
+def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
+                       model, rng: random.Random) -> tuple[Image.Image, dict]:
+    rendered = prepare_text(text, pen.text_policy)
+    chunks = [rendered]
+    if pen.model == "sjvasquez" and len(rendered) > 12:
+        chunks = [rendered[index:index + 10].strip() for index in range(0, len(rendered), 10)]
+        chunks = [chunk for chunk in chunks if chunk]
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    weights = [max(1, len(chunk)) for chunk in chunks]
+    gap = max(1, round(width * 0.01)) if len(chunks) > 1 else 0
+    available_width = max(len(chunks) * 4, width - gap * (len(chunks) - 1))
+    cursor = 0
+    seeds = []
+    total_points = 0
+    for index, (chunk, weight) in enumerate(zip(chunks, weights)):
+        chunk_width = max(4, available_width - cursor if index == len(chunks) - 1 else round(available_width * weight / sum(weights)))
+        last_error = None
+        for _ in range(4):
+            seed = rng.getrandbits(32)
+            try:
+                points = model.sample(chunk, pen.writer or 0, pen.bias, seed)
+                image = render_strokes(points, chunk_width, height, pen, seed)
+                break
+            except ValueError as exc:
+                last_error = exc
+        else:
+            raise ValueError(f"O modelo {pen.model} não conseguiu escrever o valor após novas tentativas") from last_error
+        canvas.alpha_composite(image, (cursor + index * gap, 0))
+        cursor += chunk_width
+        seeds.append(seed)
+        total_points += len(points)
+    return canvas, {"backend": pen.model, "seeds": seeds, "stroke_points": total_points}
+
+
 def render_checkbox_mark(width: int, height: int, rng: random.Random,
                          style: HandwritingStyle | None = None,
                          intensity: float = 0.65,
@@ -431,12 +465,10 @@ def render_checkbox_mark(width: int, height: int, rng: random.Random,
             handwriting_model = load_model(neural_pen.model)
         sample_rng = render_rng or rng
         rendered = prepare_text(character, neural_pen.text_policy)
-        sample_seed = sample_rng.getrandbits(32)
-        points = handwriting_model.sample(rendered, neural_pen.writer or 0, neural_pen.bias, sample_seed)
-        image = render_strokes(points, width, height, neural_pen, sample_seed)
+        image, neural_metadata = render_neural_text(rendered, width, height, neural_pen, handwriting_model, sample_rng)
         backend = neural_pen.model
         metadata = {
-            "backend": backend, "seed": sample_seed, "mark_variant": variant,
+            **neural_metadata, "backend": backend, "mark_variant": variant,
             "requested_value": character,
         }
     else:
@@ -573,16 +605,12 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             and neural_enabled
         ):
             rendered = prepare_text(text, active_pen.text_policy)
-            sample_seed = render_rng.getrandbits(32)
             model = handwriting_models[active_pen.model]
-            points = model.sample(rendered, active_pen.writer, active_pen.bias, sample_seed)
-            image = render_strokes(points, x2-x1, y2-y1, active_pen, sample_seed)
+            image, rendering = render_neural_text(rendered, x2-x1, y2-y1, active_pen, model, render_rng)
             stream = io.BytesIO()
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
-            return rendered, {"requested_value": text, "rendering": {
-                "backend": active_pen.model, "seed": sample_seed, "stroke_points": len(points),
-            }}
+            return rendered, {"requested_value": text, "rendering": rendering}
         if not force_printed and handwriting and is_numeric_text(text):
             image = render_handwritten_numeric(
                 text, max(1, x2-x1), max(1, y2-y1), rng,
@@ -684,7 +712,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
     safe_id = _safe_name(file_document_id)
     pdf_path = output_dir / f"{safe_id}.pdf"
     json_path = output_dir / f"{safe_id}.json"
-    document.save(pdf_path)
+    document.save(pdf_path, garbage=3, deflate=True, deflate_images=True, deflate_fonts=True, use_objstms=1)
     document.close()
     visual_filters = {"enabled": False}
     if realistic_filters:

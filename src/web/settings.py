@@ -16,8 +16,10 @@ class Settings(BaseSettings):
     retention_hours: int = Field(default=24, ge=1)
     job_timeout: int = Field(default=900, ge=1)
     max_job_bytes: int = Field(default=256 * 1024 * 1024, ge=1024)
+    max_upload_bytes: int = Field(default=12 * 1024 * 1024, ge=1024)
     max_storage_bytes: int = Field(default=4 * 1024**3, ge=1024)
     min_free_bytes: int = Field(default=512 * 1024**2, ge=0)
     memory_mb: int = Field(default=4096, ge=256)
     neural_enabled: bool = False
+    catalog_writable: bool = False
     accepting_jobs: bool = True

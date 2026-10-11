@@ -1,0 +1,20 @@
+{% from "macros.html" import dialog_head, icon %}
+<div class="dialog-panel dialog-wide">
+  {{ dialog_head("Comparação de realismo visual") }}
+  <form class="dialog-body" hx-post="/geracao/realismo" hx-target="#modal" hx-trigger="change" hx-disabled-elt="find fieldset" hx-disinherit="*">
+    <input type="hidden" name="document_type" value="{{ document_type }}">
+    <input type="hidden" name="seed" value="{{ seed }}">
+    <fieldset class="segmented">
+      <legend>Intensidade</legend>
+      {% for key in ["light", "medium", "strong"] %}
+      <label><input type="radio" name="filter_preset" value="{{ key }}" {% if key == preset %}checked{% endif %}><span>{{ FILTERS[key] }}</span></label>
+      {% endfor %}
+      <span class="spinner htmx-indicator" aria-hidden="true"></span>
+    </fieldset>
+    {% include "partials/realism.html" %}
+  </form>
+  <footer class="dialog-foot">
+    <button type="button" class="btn" data-fechar>Fechar</button>
+    <button type="button" class="btn btn-primary" hx-post="/geracao/realismo/aplicar" hx-include="#modal [name='filter_preset']" hx-swap="none">{{ icon('check') }}Usar este preset</button>
+  </footer>
+</div>

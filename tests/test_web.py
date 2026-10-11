@@ -1,16 +1,20 @@
 from concurrent.futures import ThreadPoolExecutor
+import asyncio
+import base64
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from zipfile import ZipFile
 
 try:
-    from fastapi.testclient import TestClient
+    import httpx2
     import jsonschema
 except ImportError as exc:
     raise unittest.SkipTest("Instale os extras web e test") from exc
@@ -24,13 +28,53 @@ from src.web.settings import Settings
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class ASGITestClient:
+    def __init__(self, app):
+        self.app = app
+        self.local = threading.local()
+        self.loops = []
+        self.lock = threading.Lock()
+
+    def request(self, method: str, path: str, **kwargs):
+        async def send():
+            transport = httpx2.ASGITransport(app=self.app)
+            async with httpx2.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                return await client.request(method, path, **kwargs)
+        loop = getattr(self.local, "loop", None)
+        if loop is None:
+            loop = asyncio.new_event_loop()
+            self.local.loop = loop
+            with self.lock:
+                self.loops.append(loop)
+        return loop.run_until_complete(send())
+
+    def get(self, path: str, **kwargs):
+        return self.request("GET", path, **kwargs)
+
+    def post(self, path: str, **kwargs):
+        return self.request("POST", path, **kwargs)
+
+    def put(self, path: str, **kwargs):
+        return self.request("PUT", path, **kwargs)
+
+    def delete(self, path: str, **kwargs):
+        return self.request("DELETE", path, **kwargs)
+
+    def close(self):
+        with self.lock:
+            for loop in self.loops:
+                if not loop.is_closed():
+                    loop.close()
+            self.loops.clear()
+
+
 class WebTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.settings = Settings(storage=Path(self.temporary.name), min_free_bytes=0, neural_enabled=False)
         self.app = create_app(self.settings)
-        self.client = TestClient(self.app)
+        self.client = ASGITestClient(self.app)
         self.addCleanup(self.client.close)
         self.store = self.app.state.store
         self.options = GenerationOptions(document_type="certidao_nascimento", mapping_id="certidao_nascimento_fields",
@@ -218,8 +262,99 @@ class WebTests(unittest.TestCase):
         data = json.loads((output / "synthetic_0001.json").read_text())
         self.assertTrue(data["visual_filters"]["enabled"])
         self.assertEqual(data["fields"][0]["field_id"], options.fields[0])
+        self.assertLess((output / "synthetic_0001.pdf").stat().st_size, 10 * 1024 * 1024)
         with self.assertRaises(FileExistsError):
             generate(options, output, self.settings, progress.append)
+
+    def test_local_catalog_mapping_is_saved_for_desktop(self):
+        documents = Path(self.temporary.name) / "catalog"
+        document = documents / "certidao_nascimento"
+        mappings = document / "mappings"
+        mappings.mkdir(parents=True)
+        source_root = ROOT / "documents/certidao_nascimento"
+        shutil.copy2(source_root / "certidao_nascimento.pdf", document / "template.pdf")
+        source_mapping = source_root / "certidao_nascimento_fields.json"
+        target_mapping = mappings / "certidao_nascimento_fields.json"
+        shutil.copy2(source_mapping, target_mapping)
+        original_source = json.loads(target_mapping.read_text())["source_template"]
+        settings = Settings(storage=Path(self.temporary.name) / "catalog-storage", documents=documents,
+                            min_free_bytes=0, catalog_writable=True)
+        client = ASGITestClient(create_app(settings))
+        workspace = client.post("/api/v1/workspaces", json={}).json()["token"]
+        headers = {"X-Workspace-Token": workspace}
+        model = client.get("/api/v1/models", headers=headers).json()[0]
+        self.assertTrue(model["builtin"])
+        self.assertTrue(model["editable"])
+        mapping = client.get(f'/api/v1/document-types/{model["id"]}/mappings/{model["mapping_id"]}', headers=headers).json()
+        mapping["definition"]["fields"][0]["description"] = "Editado na Web"
+        response = client.put(f'/api/v1/models/{model["id"]}/mapping', json={"definition": mapping["definition"]}, headers=headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = json.loads(target_mapping.read_text())
+        self.assertEqual(saved["fields"][0]["description"], "Editado na Web")
+        self.assertEqual(saved["source_template"], original_source)
+
+    def test_private_workspace_models_presets_history_and_revocable_sharing(self):
+        workspace = self.client.post("/api/v1/workspaces", json={})
+        self.assertEqual(workspace.status_code, 201, workspace.text)
+        workspace_headers = {"X-Workspace-Token": workspace.json()["token"]}
+        template_bytes = (ROOT / "documents/certidao_nascimento/certidao_nascimento.pdf").read_bytes()
+        uploaded = self.client.post("/api/v1/models", json={
+            "label": "Template enviado", "description": "Cadastro PDF pela API", "mapping_id": "default",
+            "filename": "template.pdf", "pdf_base64": "data:application/pdf;base64," + base64.b64encode(template_bytes).decode(),
+        }, headers=workspace_headers)
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        self.assertEqual(self.client.get(f'/api/v1/models/{uploaded.json()["id"]}/preview', headers=workspace_headers).status_code, 200)
+        self.assertEqual(self.client.get(f'/api/v1/models/{uploaded.json()["id"]}/preview').status_code, 404)
+        self.assertEqual(self.client.delete(f'/api/v1/models/{uploaded.json()["id"]}', headers=workspace_headers).status_code, 200)
+        models = self.client.get("/api/v1/models", headers=workspace_headers)
+        self.assertGreaterEqual(len(models.json()), 2)
+        source = next(item for item in models.json() if item["id"] == "certidao_nascimento")
+        copied = self.client.post(f'/api/v1/models/{source["id"]}/duplicate', json={}, headers=workspace_headers)
+        self.assertEqual(copied.status_code, 201, copied.text)
+        model = copied.json()
+        self.assertFalse(model["builtin"])
+        mapping = self.client.get(
+            f'/api/v1/document-types/{model["id"]}/mappings/{model["mapping_id"]}', headers=workspace_headers,
+        ).json()
+        mapping["definition"]["fields"][0]["description"] = "Alterado pela interface web"
+        saved = self.client.put(f'/api/v1/models/{model["id"]}/mapping', json={"definition": mapping["definition"]}, headers=workspace_headers)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertEqual(saved.json()["definition"]["fields"][0]["description"], "Alterado pela interface web")
+        preview = self.client.get(f'/api/v1/models/{model["id"]}/preview', headers=workspace_headers)
+        self.assertEqual(preview.headers["content-type"], "image/png")
+        writing = self.options.writing.model_dump()
+        preset = self.client.post("/api/v1/presets", json={"name": "Privado", "writing": writing,
+                                                           "filter_preset": "light", "shareable": False}, headers=workspace_headers)
+        self.assertEqual(preset.status_code, 201, preset.text)
+        self.assertFalse(preset.json()["builtin"])
+        samples = self.client.post("/api/v1/handwriting/preview", json={"writing": writing, "texts": ["Ana Silva", "15092026"]}, headers=workspace_headers)
+        self.assertEqual(samples.status_code, 200, samples.text)
+        self.assertTrue(all(image.startswith("data:image/png;base64,") for image in samples.json()["images"]))
+        realism = self.client.post("/api/v1/realism/preview", json={"document_type": model["id"], "preset": "light", "seed": 42}, headers=workspace_headers)
+        self.assertEqual(realism.status_code, 200, realism.text)
+        self.assertEqual(realism.json()["metadata"]["preset"], "light")
+        custom_options = GenerationOptions(name="Execução privada", document_type=model["id"], mapping_id=model["mapping_id"],
+                                           fields=[item["field_id"] for item in saved.json()["fields"][:2]], count=1, seed=73)
+        configuration = self.client.post("/api/v1/configurations", json={"name": "Reutilizável", "options": custom_options.model_dump()}, headers=workspace_headers)
+        self.assertEqual(configuration.status_code, 201, configuration.text)
+        job = self.client.post("/api/v1/jobs", json=custom_options.model_dump(), headers=workspace_headers)
+        self.assertEqual(job.status_code, 202, job.text)
+        self.run_worker()
+        history = self.client.get("/api/v1/jobs", headers=workspace_headers)
+        self.assertEqual(history.json()[0]["name"], "Execução privada")
+        self.assertEqual(history.json()[0]["status"], "succeeded")
+        job_id = job.json()["id"]
+        shared = self.client.post(f"/api/v1/jobs/{job_id}/shares", json={"allow_download": False, "expires_in_hours": 1}, headers=workspace_headers)
+        self.assertEqual(shared.status_code, 201, shared.text)
+        share = shared.json()
+        share_headers = {"Authorization": "Bearer " + share["token"]}
+        opened = self.client.get(f'/api/v1/shared/{share["id"]}', headers=share_headers)
+        self.assertEqual(opened.status_code, 200, opened.text)
+        pdf = next(item for item in opened.json()["artifacts"] if item["media_type"] == "application/pdf")
+        self.assertEqual(self.client.get(f'/api/v1/shared/{share["id"]}/artifacts/{pdf["id"]}?download=true', headers=share_headers).status_code, 401)
+        revoked = self.client.delete(f'/api/v1/shares/{share["id"]}', headers=workspace_headers)
+        self.assertIsNotNone(revoked.json()["revoked_at"])
+        self.assertEqual(self.client.get(f'/api/v1/shared/{share["id"]}', headers=share_headers).status_code, 410)
 
     def test_postman_matches_openapi_and_examples(self):
         from scripts.export_postman import build_collection

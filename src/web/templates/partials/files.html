@@ -1,0 +1,15 @@
+{% from "macros.html" import icon %}
+{% if oob %}<div id="arquivos" hx-swap-oob="innerHTML">{% endif %}
+<ul class="file-list">
+  {% for item in files %}
+  {% set active = viewer.artifact and viewer.artifact.id == item.id %}
+  <li class="{{ 'is-active' if active }}">
+    <button type="button" class="file-open" hx-get="/resultados/{{ job.id }}/visualizar/{{ item.id }}" hx-target="#visualizador" {% if active %}aria-current="true"{% endif %}>
+      <span class="file-kind">{{ "PDF" if item.media_type == "application/pdf" else "JSON" }}</span>
+      <span class="file-name"><b>{{ item.name }}</b><small>{{ item.size|tamanho }}</small></span>
+    </button>
+    <a class="icon-btn" href="/resultados/{{ job.id }}/arquivos/{{ item.id }}" download aria-label="Baixar {{ item.name }}">{{ icon('download') }}</a>
+  </li>
+  {% endfor %}
+</ul>
+{% if oob %}</div>{% endif %}

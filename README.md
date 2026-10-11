@@ -6,11 +6,12 @@ visão computacional; o reconhecimento OCR fornece texto e confiança no manifes
 
 ## Plataforma web
 
-A primeira versão web oferece catálogo de documentos e mapas, seleção de campos,
-presets, escrita, filtros, quantidade e semente; criação de jobs; progresso,
-cancelamento, prévia PDF e download de ZIP com PDFs, ground truth e manifesto.
-O motor Python, a CLI e o desktop continuam disponíveis. Os documentos gerados
-pela web recebem marca visível **SINTÉTICO — SEM VALIDADE LEGAL**.
+A aplicação web organiza o trabalho em Modelos, Geração e Resultados. Ela permite
+cadastrar templates PDF privados, editar mapas no canvas, manter presets de escrita
+e configurações, gerar documentos no worker Python, acompanhar o progresso, revisar
+PDF e ground truth, baixar o ZIP e criar links revogáveis. O motor Python, a CLI e
+o desktop continuam disponíveis. Os documentos gerados pela web recebem marca
+visível **SINTÉTICO — SEM VALIDADE LEGAL**.
 
 Para testar a pilha completa com Docker Engine e Compose instalados:
 
@@ -27,22 +28,36 @@ neurais quando os pesos completos estão presentes. Ajuste
 `OCRSD_HANDWRITING_ASSETS` se os pesos forem mantidos fora do checkout.
 `OCRSD_BIND_ADDRESS` controla a interface publicada; mantenha `127.0.0.1` quando
 houver proxy no host e use um endereço privado específico para acesso por VPN.
-Resultados concluídos podem ser baixados ou compartilhados por link temporário.
-A chave fica no fragmento da URL, não é enviada ao proxy, e o acesso expira junto
-com o job. Uma biblioteca permanente exigirá identidade e permissões próprias.
+Modelos, presets, configurações e histórico pertencem ao espaço privado criado no
+primeiro acesso e persistem em SQLite. O navegador guarda a chave desse espaço em um
+cookie HttpOnly; o token salvo por versões anteriores é migrado automaticamente.
+Preserve esse cookie: esta versão não integra login institucional nem recuperação de acesso. Links de resultado
+são opcionais, podem impedir downloads, expiram com o job e podem ser revogados. A
+chave do compartilhamento fica no fragmento da URL e é removida após a leitura.
 O OpenAPI está em `/api/openapi.json` e a documentação interativa em `/api/docs`.
 `docker compose --env-file deploy/.env logs -f api worker web` mostra os logs; `docker compose --env-file deploy/.env stop`
 interrompe os serviços preservando os dados. Não use `down -v` se precisar
 preservar jobs e resultados.
 
-Para desenvolver sem Docker, use Linux, Python 3.11, uv e Node.js 22.12 ou superior:
+Para desenvolver sem Docker, use Linux, Python 3.11 e uv. A interface usa FastAPI,
+Jinja2 e HTMX, sem etapa de build. O comando abaixo prepara as dependências quando
+necessário e inicia a API, que também entrega a interface, e o worker; pressione
+Ctrl+C para encerrar os dois processos:
+
+```bash
+make web
+```
+
+No modo local, esse alvo habilita automaticamente todos os modelos neurais cujos
+pesos estejam presentes em `assets/handwriting`. Abra **http://127.0.0.1:8000**.
+Se a porta 8000 estiver ocupada, use `make web PORT=8001`.
+Para iniciar cada processo separadamente:
 
 ```bash
 uv sync --locked --extra web --extra test
-npm ci --prefix frontend
 ```
 
-Execute em três terminais, todos na raiz do repositório:
+Execute em dois terminais, ambos na raiz do repositório:
 
 ```bash
 uv run --no-sync uvicorn src.web.api:create_app --factory --host 127.0.0.1 --port 8000
@@ -52,11 +67,7 @@ uv run --no-sync uvicorn src.web.api:create_app --factory --host 127.0.0.1 --por
 uv run --no-sync python -m src.web.worker
 ```
 
-```bash
-npm run dev --prefix frontend
-```
-
-Abra **http://127.0.0.1:5173**. O Vite encaminha `/api/` para a API. Os jobs ficam
+A interface fica em `http://127.0.0.1:8000` e a API em `/api/v1`. Os jobs ficam
 em `var/web/`; feche o worker com Ctrl+C, aguardando o job atual terminar.
 API e worker devem usar as mesmas variáveis `OCRSD_*`; a execução direta não lê
 `deploy/.env` automaticamente. Para carregá-las no shell, use
@@ -75,8 +86,6 @@ o ZIP em disco no Postman, use **Send and Download**. A chave retornada na cria�
 uv run --no-sync python -m unittest discover -s tests -q
 uv run --no-sync python -m scripts.smoke_generate --output output/smoke --seed 123
 uv run --no-sync python -m scripts.export_postman --check
-npm test --prefix frontend
-npm run build --prefix frontend
 ```
 
 Após alterar contratos, regenere a coleção com

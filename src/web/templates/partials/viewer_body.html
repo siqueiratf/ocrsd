@@ -1,0 +1,14 @@
+{% set artifact = viewer.artifact %}
+{% if artifact and artifact.media_type == "application/pdf" %}
+<iframe title="Visualizador do documento sintético" src="/resultados/{{ job.id }}/arquivos/{{ artifact.id }}?download=false#toolbar=1&navpanes=0&view=FitH"></iframe>
+{% elif artifact and viewer.content is not none %}
+<pre class="json-view">{{ viewer.content }}</pre>
+{% elif artifact %}
+<div class="viewer-empty"><p>O arquivo é grande demais para a pré-visualização.</p><a class="btn" href="/resultados/{{ job.id }}/arquivos/{{ artifact.id }}" download>Baixar {{ artifact.name }}</a></div>
+{% elif job.status in ACTIVE %}
+<div class="viewer-empty"><span class="spinner spinner-lg" aria-hidden="true"></span><p>Geração em andamento: {{ job.completed }} de {{ job.total }} documentos.</p></div>
+{% elif job.status == "succeeded" %}
+<div class="viewer-empty"><p>Selecione um arquivo do dataset.</p></div>
+{% else %}
+<div class="viewer-empty"><p>Job {{ STATUS[job.status]|lower }}.</p>{% if job.error %}<p class="job-error">{{ job.error }}</p>{% endif %}</div>
+{% endif %}

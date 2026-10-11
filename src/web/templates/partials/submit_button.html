@@ -1,0 +1,4 @@
+{% from "macros.html" import icon %}
+<button id="enviar" type="submit" form="form-geracao" class="btn btn-primary btn-lg btn-block" {% if running %}disabled{% endif %} {% if oob %}hx-swap-oob="true"{% endif %}>
+  {{ icon('generate') }}{{ "Geração em andamento" if running else "Gerar dataset" }}<span class="spinner htmx-indicator" aria-hidden="true"></span>
+</button>

@@ -1,5 +1,18 @@
 # Changelog
 
+## [Não publicado]
+
+### Interface web
+
+- Interface migrada de React/Vite para páginas FastAPI com Jinja2 e HTMX,
+  renderizadas no servidor, sem etapa de build nem dependências Node.
+- Navegação horizontal, visual LabREC revisado, layout responsivo e componentes
+  consistentes para modelos, editor, geração, resultados, presets e compartilhamento.
+- Espaço privado mantido em cookie HttpOnly, com migração automática do token salvo
+  pelas versões anteriores e dos links de compartilhamento antigos.
+- Nginx do Compose passa a encaminhar toda a interface para a API; testes da interface
+  web passam a usar `unittest`.
+
 ## [V1.1.0] — 2026-10-10
 
 Evolução do OCRSD para uma plataforma web modular, preservando a CLI, a interface

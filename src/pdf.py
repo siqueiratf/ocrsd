@@ -90,28 +90,30 @@ def pdf_to_image(pdf_path: str, dpi: int, page_number: int = 0) -> PageImage:
         doc.close()
 
 
-def image_to_pdf(image: np.ndarray, dpi: int, output_pdf_path: str) -> None:
+def image_to_pdf(image: np.ndarray, dpi: int, output_pdf_path: str, jpeg_quality: int | None = None) -> None:
     height_px, width_px = image.shape[:2]
     width_pt = width_px * 72.0 / dpi
     height_pt = height_px * 72.0 / dpi
 
-    ok, png_array = _encode_png(image)
+    ok, image_array = _encode_image(image, jpeg_quality)
     if not ok:
-        raise RuntimeError("Failed to encode redacted image as PNG")
-    png_bytes = png_array.tobytes()
+        raise RuntimeError("Failed to encode image for PDF")
+    image_bytes = image_array.tobytes()
 
     doc = fitz.open()
     try:
         page = doc.new_page(width=width_pt, height=height_pt)
-        page.insert_image(page.rect, stream=png_bytes)
-        doc.save(output_pdf_path)
+        page.insert_image(page.rect, stream=image_bytes)
+        doc.save(output_pdf_path, deflate=True, garbage=3)
     finally:
         doc.close()
 
 
-def _encode_png(image: np.ndarray):
+def _encode_image(image: np.ndarray, jpeg_quality: int | None):
     import cv2
 
+    if jpeg_quality is not None:
+        return cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
     return cv2.imencode(".png", image)
 
 

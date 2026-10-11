@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, page_header %}
+{% block title %}Presets{% endblock %}
+{% block content %}
+{% call page_header("Ferramentas · Presets", "Presets de escrita e realismo", "Teste estilos de escrita com o motor real, salve presets privados e compare os efeitos de digitalização.") %}
+  <a class="btn" href="/geracao">{{ icon('generate') }}Ir para a geração</a>
+{% endcall %}
+<nav class="subnav" aria-label="Seções">
+  <a href="#escrita">{{ icon('pen') }}Escrita</a>
+  <a href="#realismo">{{ icon('realism') }}Realismo visual</a>
+</nav>
+<section id="escrita" class="card section-card">
+  <header class="section-title"><span class="step">{{ icon('pen') }}</span><div><h2>Laboratório de escrita</h2><p>Os presets privados aparecem na etapa 4 da geração.</p></div></header>
+  {% include "partials/lab.html" %}
+</section>
+<section id="realismo" class="card section-card">
+  <header class="section-title"><span class="step">{{ icon('realism') }}</span><div><h2>Realismo visual</h2><p>Compare o template original com a versão após os filtros de digitalização.</p></div></header>
+  <form class="realism-form" hx-post="/presets/realismo" hx-target="#comparacao" hx-disabled-elt="find button">
+    <label class="field">Modelo
+      <select name="document_type">{% for item in types %}<option value="{{ item.id }}">{{ item.label }}</option>{% endfor %}</select>
+    </label>
+    <label class="field">Intensidade
+      <select name="filter_preset">{% for key in ["light", "medium", "strong"] %}<option value="{{ key }}" {% if key == 'medium' %}selected{% endif %}>{{ FILTERS[key] }}</option>{% endfor %}</select>
+    </label>
+    <label class="field">Seed aleatória<input type="number" name="seed" min="0" max="4294967295" value="42" required></label>
+    <button type="submit" class="btn btn-primary">{{ icon('realism') }}Comparar<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+  </form>
+  <div id="comparacao" class="realism-result"><p class="sample-empty">Escolha um modelo e uma intensidade para ver o antes e depois.</p></div>
+</section>
+{% endblock %}

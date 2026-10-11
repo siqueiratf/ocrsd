@@ -1,0 +1,63 @@
+{% from "macros.html" import icon, writing_controls %}
+<section class="card section-card">
+  <header class="section-title"><span class="step">1</span><div><h2>Documento base</h2><p>Selecione o template e o mapeamento.</p></div></header>
+  <div class="grid-2">
+    <label class="field">Modelo
+      <select name="document_type" hx-post="/geracao/formulario" hx-target="#secoes" hx-trigger="change" hx-vals='{"acao": "documento"}'>
+        {% for item in types %}<option value="{{ item.id }}" {% if item.id == options.document_type %}selected{% endif %}>{{ item.label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field">Mapeamento
+      <select name="mapping_id" hx-post="/geracao/formulario" hx-target="#secoes" hx-trigger="change" hx-vals='{"acao": "mapeamento"}'>
+        {% for item in current_type.mappings %}<option value="{{ item.id }}" {% if item.id == options.mapping_id %}selected{% endif %}>{{ item.label }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+</section>
+<section class="card section-card">
+  <header class="section-title"><span class="step">2</span><div><h2>Campos a gerar</h2><p>Escolha os campos que recebem valores sintéticos.</p></div></header>
+  <div class="field-toolbar">
+    <label class="search-field">{{ icon('search') }}<input type="search" name="busca" value="{{ search }}" placeholder="Buscar campo…" aria-label="Buscar campos" form="sem-formulario" autocomplete="off" hx-post="/geracao/campos" hx-target="#lista-campos" hx-trigger="input changed delay:250ms, search" hx-include="#form-geracao" hx-sync="this:replace"></label>
+    <div class="field-toolbar-actions">
+      <button type="button" class="btn btn-sm" hx-post="/geracao/campos" hx-target="#lista-campos" hx-vals='{"acao": "todos"}'>Selecionar todos</button>
+      <button type="button" class="btn btn-sm" hx-post="/geracao/campos" hx-target="#lista-campos" hx-vals='{"acao": "limpar"}'>Limpar</button>
+    </div>
+  </div>
+  <div id="lista-campos">{% with oob = False %}{% include "partials/field_list.html" %}{% endwith %}</div>
+</section>
+<section class="card section-card">
+  <header class="section-title"><span class="step">3</span><div><h2>Parâmetros de geração</h2><p>Defina o volume e a reprodutibilidade.</p></div></header>
+  <div class="grid-2">
+    <label class="field">Quantidade de documentos<input type="number" name="count" min="1" max="{{ max_count }}" value="{{ options.count }}" required><small class="hint">Máximo de {{ max_count }} por job.</small></label>
+    <label class="field">Seed aleatória<input type="number" name="seed" min="0" max="4294967295" value="{{ options.seed }}" required><small class="hint">A mesma seed reproduz o mesmo dataset.</small></label>
+  </div>
+  <label class="field">Nome do dataset<input name="name" maxlength="120" value="{{ options.name }}" required></label>
+</section>
+<section class="card section-card">
+  <header class="section-title"><span class="step">4</span><div><h2>Escrita</h2><p>Use um preset ou personalize as opções suportadas.</p></div></header>
+  <div class="grid-2">
+    <label class="field">Preset
+      <span class="select-refresh" hx-get="/geracao/presets" hx-trigger="presets-atualizados from:body" hx-target="find select" hx-swap="innerHTML" hx-disinherit="*">
+        <select name="preset" hx-post="/geracao/formulario" hx-target="#secoes" hx-trigger="change" hx-vals='{"acao": "preset"}'>
+          {% include "partials/preset_options.html" %}
+        </select>
+      </span>
+    </label>
+    <div class="field field-action">
+      <span>Laboratório</span>
+      <button type="button" class="btn" hx-get="/presets/laboratorio" hx-target="#modal">{{ icon('pen') }}Testar e comparar escrita</button>
+    </div>
+  </div>
+  {{ writing_controls(options.writing, models, "/geracao/formulario", "#secoes", "geracao") }}
+</section>
+<section class="card section-card">
+  <header class="section-title"><span class="step">5</span><div><h2>Realismo visual</h2><p>Efeitos de digitalização aplicados pelo motor Python após a composição.</p></div></header>
+  <div class="grid-2 align-end">
+    <label class="field">Intensidade{% with selected = options.filter_preset, oob = False %}{% include "partials/realism_select.html" %}{% endwith %}</label>
+    <button type="button" class="btn" hx-post="/geracao/realismo" hx-target="#modal" hx-disabled-elt="this">{{ icon('realism') }}Comparar antes e depois<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+  </div>
+</section>
+{% if oob %}
+<div id="previa" hx-swap-oob="innerHTML">{% include "partials/preview.html" %}</div>
+<div id="resumo" hx-swap-oob="innerHTML">{% include "partials/summary.html" %}</div>
+{% endif %}

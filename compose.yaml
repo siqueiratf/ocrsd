@@ -70,7 +70,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: deploy/frontend.Dockerfile
+      dockerfile: deploy/nginx.Dockerfile
     networks:
       private:
         ipv4_address: 172.30.85.2
@@ -95,7 +95,7 @@ services:
     mem_limit: 128m
     pids_limit: 64
     healthcheck:
-      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/]
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/api/v1/health]
       interval: 15s
       timeout: 5s
       retries: 3

@@ -26,6 +26,4 @@ documents/*/dataset/*
 assets/handwriting/*.bin
 assets/handwriting/sjvasquez/
 var/
-frontend/node_modules/
-frontend/coverage/
 deploy/.env

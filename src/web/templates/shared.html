@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, page_header %}
+{% block title %}Resultado compartilhado{% endblock %}
+{% block home %}#conteudo{% endblock %}
+{% block nav %}<span class="nav nav-static">Acesso compartilhado</span>{% endblock %}
+{% block content %}
+{% if pending %}
+<section class="card shared-pending" data-compartilhamento="{{ share_id }}">
+  <div data-abrindo><span class="spinner spinner-lg" aria-hidden="true"></span><p>Abrindo o resultado compartilhado…</p></div>
+  <div data-sem-token hidden>
+    <span class="error-icon">{{ icon('alert') }}</span>
+    <h1>Link incompleto</h1>
+    <p class="lead">O endereço não contém a chave de acesso. Peça um novo link ao responsável pelo resultado.</p>
+  </div>
+</section>
+{% else %}
+{% call page_header("OCRSD · Resultado sintético", job.name, "Dataset com " ~ job.total ~ " documentos. Acesso até " ~ (share.expires_at|data) ~ ".") %}
+  {% if share.allow_download and archive %}<a class="btn btn-primary" href="/compartilhado/{{ share_id }}/arquivos/{{ archive.id }}?download=true" download>{{ icon('download') }}Baixar dataset <small>{{ archive.size|tamanho }}</small></a>{% endif %}
+{% endcall %}
+<p class="notice notice-warning">{{ icon('alert') }}<span><b>Material exclusivamente sintético e sem validade legal.</b> O proprietário pode revogar este link a qualquer momento.</span></p>
+{% if pdf %}
+<section class="card viewer-card shared-viewer">
+  <div class="viewer-stage"><iframe title="Documento compartilhado" src="/compartilhado/{{ share_id }}/arquivos/{{ pdf.id }}?download=false#toolbar=1&view=FitH"></iframe></div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% from "macros.html" import dialog_head, icon %}
+<form class="dialog-panel" hx-post="/modelos" hx-encoding="multipart/form-data" hx-disabled-elt="find button[type=submit]" hx-disinherit="*">
+  {{ dialog_head("Cadastrar modelo") }}
+  <div class="dialog-body form-stack">
+    <label class="field">Nome do modelo<input name="label" required maxlength="120" placeholder="Ex.: Certidão de óbito" autofocus></label>
+    <label class="field">Descrição<textarea name="description" maxlength="500" rows="3" placeholder="Finalidade e versão do template"></textarea></label>
+    <label class="field">Template PDF
+      <input name="pdf" required type="file" accept="application/pdf,.pdf">
+      <small class="hint">Página única, até {{ (max_upload / 1024 / 1024)|round(1) }} MB.</small>
+    </label>
+    <label class="field">Mapeamento JSON existente
+      <input name="mapping" type="file" accept="application/json,.json">
+      <small class="hint">Opcional. O formato JSON do OCRSD é preservado.</small>
+    </label>
+    <label class="field">ID do mapeamento<input name="mapping_id" value="default" required maxlength="100" pattern="[A-Za-z0-9_\-]+" spellcheck="false"></label>
+  </div>
+  <footer class="dialog-foot">
+    <button type="button" class="btn" data-fechar>Cancelar</button>
+    <button type="submit" class="btn btn-primary">Cadastrar e mapear<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+  </footer>
+</form>

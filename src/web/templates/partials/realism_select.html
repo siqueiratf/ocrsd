@@ -1,0 +1,3 @@
+<select id="filtro-realismo" name="filter_preset" {% if oob %}hx-swap-oob="true"{% endif %}>
+  {% for key, label in FILTERS.items() %}<option value="{{ key }}" {% if key == selected %}selected{% endif %}>{{ label }}</option>{% endfor %}
+</select>

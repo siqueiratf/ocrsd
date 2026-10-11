@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, page_header %}
+{% block title %}Editor · {{ model.label }}{% endblock %}
+{% block scripts %}<script src="/static/editor.js?v={{ VERSION }}" defer></script>{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Trilha"><a href="/modelos">Modelos</a><span aria-hidden="true">/</span><span>{{ model.label }}</span><span aria-hidden="true">/</span><span>Editor</span></nav>
+{% call page_header("Modelos · Editor visual", "Mapeamento de campos", "Delimite áreas no documento e edite as propriedades sem alterar o formato JSON do OCRSD.") %}
+  <a class="btn" href="/modelos" data-voltar>{{ icon('back') }}Voltar</a>
+  {% if not model.builtin %}
+  <button type="button" class="btn btn-danger" hx-post="/modelos/{{ model.id }}/excluir" hx-confirm="Excluir este modelo privado? Esta ação não pode ser desfeita." data-saida>{{ icon('trash') }}Excluir</button>
+  {% endif %}
+  <button type="button" class="btn" data-acao="exportar">{{ icon('download') }}Exportar JSON</button>
+  <button type="submit" class="btn btn-primary" form="form-salvar" data-salvar disabled>{{ icon('save') }}<span data-salvar-rotulo>Salvar mapeamento</span></button>
+{% endcall %}
+{% if model.builtin %}
+<p class="notice notice-info">{{ icon('alert') }}<span>Este mapeamento é compartilhado com o OCRSD desktop. Ao salvar aqui, o mesmo JSON do catálogo local é atualizado.</span></p>
+{% endif %}
+<section class="card editor" id="editor" data-tool="select">
+  <div class="editor-toolbar" role="toolbar" aria-label="Ferramentas do editor">
+    <div class="tool-group">
+      <button type="button" class="btn btn-sm" data-ferramenta="select" aria-pressed="true" title="Selecionar e mover (V)">{{ icon('select') }}<span>Selecionar</span></button>
+      <button type="button" class="btn btn-sm" data-ferramenta="draw" aria-pressed="false" title="Desenhar um campo (N)">{{ icon('box') }}<span>Campo</span></button>
+      <button type="button" class="btn btn-sm" data-acao="duplicar" title="Ctrl+D" disabled>{{ icon('copy') }}<span>Duplicar</span></button>
+      <button type="button" class="btn btn-sm" data-acao="excluir" title="Delete" disabled>{{ icon('trash') }}<span>Excluir</span></button>
+    </div>
+    <div class="tool-group">
+      <button type="button" class="btn btn-sm" data-acao="desfazer" title="Ctrl+Z" disabled>{{ icon('undo') }}<span>Desfazer</span></button>
+      <button type="button" class="btn btn-sm" data-acao="refazer" title="Ctrl+Shift+Z" disabled>{{ icon('redo') }}<span>Refazer</span></button>
+      <button type="button" class="btn btn-sm btn-icon" data-acao="recarregar" title="Recarregar o JSON salvo" aria-label="Recarregar o JSON salvo">{{ icon('reload') }}</button>
+    </div>
+    <div class="tool-group tool-zoom">
+      <button type="button" class="btn btn-sm btn-icon" data-acao="afastar" title="Ctrl+-" aria-label="Diminuir zoom">{{ icon('zoom-out') }}</button>
+      <output class="zoom-value" data-zoom aria-live="polite">100%</output>
+      <button type="button" class="btn btn-sm btn-icon" data-acao="aproximar" title="Ctrl++" aria-label="Aumentar zoom">{{ icon('zoom-in') }}</button>
+      <button type="button" class="btn btn-sm" data-acao="ajustar" title="Ctrl+0">{{ icon('fit') }}<span>Ajustar</span></button>
+    </div>
+  </div>
+  <div class="editor-grid">
+    <aside class="editor-fields" aria-label="Campos mapeados">
+      <div class="panel-title"><span>Campos</span><span class="tag tag-blue" data-total>0</span></div>
+      <label class="search-field">{{ icon('search') }}<input type="search" placeholder="Buscar campo…" aria-label="Buscar campo" data-busca></label>
+      <div class="field-nav" data-lista></div>
+    </aside>
+    <div class="editor-canvas" data-tela-container>
+      <div class="canvas-scroll">
+        <svg data-tela role="img" aria-label="Documento com as áreas mapeadas"></svg>
+      </div>
+    </div>
+    <aside class="editor-inspector" aria-label="Propriedades">
+      <form id="form-salvar" hx-post="/modelos/{{ model.id }}/mapeamento" hx-swap="none" hx-disinherit="*">
+        {% if not model.builtin %}
+        <details class="model-data">
+          <summary>Dados do modelo</summary>
+          <div class="form-stack compact">
+            <label class="field">Nome<input name="label" value="{{ model.label }}" maxlength="120" required></label>
+            <label class="field">Descrição<textarea name="description" maxlength="500" rows="3">{{ model.description }}</textarea></label>
+            <label class="field">Status
+              <select name="status">
+                <option value="draft" {% if model.status == 'draft' %}selected{% endif %}>Rascunho</option>
+                <option value="published" {% if model.status == 'published' %}selected{% endif %}>Disponível</option>
+              </select>
+            </label>
+          </div>
+        </details>
+        {% endif %}
+      </form>
+      <div class="panel-title"><span>Propriedades do campo</span></div>
+      <div data-inspetor></div>
+    </aside>
+  </div>
+  <p class="editor-help">Use <kbd>Ctrl</kbd>+<kbd>Z</kbd> para desfazer, <kbd>Ctrl</kbd>+<kbd>D</kbd> para duplicar, <kbd>Delete</kbd> para excluir e <kbd>Ctrl</kbd>+<kbd>S</kbd> para salvar.</p>
+</section>
+<template id="modelo-inspetor">
+  <div class="form-stack compact">
+    <span class="tag tag-blue" data-texto="tipo"></span>
+    <label class="field">ID do campo<input data-prop="field_id" autocomplete="off" spellcheck="false"></label>
+    <label class="field">Rótulo<input data-prop="label"></label>
+    <label class="field">Descrição<textarea data-prop="description" rows="2"></textarea></label>
+    <label class="field">Tipo de dado
+      <select data-prop="data_type">{% for item in data_types %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select>
+    </label>
+    <fieldset class="bbox">
+      <legend>Área de preenchimento</legend>
+      <div class="grid-2">
+        <label class="field">X<input type="number" data-prop="x" step="1"></label>
+        <label class="field">Y<input type="number" data-prop="y" step="1"></label>
+        <label class="field">Largura<input type="number" data-prop="w" step="1" min="1"></label>
+        <label class="field">Altura<input type="number" data-prop="h" step="1" min="1"></label>
+      </div>
+    </fieldset>
+    <label class="field">Modo de seleção
+      <select data-prop="selection_mode"><option value="single">Única</option><option value="multiple">Múltipla</option></select>
+    </label>
+    <label class="field">Validações JSON
+      <textarea class="code" data-prop="validation" rows="5" spellcheck="false"></textarea>
+      <small class="field-error" data-erro hidden>Use um objeto JSON válido.</small>
+    </label>
+    <label class="check"><input type="checkbox" data-prop="render_as_printed">Renderizar como impresso</label>
+    <label class="check"><input type="checkbox" data-prop="always_redact">Sempre ocultar no processamento</label>
+    <p class="hint" data-texto="elementos" hidden></p>
+  </div>
+</template>
+<template id="modelo-vazio"><p class="empty-hint">Selecione ou desenhe um campo para editar as propriedades.</p></template>
+<script type="application/json" id="dados-editor">{{ editor|tojson }}</script>
+{% endblock %}

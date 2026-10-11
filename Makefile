@@ -1,6 +1,8 @@
 .DEFAULT_GOAL := help
 
 UV ?= uv
+UV_CACHE_DIR ?= /tmp/ocrsd-uv-cache-$(shell id -u)
+export UV_CACHE_DIR
 RUN ?= $(UV) run --offline --no-sync ocrsd
 TEMPLATE ?= documents/dnv/template.pdf
 MAPPING ?= documents/dnv/mappings/mapeamento_seguindo_norma.json
@@ -17,10 +19,14 @@ PEN_PRESSURE ?= 0.3
 PEN_DROPOUT ?= 0.1
 TEXT_POLICY ?= normalize
 THREADS ?= 1
+PORT ?=
+API_PORT ?= $(if $(strip $(PORT)),$(PORT),8000)
 
 .PHONY: help dataset dataset-font dataset-sjvasquez dataset-aaron1259 dataset-wpvnteam
 .PHONY: download-sjvasquez download-aaron1259 download-wpvnteam
-.PHONY: test smoke check gui
+.PHONY: test smoke check gui web
+
+WEB_PY_STAMP := .venv/.ocrsd-web-dependencies
 
 help:
 	@printf '%s\n' \
@@ -37,6 +43,8 @@ help:
 	  'make dataset FIELDS="campo_1 campo_2"' \
 	  'make check                    Executa os testes e gera/processa uma DNV e uma certidao.' \
 	  'make smoke                    Valida geracao, alinhamento, recortes e ocultacao.' \
+	  'make web                      Prepara e inicia a interface web, a API e o worker.' \
+	  'make web PORT=8001            Usa outra porta local para a interface e a API.' \
 	  'make gui                      Abre a interface desktop.' \
 	  '' \
 	  'Cada execucao cria documents/<tipo>/dataset/yyyymmdd_hhmm-<tipo>-<total>.' \
@@ -85,3 +93,10 @@ check: test smoke
 
 gui:
 	$(UV) run --offline --no-sync python -m src.gui
+
+$(WEB_PY_STAMP): pyproject.toml uv.lock
+	$(UV) sync --locked --extra web --extra test
+	@touch '$(WEB_PY_STAMP)'
+
+web: $(WEB_PY_STAMP)
+	env OCRSD_NEURAL_ENABLED=true OCRSD_API_PORT='$(API_PORT)' $(UV) run --offline --no-sync python -m scripts.run_web

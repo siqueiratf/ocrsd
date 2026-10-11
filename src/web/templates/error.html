@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Aviso{% endblock %}
+{% block content %}
+<section class="card error-card">
+  <span class="error-icon">{{ icon('alert') }}</span>
+  <p class="eyebrow">Código {{ code }}</p>
+  <h1>Não foi possível abrir esta página</h1>
+  <p class="lead">{{ message }}</p>
+  <a class="btn btn-primary" href="/modelos">{{ icon('back') }}Voltar para os modelos</a>
+</section>
+{% endblock %}

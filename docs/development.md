@@ -2,10 +2,10 @@
 
 ## Fronteiras da aplicação
 
-A entrega web é uma primeira fatia operacional de geração sintética, com React +
-TypeScript/Vite, FastAPI/Pydantic, SQLite e worker Linux independente. Não há
-upload nem processamento público de documentos pessoais. A CLI e o desktop
-mantêm suas entradas e algoritmos; os extras `web` e `test` são opcionais.
+A entrega web usa FastAPI/Pydantic, páginas Jinja2 renderizadas no servidor com HTMX,
+SQLite e um worker Linux independente. Templates sintéticos podem ser enviados para espaços privados; não há
+upload nem processamento público de documentos pessoais. A CLI e o desktop mantêm
+suas entradas e algoritmos; os extras `web` e `test` são opcionais.
 
 | Implementação examinada | Comportamento e fronteira de migração |
 | --- | --- |
@@ -14,48 +14,43 @@ mantêm suas entradas e algoritmos; os extras `web` e `test` são opcionais.
 | `pipeline.py`, `config.py` | Pipeline e configuração independentes: rasterização, alinhamento, diferenças, segmentação, OCR, ocultação e manifestos. Caminhos são aceitos no uso local; uma API futura deverá resolver IDs antes de chamá-los. |
 | `pipeline_gui.py` | Ainda contém orquestração adicional: escolha de modelos/tipos, pré-processamento por campo, OCR de sequências e agregação de previsões. Extrair esse caso de uso antes de migrar a tela; chamar só `run_pipeline` não reproduziria tudo. |
 | `gui.py` | Edição de imagem, histórico/crop, presets, processamento de pastas e subprocessos de benchmark com cancelamento/timeout. Os controles são Tkinter; operações do motor e seus parâmetros podem ser compartilhados. |
-| `field_mapper_gui.py` | Canvas, coordenadas/zoom, undo, caixas e subelementos, validação de IDs, regras e serialização do mapa estão acoplados. Preservar o JSON com `dpi`, `page_size_px`, `bbox`, `elements` e `validation`; extrair validação/serialização antes do futuro editor web. |
+| `field_mapper_gui.py` | O editor web implementa canvas, coordenadas originais, zoom, undo/redo e caixas; conserva `dpi`, `page_size_px`, `bbox`, `elements` e `validation`. Operações avançadas exclusivas do desktop continuam disponíveis nele. |
 | `fields.py`, `document_types.py` | Leitura/associação de mapas e descoberta de templates independentes. A web reutiliza o catálogo, incluindo `mappings/*.json` e o formato antigo `*_fields.json`. PDFs conservam o layout original. |
 | `writing_presets.py` | Biblioteca JSON independente; CRUD e descrições podem servir desktop/serviços. Na web há leitura e conversão de presets simples. Presets mistos são listados como indisponíveis. |
 | `ocr.py`, `ocr_bench.py`, `preprocess.py` | Reconhecimento, backends e filtros independentes. EasyOCR, TrOCR, Tesseract e Paddle têm pesos/dependências próprios; não são carregados pela API de geração. |
 | `neural_handwriting.py`, `sj_handwriting.py` | Canetas, alfabetos, inferência, verificação de pesos e conversão são reutilizáveis. A web não baixa pesos; modelos ficam desabilitados por padrão. Sjvasquez exige também checksum e arquivos dos 13 estilos. |
 | `document_filters.py` e GUI | Filtros e PDFs têm funções próprias e semente; a GUI mantém seleção, prévia e exportação. A web oferece os três presets existentes. |
-| Galeria e visualizador PDF | `render_gallery_samples` ainda reside em módulo que importa Tkinter: deve ser extraído antes da API de prévias de escrita. O visualizador resolve pastas, presets e imagens localmente; a web usa artefatos autorizados e PDF no navegador. |
+| Galeria e visualizador PDF | As prévias web chamam diretamente os renderizadores Python sem importar Tkinter. O visualizador usa somente artefatos autorizados e o leitor PDF do navegador. |
 
 `src/web/models.py` define o contrato; `services.py` resolve recursos, valida opções
 e chama o motor, sem depender de HTTP. `jobs.py` persiste estados e controla acesso,
 cotas e retenção. `worker.py` executa os processos; `api.py` adapta HTTP para esses
-serviços. `settings.py` centraliza limites e armazenamento. Essas fronteiras são
+serviços. `ui.py` renderiza as páginas e os fragmentos HTMX com os mesmos serviços, sem
+chamar a API por HTTP; `templates/` e `static/` contêm o HTML, o CSS, o HTMX local e o
+JavaScript mínimo do editor de campos. `settings.py` centraliza limites e armazenamento. Essas fronteiras são
 suficientes para o primeiro caso de uso, sem replicar o motor ou criar repositórios
 abstratos. O serviço de geração também pode ser chamado diretamente em Python.
 
-## Direção do produto
+## Módulos web
 
-A evolução da interface está organizada em três áreas, mantendo o processamento no
-backend Python:
+A interface está organizada em três áreas, mantendo o processamento no backend Python:
 
 | Área | Escopo |
 | --- | --- |
-| Documentos | Cadastro de templates administrados, versões de mapas, canvas para caixas e subelementos, tipos, validações e prévia. O arquivo continua usando o schema atual de `FieldMap`; o cliente envia IDs e coordenadas, nunca caminhos do servidor. |
-| Geração | Seleção do documento, campos, quantidade, semente, escrita e realismo. A galeria deve executar amostras dos modelos no worker, comparar estilos e transformar uma escolha em preset reutilizável. Filtros de posição, iluminação, cor, papel e falhas pertencem à configuração do job, com uma ferramenta individual de prévia. |
-| Resultados | Progresso, PDFs, ground truth, manifesto e downloads. Links temporários atendem colaboração imediata; biblioteca durável requer identidade, proprietário, permissões, metadados, quotas e política de retenção. |
+| Modelos | Cadastro de templates PDF, cópia editável do catálogo, metadados e canvas com caixas, zoom, movimentação, redimensionamento, busca, undo/redo, propriedades, validações e exportação do mapa no schema existente. |
+| Geração | Seleção de modelo, mapa e campos, quantidade, semente, escrita impressa/manuscrita, estilos distintos, presets privados, configurações reutilizáveis e realismo com prévia executada pelo backend. |
+| Resultados | Histórico privado persistente, busca/filtro, progresso, cancelamento, PDFs, ground truth, manifesto, downloads, repetição e compartilhamentos revogáveis com permissão de download. |
 
-Presets de escrita devem ser recursos versionados, com autor e visibilidade privada,
-institucional ou compartilhada. Um preset referencia modelo, revisão dos pesos,
-estilo e parâmetros de caneta; a configuração do dataset copia esses valores para o
-manifesto para que resultados antigos continuem reproduzíveis após uma edição.
-Presets mistos preservam configurações distintas para campos numéricos e textuais.
-O catálogo público só deve expor pesos e presets aprovados pelo administrador.
+Presets criados pela web são privados e armazenados por proprietário, sem um arquivo
+JSON global mutável. A configuração do dataset copia seus parâmetros para o job. O
+catálogo administrado continua somente leitura e só expõe pesos e presets aprovados.
 
-O frontend apenas edita configurações, consulta capacidades e monitora resultados.
-A seleção atual fica na memória; a chave do último job fica em `sessionStorage`,
-restrita à aba. O usuário pode copiar um link temporário que leva ID e chave no
-fragmento da URL; o navegador o transfere para `sessionStorage` e remove o fragmento
-da barra. Fragmentos não chegam ao proxy, mas qualquer pessoa com o link tem acesso
-até a expiração. Não há conta, histórico permanente ou recuperação de chaves.
-O catálogo é administrado por arquivos locais, nunca por caminhos recebidos da API.
-Mapas expostos substituem `source_template` por um ID; o conteúdo dos mapas deve ser
-revisado pelo administrador antes de integrar o catálogo público.
+O navegador mantém um token opaco do espaço em `localStorage`; seu hash fica no banco.
+Esse token delimita modelos, presets, configurações, jobs e compartilhamentos, mas não
+substitui autenticação institucional. Um link compartilhado leva ID e chave no
+fragmento, que não chega ao proxy e é removido da barra após a leitura. Quem possuir o
+link acessa o resultado até revogação ou expiração. O catálogo é administrado por
+arquivos locais, nunca por caminhos recebidos da API.
 
 ## Jobs e limites
 
@@ -88,13 +83,14 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 | `OCRSD_RETENTION_HOURS` | 24 | Retenção após término; limpeza pelo worker |
 | `OCRSD_JOB_TIMEOUT` | 900 | Tempo máximo do subprocesso em segundos |
 | `OCRSD_MAX_JOB_BYTES` | 268435456 | 256 MiB por job, incluindo ZIP e temporários |
+| `OCRSD_MAX_UPLOAD_BYTES` | 12582912 | Limite do template PDF enviado; 12 MiB |
 | `OCRSD_MAX_STORAGE_BYTES` | 4294967296 | Reserva de saídas: 4 GiB; até 16 jobs não expirados no padrão |
 | `OCRSD_MIN_FREE_BYTES` | 536870912 | Margem livre mínima; 512 MiB |
 | `OCRSD_MEMORY_MB` | 4096 | Limite de espaço virtual do subprocesso, além do cgroup |
 | `OCRSD_NEURAL_ENABLED` | false no código; true no exemplo de deploy | Requer habilitação e pesos completos instalados pelo administrador |
 | `OCRSD_ACCEPTING_JOBS` | true | false suspende submissões; consulta/download continuam |
-| `OCRSD_BIND_ADDRESS` | `127.0.0.1` no exemplo | Interface do host usada pela publicação do frontend |
-| `OCRSD_HTTP_PORT` | 8080 | Porta HTTP local ou privada do frontend |
+| `OCRSD_BIND_ADDRESS` | `127.0.0.1` no exemplo | Interface do host usada pela publicação web |
+| `OCRSD_HTTP_PORT` | 8080 | Porta HTTP local ou privada da interface web |
 
 O worker verifica tempo/disco a cada 0,5 s e limita CPU, memória virtual e tamanho
 individual de arquivo. A medição de volume pode ultrapassar brevemente o teto entre
@@ -121,8 +117,10 @@ capacidades. `POST /api/v1/generation/validate` valida a configuração;
 exigem `Authorization: Bearer <chave>`. `download=false` entrega PDF inline.
 Resultados incompletos retornam 409; expirados, 410; acessos com chave incorreta, 404.
 Erros da aplicação seguem `{"error":{"code":"...","message":"..."}}`.
-POST exige JSON e Content-Length, com máximo de 32 KiB; o servidor confere também o
-corpo efetivamente recebido. Não há CORS aberto nem credenciais na URL.
+POST exige JSON e Content-Length. Corpos comuns têm limite de 32 KiB, mapas de 128 KiB
+e cadastro de modelo permite o PDF base64 dentro do limite configurado. O servidor
+confere também o corpo efetivamente recebido. Não há CORS aberto nem credenciais em
+query strings; links compartilhados transportam o segredo no fragmento do navegador.
 
 As rotas reais estão no OpenAPI e em `postman/ocrsd.postman_collection.json`.
 O gerador percorre o OpenAPI e usa respostas reais do catálogo como exemplos.
@@ -139,12 +137,13 @@ npx --yes newman@6.2.1 run postman/ocrsd.postman_collection.json --env-var baseU
 Execute Newman com worker ativo e cota disponível: cada execução cria dois jobs.
 Não exporte o ambiente após testes com chaves preenchidas. A documentação Swagger
 carrega scripts do CDN jsDelivr; redes isoladas podem usar o OpenAPI baixado no
-Postman, sem depender dessa interface. O frontend não depende de CDN.
+Postman, sem depender dessa interface. A interface web não depende de CDN.
 
 A suíte `unittest` cobre motor/CLI/auxiliares desktop e serviços/API, incluindo
 processos reais, concorrência, entradas inválidas, isolamento, falhas, cancelamento,
-expiração e repetição determinística. Vitest cobre configuração, submissão, progresso,
-prévia, download autenticado, erros e recuperação de acesso. O smoke testa os 69 campos
+expiração e repetição determinística. `tests/test_web_ui.py` cobre páginas, fragmentos
+HTMX, sessão por cookie, submissão, progresso, prévia, download autenticado,
+compartilhamento, editor, presets, erros e recuperação de acesso. O smoke testa os 69 campos
 da DNV e os 19 da certidão, alinhamento, detecção, recortes e ocultação, sem OCR.
 A interação manual desktop ainda precisa de validação própria. A suíte automatizada
 usa fonte local; os três modelos neurais foram exercitados separadamente no servidor
@@ -186,8 +185,8 @@ curl --fail http://127.0.0.1:8080/api/v1/health
 ```
 
 Selecione a revisão aprovada com `sudo git checkout REVISAO_APROVADA` antes do build.
-O build instala dependências do lockfile, compila o frontend e inclui o catálogo.
-Downloads exigem saída HTTPS para registries Docker, PyPI, índice PyTorch e npm;
+O build instala dependências do lockfile e inclui o catálogo e a interface web.
+Downloads exigem saída HTTPS para registries Docker, PyPI e índice PyTorch;
 o funcionamento padrão não precisa de saída da rede privada dos containers.
 A API e o worker usam UID 10001, filesystem somente leitura, volume persistente e
 limites de CPU/memória/processos. O Nginx público do container atende apenas no
@@ -205,8 +204,8 @@ diretamente pela internet. Não publique a porta 8000 nem o volume de jobs.
 
 A primeira implantação está em `/opt/ocrsd` no Ubuntu 22.04 do servidor
 `192.168.3.102`. O Compose v2 foi instalado pelo pacote da distribuição e o projeto
-mantém API, worker e frontend em containers próprios, com o volume `ocrsd_jobs`.
-O frontend escuta somente em `192.168.3.102:8080`; a API não publica porta no host.
+mantém API, worker e Nginx de entrada em containers próprios, com o volume `ocrsd_jobs`.
+O Nginx de entrada escuta somente em `192.168.3.102:8080`; a API não publica porta no host.
 O container preexistente `chandra-ocr-vllm`, na porta 8010, não faz parte desta pilha.
 
 A VPN atual encaminha SSH, mas a política de rede bloqueia TCP 8080 antes de chegar
@@ -235,7 +234,7 @@ sudo docker compose --env-file deploy/.env start
 Ainda não há FQDN institucional, registro DNS ou certificado TLS configurado. Para
 publicação sem túnel, a infraestrutura deve fornecer o domínio aprovado e decidir
 se a terminação HTTPS ficará neste host ou em uma borda institucional. Se o Nginx
-ficar no mesmo host, altere `OCRSD_BIND_ADDRESS` para `127.0.0.1`, recrie o frontend
+ficar no mesmo host, altere `OCRSD_BIND_ADDRESS` para `127.0.0.1`, recrie o serviço `web`
 com Compose e siga a configuração TLS abaixo. Para acesso direto apenas pela VPN,
 a equipe de rede deve liberar a porta escolhida somente para a origem autorizada.
 
@@ -291,7 +290,7 @@ Use Debian 12 com Python 3.11, mantendo código em `/opt/ocrsd`, dados em
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git curl ca-certificates python3.11 python3.11-venv nginx certbot xz-utils
+sudo apt-get install -y git curl ca-certificates python3.11 python3.11-venv nginx certbot
 sudo useradd --system --home-dir /var/lib/ocrsd --shell /usr/sbin/nologin ocrsd
 sudo install -d -o ocrsd -g ocrsd -m 700 /var/lib/ocrsd
 sudo git clone https://github.com/siqueiratf/ocrsd.git /opt/ocrsd
@@ -299,21 +298,6 @@ sudo python3.11 -m venv /opt/ocrsd-tools
 sudo /opt/ocrsd-tools/bin/pip install uv==0.12.10
 cd /opt/ocrsd
 sudo /opt/ocrsd-tools/bin/uv sync --locked --extra web --python /usr/bin/python3.11
-```
-
-Instale Node.js para o build; exemplo amd64 com checksum oficial:
-
-```bash
-cd /tmp
-curl -fsSLO https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz
-curl -fsSLO https://nodejs.org/dist/v22.23.3/SHASUMS256.txt
-sha256sum --check --ignore-missing SHASUMS256.txt
-sudo tar -xJf node-v22.23.3-linux-x64.tar.xz -C /opt
-cd /opt/ocrsd
-sudo env PATH=/opt/node-v22.23.3-linux-x64/bin:$PATH npm ci --prefix frontend
-sudo env PATH=/opt/node-v22.23.3-linux-x64/bin:$PATH npm run build --prefix frontend
-sudo install -d -m 755 /var/www/ocrsd
-sudo cp -a frontend/dist/. /var/www/ocrsd/
 sudo cp deploy/.env.example /etc/ocrsd.env
 sudo chown root:ocrsd /etc/ocrsd.env
 sudo chmod 640 /etc/ocrsd.env
@@ -324,11 +308,11 @@ sudo systemctl status ocrsd-api ocrsd-worker --no-pager
 ```
 
 As unidades definem `OCRSD_STORAGE` e variáveis de threads, limite de memória,
-restart e parada graciosa. Para hospedar o frontend em 8080, mantenha o mesmo proxy
+restart e parada graciosa. Para publicar a interface em 8080, mantenha o mesmo proxy
 TLS descrito acima e configure o servidor interno Nginx:
 
 ```bash
-sed -e 's/listen 8080;/listen 127.0.0.1:8080;/' -e 's|root /usr/share/nginx/html;|root /var/www/ocrsd;|' -e 's|http://api:8000|http://127.0.0.1:8000|g' deploy/nginx.conf | sudo tee /etc/nginx/conf.d/ocrsd-local.conf
+sed -e 's/listen 8080;/listen 127.0.0.1:8080;/' -e 's|http://api:8000|http://127.0.0.1:8000|g' deploy/nginx.conf | sudo tee /etc/nginx/conf.d/ocrsd-local.conf
 sudo nginx -t
 sudo systemctl reload nginx
 curl --fail http://127.0.0.1:8080/api/v1/health
@@ -336,7 +320,7 @@ curl --fail http://127.0.0.1:8080/api/v1/health
 
 Nessa alternativa, a API só confia no proxy em 127.0.0.1. Complete DNS, TLS e testes
 externos com os mesmos passos da seção anterior. Não sirva a pasta do repositório
-nem `/var/lib/ocrsd` diretamente pelo Nginx. O frontend usa somente o build estático.
+nem `/var/lib/ocrsd` diretamente pelo Nginx. A API entrega as páginas e os arquivos estáticos.
 
 ## Operação, atualização e recuperação
 
@@ -424,14 +408,16 @@ em `OCRSD_HANDWRITING_ASSETS` somente para leitura em `/app/assets/handwriting`,
 API e no worker; o build continua excluindo pesos das imagens. Não baixe modelos
 durante requisições. Fontes, modelos e templates precisam de revisão de licença institucional.
 
-## Próximas migrações e referências
+## Limites atuais e referências
 
-Ainda não implementados na web: editor de mapas, upload/processamento de documentos,
-comparação OCR, ajustes livres de pré-processamento/filtros, galeria neural e presets
-mistos. Antes de expor documentos reais, criar autenticação institucional, autorização,
-armazenamento/retenção segregados e implantação privada aprovada; não reutilizar a
-superfície pública anônima sem essas definições. O futuro canvas deve editar o mesmo
-schema de mapas e enviar operações validadas a um serviço, mantendo geração no Python.
+Ainda não implementados na web: autenticação institucional e recuperação de conta,
+papéis/grupos, compartilhamento de presets ou configurações, comparação OCR,
+processamento de documentos reais, ajuste livre de cada parâmetro dos filtros e
+pós-processamento avulso de um artefato concluído. A galeria neural depende dos pesos
+aprovados no servidor. O canvas preserva subelementos já existentes no JSON, mas não
+oferece uma ferramenta gráfica dedicada para desenhar cada subelemento. Antes de
+expor documentos reais, defina autenticação, autorização, retenção segregada e uma
+implantação privada aprovada; não reutilize a superfície por token como login final.
 
 As decisões de implantação usam a documentação de
 [processos FastAPI](https://fastapi.tiangolo.com/deployment/server-workers/),

@@ -1,0 +1,16 @@
+{% from "macros.html" import dialog_head, icon %}
+<div class="dialog-panel">
+  {{ dialog_head("Link criado") }}
+  <div class="dialog-body form-stack">
+    <p class="lead-small">Envie este endereço a quem precisa ver o resultado. Ele expira em {{ share.expires_at|data }}{{ " e permite downloads" if share.allow_download else " e permite somente visualização" }}.</p>
+    <label class="field">Link do compartilhamento
+      <span class="copy-field"><input id="link-compartilhado" readonly value="{{ link }}" data-copiar-auto><button type="button" class="btn" data-copiar="#link-compartilhado">{{ icon('copy') }}<span>Copiar</span></button></span>
+    </label>
+    <p class="notice notice-warning">{{ icon('alert') }}<span>A chave aparece somente agora. Guarde o link antes de fechar.</span></p>
+  </div>
+  <footer class="dialog-foot">
+    <button type="button" class="btn" hx-get="/resultados/{{ job.id }}/compartilhar" hx-target="#modal">Criar outro link</button>
+    <button type="button" class="btn btn-primary" data-fechar>Concluir</button>
+  </footer>
+</div>
+<div id="compartilhamentos" hx-swap-oob="innerHTML">{% include "partials/shares.html" %}</div>

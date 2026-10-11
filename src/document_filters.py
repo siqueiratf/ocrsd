@@ -181,11 +181,11 @@ def apply_realistic_filters_to_pdf(
         with tempfile.NamedTemporaryFile(suffix=".pdf", dir=str(output_pdf.parent), delete=False) as temporary:
             temporary_path = Path(temporary.name)
         try:
-            image_to_pdf(filtered, dpi, str(temporary_path))
+            image_to_pdf(filtered, dpi, str(temporary_path), jpeg_quality=metadata["jpeg_quality"])
             temporary_path.replace(output_pdf)
         finally:
             if temporary_path.exists():
                 temporary_path.unlink()
     else:
-        image_to_pdf(filtered, dpi, str(output_pdf))
+        image_to_pdf(filtered, dpi, str(output_pdf), jpeg_quality=metadata["jpeg_quality"])
     return metadata

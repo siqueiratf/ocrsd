@@ -1,0 +1,20 @@
+{% from "macros.html" import icon %}
+{% if shares %}
+<div class="shares">
+  <h3>{{ icon('link') }}Links de compartilhamento</h3>
+  <ul>
+    {% for share in shares %}
+    <li>
+      <span class="share-state">
+        {% if share.revoked_at %}<span class="tag tag-red">Revogado</span> em {{ share.revoked_at|data }}
+        {% else %}<span class="tag tag-green">Ativo</span> até {{ share.expires_at|data }}{% endif %}
+        <small>{{ "download permitido" if share.allow_download else "somente visualização" }}</small>
+      </span>
+      {% if not share.revoked_at %}
+      <button type="button" class="btn btn-sm btn-danger" hx-post="/compartilhamentos/{{ share.id }}/revogar" hx-target="#compartilhamentos" hx-confirm="Revogar este link? Quem recebeu o link perde o acesso.">Revogar</button>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

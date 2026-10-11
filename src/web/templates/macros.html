@@ -1,0 +1,104 @@
+{% macro icon(name) -%}
+<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+{%- if name == 'models' %}<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>
+{%- elif name == 'generate' %}<path d="M13 3 4 14h7l-1 7 9-12h-7l1-6Z"/>
+{%- elif name == 'results' %}<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>
+{%- elif name == 'presets' %}<path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/>
+{%- elif name == 'pen' %}<path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m14 7 3 3"/>
+{%- elif name == 'realism' %}<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3"/>
+{%- elif name == 'select' %}<path d="m5 3 13 9-6 1-3 6L5 3Z"/>
+{%- elif name == 'add' %}<path d="M12 5v14M5 12h14"/>
+{%- elif name == 'box' %}<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v8M8 12h8"/>
+{%- elif name == 'copy' %}<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+{%- elif name == 'trash' %}<path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>
+{%- elif name == 'undo' %}<path d="m9 7-5 5 5 5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+{%- elif name == 'redo' %}<path d="m15 7 5 5-5 5"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/>
+{%- elif name == 'zoom-in' %}<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5M10.5 7.5v6M7.5 10.5h6"/>
+{%- elif name == 'zoom-out' %}<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5M7.5 10.5h6"/>
+{%- elif name == 'fit' %}<path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/><rect x="7" y="7" width="10" height="10" rx="1"/>
+{%- elif name == 'back' %}<path d="m15 18-6-6 6-6"/>
+{%- elif name == 'download' %}<path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M5 21h14"/>
+{%- elif name == 'save' %}<path d="M5 3h12l2 2v16H5z"/><path d="M8 3v6h8V3M8 21v-8h8v8"/>
+{%- elif name == 'reload' %}<path d="M20 11a8 8 0 1 0-2 6"/><path d="M20 5v6h-6"/>
+{%- elif name == 'share' %}<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>
+{%- elif name == 'search' %}<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+{%- elif name == 'file' %}<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8l-5-5Z"/><path d="M14 3v5h5"/>
+{%- elif name == 'check' %}<path d="m5 12 5 5L20 7"/>
+{%- elif name == 'close' %}<path d="M6 6l12 12M18 6 6 18"/>
+{%- elif name == 'link' %}<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>
+{%- elif name == 'alert' %}<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/>
+{%- endif %}
+</svg>
+{%- endmacro %}
+
+{% macro status(value) -%}
+<span class="status status-{{ value }}">{{ STATUS[value] }}</span>
+{%- endmacro %}
+
+{% macro page_header(eyebrow, title, description) -%}
+<div class="page-head">
+  <div class="page-intro">
+    <p class="eyebrow">{{ eyebrow }}</p>
+    <h1>{{ title }}</h1>
+    <p class="lead">{{ description }}</p>
+  </div>
+  {%- if caller %}
+  <div class="page-actions">{{ caller() }}</div>
+  {%- endif %}
+</div>
+{%- endmacro %}
+
+{% macro toast(message, kind='sucesso', oob=False) -%}
+{% if oob %}<div hx-swap-oob="beforeend:#avisos">{% endif %}
+<div class="toast toast-{{ kind }}" role="{{ 'alert' if kind == 'erro' else 'status' }}">
+  {{ icon('alert' if kind == 'erro' else 'check') }}
+  <span>{{ message }}</span>
+  <button type="button" class="toast-close" data-fechar-aviso aria-label="Fechar aviso">{{ icon('close') }}</button>
+</div>
+{% if oob %}</div>{% endif %}
+{%- endmacro %}
+
+{% macro dialog_head(title) -%}
+<header class="dialog-head">
+  <h2 id="modal-titulo">{{ title }}</h2>
+  <button type="button" class="icon-btn" data-fechar aria-label="Fechar">{{ icon('close') }}</button>
+</header>
+{%- endmacro %}
+
+{% macro writing_controls(writing, models, endpoint, target, prefix) -%}
+<div class="grid-2">
+  <label class="field">Modelo de escrita
+    <select name="model" hx-post="{{ endpoint }}" hx-target="{{ target }}" hx-trigger="change" hx-vals='{"acao": "modelo"}'>
+      {% for model in models %}
+      <option value="{{ model.id }}" {% if model.id == writing.model %}selected{% endif %} {% if not model.available %}disabled{% endif %}>{{ model.label }}{% if not model.available %} · indisponível{% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field"><span>Variação da escrita · <output id="{{ prefix }}-saida" for="{{ prefix }}-intensidade">{{ ((writing.intensity if writing.intensity is number else 0.65) * 100)|round|int }}%</output></span>
+    <input id="{{ prefix }}-intensidade" type="range" name="intensity" min="0" max="1" step="0.05" value="{{ writing.intensity }}" data-saida="{{ prefix }}-saida">
+  </label>
+</div>
+<div class="check-row">
+  <label class="check"><input type="checkbox" name="handwriting" {% if writing.handwriting %}checked{% endif %}>Números manuscritos</label>
+  <label class="check"><input type="checkbox" name="text_handwriting" {% if writing.text_handwriting %}checked{% endif %}>Textos manuscritos</label>
+</div>
+<details class="advanced">
+  <summary>Configurações avançadas da caneta</summary>
+  <div class="grid-3">
+    <label class="field">Identidade do escritor
+      <input type="number" name="writer" min="0" max="{{ 12 if writing.model == 'sjvasquez' else 511 }}" value="{{ writing.writer if writing.writer is not none else '' }}" placeholder="Aleatória">
+    </label>
+    <label class="field">Regularidade<input type="number" name="bias" min="0" max="3" step="0.05" value="{{ writing.bias }}"></label>
+    <label class="field">Cor<input type="color" name="color" value="{{ writing.color }}"></label>
+    <label class="field">Espessura<input type="number" name="width" min="0.1" max="40" step="0.1" value="{{ writing.width }}"></label>
+    <label class="field">Pressão<input type="number" name="pressure" min="0" max="1" step="0.05" value="{{ writing.pressure }}"></label>
+    <label class="field">Falhas<input type="number" name="dropout" min="0" max="1" step="0.05" value="{{ writing.dropout }}"></label>
+  </div>
+  <label class="field">Caracteres não suportados
+    <select name="text_policy">
+      <option value="normalize" {% if writing.text_policy == 'normalize' %}selected{% endif %}>Normalizar</option>
+      <option value="strict" {% if writing.text_policy == 'strict' %}selected{% endif %}>Rejeitar</option>
+    </select>
+  </label>
+</details>
+{%- endmacro %}

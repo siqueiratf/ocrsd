@@ -1,0 +1,20 @@
+{% from "macros.html" import icon, status %}
+{% set active = job.status in ACTIVE %}
+{% set percent = (job.completed / (job.total or 1) * 100)|round|int %}
+<section class="card job-card" {% if active %}hx-get="/geracao/jobs/{{ job.id }}" hx-trigger="every 1500ms" hx-target="this" hx-swap="outerHTML" hx-disinherit="*"{% endif %}>
+  <div class="job-head">
+    {{ status(job.status) }}
+    <b>{{ job.name }}</b>
+  </div>
+  <progress max="{{ job.total }}" value="{{ job.completed }}" aria-label="Progresso da geração">{{ percent }}%</progress>
+  <p class="job-meta">{{ job.completed }} de {{ job.total }} documentos · {{ percent }}%</p>
+  {% if job.error %}<p class="job-error">{{ job.error }}</p>{% endif %}
+  <div class="job-actions">
+    {% if job.status == 'succeeded' %}
+    <a class="btn btn-primary" href="/resultados?job={{ job.id }}">{{ icon('results') }}Abrir resultado</a>
+    {% elif active %}
+    <button type="button" class="btn btn-sm btn-danger" hx-post="/geracao/jobs/{{ job.id }}/cancelar" hx-target="closest .job-card" hx-swap="outerHTML" {% if job.cancel_requested %}disabled{% endif %}>{{ "Cancelamento solicitado" if job.cancel_requested else "Cancelar job" }}</button>
+    {% endif %}
+  </div>
+</section>
+{% with running = active, oob = True %}{% include "partials/submit_button.html" %}{% endwith %}

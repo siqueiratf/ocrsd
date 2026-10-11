@@ -1,0 +1,17 @@
+{% from "macros.html" import icon %}
+<div class="lab-grid">
+  <form id="form-escrita" class="lab-controls" hx-post="/presets/amostras" hx-target="#amostras" hx-disabled-elt="find .btn-amostras" hx-disinherit="*">
+    <p class="lead-small">Gere amostras reais pelo motor Python e salve configurações reutilizáveis.</p>
+    <div id="controles-escrita">{% include "partials/lab_controls.html" %}</div>
+    <button type="submit" class="btn btn-block btn-amostras">{{ icon('pen') }}Gerar amostras<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+    <div class="divider"></div>
+    <label class="field">Nome do preset<input name="preset_name" value="Escrita azul natural" maxlength="120"></label>
+    <button type="button" class="btn btn-primary btn-block" hx-post="/presets" hx-target="#lista-presets">{{ icon('save') }}Salvar preset privado</button>
+  </form>
+  <div class="lab-gallery">
+    <h3>Amostras do motor</h3>
+    <div id="amostras" class="samples"><p class="sample-empty">Ajuste os parâmetros e gere uma comparação.</p></div>
+    <h3>Presets disponíveis</h3>
+    <div id="lista-presets">{% include "partials/preset_list.html" %}</div>
+  </div>
+</div>

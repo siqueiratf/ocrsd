@@ -19,6 +19,18 @@ from src.web.settings import Settings
 logger = logging.getLogger("ocrsd.worker")
 
 
+def failure_message(exc: Exception) -> str:
+    if isinstance(exc, MemoryError):
+        return "A geração excedeu o limite de memória do worker"
+    if isinstance(exc, FileNotFoundError):
+        return "Um arquivo necessário ao modelo de geração não foi encontrado"
+    if isinstance(exc, ValueError):
+        message = str(exc).replace("\n", " ").strip()
+        if message:
+            return f"A geração foi rejeitada pelo motor: {message[:300]}"
+    return "A geração foi interrompida por uma falha interna"
+
+
 def execute(settings_data: dict, identifier: str, parent_pid: int) -> None:
     ctypes.CDLL(None).prctl(1, signal.SIGKILL)
     if os.getppid() != parent_pid:
@@ -32,13 +44,13 @@ def execute(settings_data: dict, identifier: str, parent_pid: int) -> None:
     try:
         row = store.get(identifier)
         artifacts = generate(GenerationOptions.model_validate_json(row["options"]), store.directory(identifier), settings,
-                             lambda completed: store.progress(identifier, completed))
+                             lambda completed: store.progress(identifier, completed), row.get("owner_id"))
         if sum(item["size"] for item in artifacts) > settings.max_job_bytes:
             raise ValueError("Limite de tamanho excedido")
         store.finish(identifier, "succeeded", artifacts=artifacts)
-    except Exception:
+    except Exception as exc:
         logger.exception("Falha no job %s", identifier)
-        store.finish(identifier, "failed", "Falha na geração; consulte o administrador com o identificador do job")
+        store.finish(identifier, "failed", failure_message(exc))
 
 
 def run_job(store: JobStore, row: dict) -> None:
@@ -72,7 +84,10 @@ def run_job(store: JobStore, row: dict) -> None:
         process.join()
     current = store.get(row["id"])
     if failure or current["status"] == "running":
-        store.finish(row["id"], "failed", failure or "Processo de geração interrompido por falha ou limite de recursos")
+        stopped = failure
+        if stopped is None and process.exitcode is not None and process.exitcode < 0:
+            stopped = "O processo de geração excedeu um limite de recursos do servidor"
+        store.finish(row["id"], "failed", stopped or "Processo de geração interrompido inesperadamente")
     if store.get(row["id"])["status"] != "succeeded":
         shutil.rmtree(store.directory(row["id"]), ignore_errors=True)
 

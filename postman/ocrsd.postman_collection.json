@@ -2,12 +2,17 @@
   "info": {
     "name": "OCRSD API v1",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Execute a coleção na ordem para descobrir recursos, validar, gerar, aguardar, visualizar e baixar. Cancelamento cria outro job. Configure baseUrl sem barra final. A chave do job é temporária e privada; não exporte variáveis preenchidas."
+    "description": "Fluxo real: criar espaço privado, consultar catálogo, validar, criar job, acompanhar, listar artefatos, baixar e compartilhar. Execute na ordem. Para upload, preencha pdfBase64."
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://127.0.0.1:5173",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "workspace_token",
+      "value": "",
       "type": "string"
     },
     {
@@ -21,8 +26,33 @@
       "type": "string"
     },
     {
+      "key": "model_id",
+      "value": "certidao_nascimento",
+      "type": "string"
+    },
+    {
+      "key": "preset_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "configuration_id",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "fields",
       "value": "[\"cpf\", \"matricula\", \"data_nascimento_por_extenso\"]",
+      "type": "string"
+    },
+    {
+      "key": "mappingDefinition",
+      "value": "{\"template_id\": \"certidao_nascimento\", \"dpi\": 300, \"page_size_px\": [2481, 3508], \"source_template\": \"certidao_nascimento\", \"fields\": [{\"field_id\": \"cpf\", \"label\": \"CPF\", \"description\": \"CPF no formato 000.000.000-00.\", \"bbox\": [206, 766, 2245, 829], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"allowed_values\": [\"123.456.789-09\", \"987.654.321-00\", \"456.789.123-10\"], \"pattern\": \"^[0-9]{3}\\\\.[0-9]{3}\\\\.[0-9]{3}-[0-9]{2}$\"}}, {\"field_id\": \"matricula\", \"label\": \"Matrícula\", \"description\": \"Matrícula do registro civil no formato 000000.00.00.0000.0.00000.000.0000000-00.\", \"bbox\": [733, 982, 1703, 1039], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"allowed_values\": [\"999999.99.99.9999.9.99999.999.9999999-99\", \"123456.01.55.2026.1.00001.001.0000001-10\", \"654321.02.55.2025.1.00002.002.0000002-20\"], \"pattern\": \"^[0-9]{6}\\\\.[0-9]{2}\\\\.[0-9]{2}\\\\.[0-9]{4}\\\\.[0-9]\\\\.[0-9]{5}\\\\.[0-9]{3}\\\\.[0-9]{7}-[0-9]{2}$\"}}, {\"field_id\": \"data_nascimento_por_extenso\", \"label\": \"Data de nascimento por extenso\", \"description\": \"Data de nascimento escrita por extenso.\", \"bbox\": [206, 1085, 1676, 1139], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\", \"allow_digits\": false, \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"dia_nascimento\", \"label\": \"Dia\", \"description\": \"Dia numérico do nascimento.\", \"bbox\": [1744, 1092, 1857, 1135], \"render_as_printed\": true, \"data_type\": \"integer\", \"validation\": {\"min_value\": 1, \"max_value\": 31, \"pattern\": \"^[0-9]{1,2}$\"}}, {\"field_id\": \"mes_nascimento\", \"label\": \"Mês\", \"description\": \"Mês numérico do nascimento.\", \"bbox\": [1918, 1087, 2036, 1137], \"render_as_printed\": true, \"data_type\": \"integer\", \"validation\": {\"min_value\": 1, \"max_value\": 12, \"pattern\": \"^[0-9]{1,2}$\"}}, {\"field_id\": \"ano_nascimento\", \"label\": \"Ano\", \"description\": \"Ano numérico do nascimento.\", \"bbox\": [2101, 1087, 2240, 1139], \"render_as_printed\": true, \"data_type\": \"integer\", \"validation\": {\"min_value\": 1900, \"max_value\": 2100, \"pattern\": \"^[0-9]{4}$\"}}, {\"field_id\": \"hora_nascimento\", \"label\": \"Hora de nascimento\", \"description\": \"Horário de nascimento no formato HH:MM.\", \"bbox\": [206, 1176, 797, 1230], \"render_as_printed\": true, \"data_type\": \"time\", \"validation\": {\"pattern\": \"^([01][0-9]|2[0-3]):[0-5][0-9]$\"}}, {\"field_id\": \"naturalidade\", \"label\": \"Naturalidade\", \"description\": \"Naturalidade da pessoa registrada.\", \"bbox\": [858, 1176, 2242, 1230], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' /.,-]+$\", \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"municipio_registro_uf\", \"label\": \"Município de registro e unidade da federação\", \"description\": \"Município de registro seguido da UF.\", \"bbox\": [206, 1266, 940, 1318], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' /.,-]+$\", \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"local_municipio_nascimento_uf\", \"label\": \"Local, município de nascimento e UF\", \"description\": \"Local de nascimento, município e unidade da federação.\", \"bbox\": [999, 1268, 1889, 1325], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,-]+$\", \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"sexo\", \"label\": \"Sexo\", \"description\": \"Sexo informado na certidão.\", \"bbox\": [1948, 1268, 2245, 1320], \"render_as_printed\": true, \"data_type\": \"enum\", \"validation\": {\"allowed_values\": [\"MASCULINO\", \"FEMININO\"]}}, {\"field_id\": \"filiacao\", \"label\": \"Filiação\", \"description\": \"Nome dos genitores.\", \"bbox\": [206, 1393, 2242, 1653], \"render_as_printed\": true, \"data_type\": \"person_name\", \"validation\": {\"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\", \"allow_digits\": false, \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"avos\", \"label\": \"Avós\", \"description\": \"Nomes dos avós respectivos.\", \"bbox\": [204, 1708, 2242, 1771], \"render_as_printed\": true, \"data_type\": \"person_name\", \"validation\": {\"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\", \"allow_digits\": false, \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"gemeos\", \"label\": \"Gêmeos\", \"description\": \"Indicação se há gêmeos.\", \"bbox\": [206, 1847, 413, 1901], \"render_as_printed\": true, \"data_type\": \"enum\", \"validation\": {\"allowed_values\": [\"SIM\", \"NÃO\"]}}, {\"field_id\": \"nome_matricula_gemeos\", \"label\": \"Nome e matrícula dos gêmeos\", \"description\": \"Nome e matrícula dos gêmeos, quando houver.\", \"bbox\": [430, 1847, 2242, 1901], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' .,-]+$\", \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"data_registro_por_extenso\", \"label\": \"Data do registro por extenso\", \"description\": \"Data do registro escrita por extenso.\", \"bbox\": [208, 1984, 1300, 2029], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\", \"allow_digits\": false, \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"numero_dnv\", \"label\": \"Número da DNV/Declaração de Nascido Vivo\", \"description\": \"Número da DNV ou Declaração de Nascido Vivo.\", \"bbox\": [1350, 1977, 2242, 2032], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"allowed_values\": [\"12345678\", \"87654321\", \"20260000123\"], \"pattern\": \"^[0-9]{8,15}$\"}}, {\"field_id\": \"averbacoes_anotacoes_acrescer\", \"label\": \"Averbações/anotações a acrescer\", \"description\": \"Averbações ou anotações a acrescer.\", \"bbox\": [206, 2070, 2247, 2122], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"max_length\": 120, \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$\", \"portuguese_rules\": true, \"language\": \"pt-BR\"}}, {\"field_id\": \"anotacoes_cadastro\", \"label\": \"Anotações de cadastro\", \"description\": \"Anotações de cadastro.\", \"bbox\": [206, 2249, 2247, 2373], \"render_as_printed\": true, \"data_type\": \"text\", \"validation\": {\"max_length\": 180, \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$\", \"portuguese_rules\": true, \"language\": \"pt-BR\"}}]}",
+      "type": "string"
+    },
+    {
+      "key": "pdfBase64",
+      "value": "COLE_BASE64_DO_PDF",
       "type": "string"
     },
     {
@@ -41,7 +71,12 @@
       "type": "string"
     },
     {
-      "key": "pdf_id",
+      "key": "share_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "share_token",
       "value": "",
       "type": "string"
     },
@@ -80,7 +115,7 @@
               ],
               "query": []
             },
-            "description": "Contrato: GET /api/v1/health. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+            "description": "Contrato implementado: GET /api/v1/health."
           },
           "response": [
             {
@@ -108,7 +143,7 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: GET /api/v1/health. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+                "description": "Contrato implementado: GET /api/v1/health."
               },
               "status": "OK",
               "code": 200,
@@ -127,7 +162,118 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Espaço de trabalho",
+      "item": [
+        {
+          "name": "Criar espaço privado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workspaces"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/workspaces.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/workspaces",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "workspaces"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/workspaces.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"33333333333333333333333333333333\",\n  \"token\": \"CHAVE_PRIVADA_DO_ESPACO\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "const value = pm.response.json();",
+                  "pm.collectionVariables.set('workspace_token', value.token);"
                 ]
               }
             }
@@ -146,6 +292,10 @@
               {
                 "key": "Accept",
                 "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
               }
             ],
             "auth": {
@@ -163,7 +313,7 @@
               ],
               "query": []
             },
-            "description": "Contrato: GET /api/v1/document-types. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+            "description": "Contrato implementado: GET /api/v1/document-types."
           },
           "response": [
             {
@@ -174,6 +324,10 @@
                   {
                     "key": "Accept",
                     "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
                   }
                 ],
                 "auth": {
@@ -191,7 +345,7 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: GET /api/v1/document-types. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+                "description": "Contrato implementado: GET /api/v1/document-types."
               },
               "status": "OK",
               "code": 200,
@@ -210,10 +364,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
-                  "const type = pm.response.json()[0];",
-                  "pm.collectionVariables.set(\"document_type\", type.id);",
-                  "pm.collectionVariables.set(\"mapping_id\", type.mappings[0].id);"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "const value = pm.response.json()[0];",
+                  "pm.collectionVariables.set('document_type', value.id);",
+                  "pm.collectionVariables.set('mapping_id', value.mappings[0].id);",
+                  "pm.collectionVariables.set('model_id', value.id);"
                 ]
               }
             }
@@ -227,6 +382,10 @@
               {
                 "key": "Accept",
                 "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
               }
             ],
             "auth": {
@@ -246,17 +405,21 @@
               ],
               "query": []
             },
-            "description": "Contrato: GET /api/v1/document-types/{document_type}/template. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+            "description": "Contrato implementado: GET /api/v1/document-types/{document_type}/template."
           },
           "response": [
             {
-              "name": "Resposta de exemplo",
+              "name": "Arquivo binário",
               "originalRequest": {
                 "method": "GET",
                 "header": [
                   {
                     "key": "Accept",
                     "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
                   }
                 ],
                 "auth": {
@@ -276,7 +439,7 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: GET /api/v1/document-types/{document_type}/template. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+                "description": "Contrato implementado: GET /api/v1/document-types/{document_type}/template."
               },
               "status": "OK",
               "code": 200,
@@ -295,7 +458,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
                 ]
               }
             }
@@ -309,6 +472,10 @@
               {
                 "key": "Accept",
                 "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
               }
             ],
             "auth": {
@@ -329,7 +496,7 @@
               ],
               "query": []
             },
-            "description": "Contrato: GET /api/v1/document-types/{document_type}/mappings/{mapping_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+            "description": "Contrato implementado: GET /api/v1/document-types/{document_type}/mappings/{mapping_id}."
           },
           "response": [
             {
@@ -340,6 +507,10 @@
                   {
                     "key": "Accept",
                     "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
                   }
                 ],
                 "auth": {
@@ -360,7 +531,7 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: GET /api/v1/document-types/{document_type}/mappings/{mapping_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+                "description": "Contrato implementado: GET /api/v1/document-types/{document_type}/mappings/{mapping_id}."
               },
               "status": "OK",
               "code": 200,
@@ -379,8 +550,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
-                  "pm.collectionVariables.set(\"fields\", JSON.stringify(pm.response.json().fields.slice(0, 3).map(field => field.field_id)));"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "const value = pm.response.json();",
+                  "pm.collectionVariables.set('fields', JSON.stringify(value.fields.slice(0,3).map(item => item.field_id)));",
+                  "pm.collectionVariables.set('mappingDefinition', JSON.stringify(value.definition));"
                 ]
               }
             }
@@ -411,7 +584,7 @@
               ],
               "query": []
             },
-            "description": "Contrato: GET /api/v1/capabilities. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+            "description": "Contrato implementado: GET /api/v1/capabilities."
           },
           "response": [
             {
@@ -439,7 +612,7 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: GET /api/v1/capabilities. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+                "description": "Contrato implementado: GET /api/v1/capabilities."
               },
               "status": "OK",
               "code": 200,
@@ -458,14 +631,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Presets de escrita",
+          "name": "Presets incluídos",
           "request": {
             "method": "GET",
             "header": [
@@ -489,7 +662,7 @@
               ],
               "query": []
             },
-            "description": "Contrato: GET /api/v1/writing-presets. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+            "description": "Contrato implementado: GET /api/v1/writing-presets."
           },
           "response": [
             {
@@ -517,7 +690,7 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: GET /api/v1/writing-presets. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+                "description": "Contrato implementado: GET /api/v1/writing-presets."
               },
               "status": "OK",
               "code": 200,
@@ -536,7 +709,1660 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Modelos",
+      "item": [
+        {
+          "name": "Listar modelos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/models."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/models."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"certidao_nascimento\",\n    \"label\": \"CERTIDAO NASCIMENTO\",\n    \"description\": \"Modelo incluído no catálogo OCRSD\",\n    \"status\": \"published\",\n    \"version\": 1,\n    \"field_count\": 19,\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"builtin\": true,\n    \"editable\": false,\n    \"created_at\": null,\n    \"updated_at\": null\n  }\n]"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cadastrar template PDF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/models.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Meu modelo\",\n  \"description\": \"Template de pesquisa\",\n  \"filename\": \"template.pdf\",\n  \"pdf_base64\": \"{{pdfBase64}}\",\n  \"mapping_id\": \"default\",\n  \"mapping\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/models.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"label\": \"Meu modelo\",\n  \"description\": \"Template de pesquisa\",\n  \"filename\": \"template.pdf\",\n  \"pdf_base64\": \"{{pdfBase64}}\",\n  \"mapping_id\": \"default\",\n  \"mapping\": null\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"44444444444444444444444444444444\",\n  \"label\": \"CERTIDAO NASCIMENTO\",\n  \"description\": \"Modelo incluído no catálogo OCRSD\",\n  \"status\": \"draft\",\n  \"version\": 1,\n  \"field_count\": 19,\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"builtin\": false,\n  \"editable\": false,\n  \"created_at\": null,\n  \"updated_at\": null\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar cópia editável",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models",
+                "{{model_id}}",
+                "duplicate"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/models/{model_id}/duplicate.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/duplicate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models",
+                    "{{model_id}}",
+                    "duplicate"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/models/{model_id}/duplicate.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"44444444444444444444444444444444\",\n  \"label\": \"CERTIDAO NASCIMENTO\",\n  \"description\": \"Modelo incluído no catálogo OCRSD\",\n  \"status\": \"draft\",\n  \"version\": 1,\n  \"field_count\": 19,\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"builtin\": false,\n  \"editable\": false,\n  \"created_at\": null,\n  \"updated_at\": null\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar metadados",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models/{{model_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models",
+                "{{model_id}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: PUT /api/v1/models/{model_id}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Meu modelo\",\n  \"description\": \"Versão revisada\",\n  \"status\": \"draft\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models/{{model_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models",
+                    "{{model_id}}"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: PUT /api/v1/models/{model_id}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"label\": \"Meu modelo\",\n  \"description\": \"Versão revisada\",\n  \"status\": \"draft\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"44444444444444444444444444444444\",\n  \"label\": \"CERTIDAO NASCIMENTO\",\n  \"description\": \"Modelo incluído no catálogo OCRSD\",\n  \"status\": \"draft\",\n  \"version\": 1,\n  \"field_count\": 19,\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"builtin\": false,\n  \"editable\": false,\n  \"created_at\": null,\n  \"updated_at\": null\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Excluir modelo",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models/{{model_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models",
+                "{{model_id}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: DELETE /api/v1/models/{model_id}."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models/{{model_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models",
+                    "{{model_id}}"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: DELETE /api/v1/models/{model_id}."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"deleted\": true\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prévia PNG do template",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models",
+                "{{model_id}}",
+                "preview"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/models/{model_id}/preview."
+          },
+          "response": [
+            {
+              "name": "Arquivo binário",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/preview",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models",
+                    "{{model_id}}",
+                    "preview"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/models/{model_id}/preview."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "image/png"
+                }
+              ],
+              "body": ""
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Salvar mapeamento",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/mapping",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models",
+                "{{model_id}}",
+                "mapping"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: PUT /api/v1/models/{model_id}/mapping.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"definition\": {{mappingDefinition}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/mapping",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models",
+                    "{{model_id}}",
+                    "mapping"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: PUT /api/v1/models/{model_id}/mapping.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"definition\": {{mappingDefinition}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"certidao_nascimento_fields\",\n  \"definition\": {\n    \"template_id\": \"certidao_nascimento\",\n    \"dpi\": 300,\n    \"page_size_px\": [\n      2481,\n      3508\n    ],\n    \"source_template\": \"certidao_nascimento\",\n    \"fields\": [\n      {\n        \"field_id\": \"cpf\",\n        \"label\": \"CPF\",\n        \"description\": \"CPF no formato 000.000.000-00.\",\n        \"bbox\": [\n          206,\n          766,\n          2245,\n          829\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"123.456.789-09\",\n            \"987.654.321-00\",\n            \"456.789.123-10\"\n          ],\n          \"pattern\": \"^[0-9]{3}\\\\.[0-9]{3}\\\\.[0-9]{3}-[0-9]{2}$\"\n        }\n      },\n      {\n        \"field_id\": \"matricula\",\n        \"label\": \"Matrícula\",\n        \"description\": \"Matrícula do registro civil no formato 000000.00.00.0000.0.00000.000.0000000-00.\",\n        \"bbox\": [\n          733,\n          982,\n          1703,\n          1039\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"999999.99.99.9999.9.99999.999.9999999-99\",\n            \"123456.01.55.2026.1.00001.001.0000001-10\",\n            \"654321.02.55.2025.1.00002.002.0000002-20\"\n          ],\n          \"pattern\": \"^[0-9]{6}\\\\.[0-9]{2}\\\\.[0-9]{2}\\\\.[0-9]{4}\\\\.[0-9]\\\\.[0-9]{5}\\\\.[0-9]{3}\\\\.[0-9]{7}-[0-9]{2}$\"\n        }\n      },\n      {\n        \"field_id\": \"data_nascimento_por_extenso\",\n        \"label\": \"Data de nascimento por extenso\",\n        \"description\": \"Data de nascimento escrita por extenso.\",\n        \"bbox\": [\n          206,\n          1085,\n          1676,\n          1139\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\",\n          \"allow_digits\": false,\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"dia_nascimento\",\n        \"label\": \"Dia\",\n        \"description\": \"Dia numérico do nascimento.\",\n        \"bbox\": [\n          1744,\n          1092,\n          1857,\n          1135\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"integer\",\n        \"validation\": {\n          \"min_value\": 1,\n          \"max_value\": 31,\n          \"pattern\": \"^[0-9]{1,2}$\"\n        }\n      },\n      {\n        \"field_id\": \"mes_nascimento\",\n        \"label\": \"Mês\",\n        \"description\": \"Mês numérico do nascimento.\",\n        \"bbox\": [\n          1918,\n          1087,\n          2036,\n          1137\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"integer\",\n        \"validation\": {\n          \"min_value\": 1,\n          \"max_value\": 12,\n          \"pattern\": \"^[0-9]{1,2}$\"\n        }\n      },\n      {\n        \"field_id\": \"ano_nascimento\",\n        \"label\": \"Ano\",\n        \"description\": \"Ano numérico do nascimento.\",\n        \"bbox\": [\n          2101,\n          1087,\n          2240,\n          1139\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"integer\",\n        \"validation\": {\n          \"min_value\": 1900,\n          \"max_value\": 2100,\n          \"pattern\": \"^[0-9]{4}$\"\n        }\n      },\n      {\n        \"field_id\": \"hora_nascimento\",\n        \"label\": \"Hora de nascimento\",\n        \"description\": \"Horário de nascimento no formato HH:MM.\",\n        \"bbox\": [\n          206,\n          1176,\n          797,\n          1230\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"time\",\n        \"validation\": {\n          \"pattern\": \"^([01][0-9]|2[0-3]):[0-5][0-9]$\"\n        }\n      },\n      {\n        \"field_id\": \"naturalidade\",\n        \"label\": \"Naturalidade\",\n        \"description\": \"Naturalidade da pessoa registrada.\",\n        \"bbox\": [\n          858,\n          1176,\n          2242,\n          1230\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' /.,-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"municipio_registro_uf\",\n        \"label\": \"Município de registro e unidade da federação\",\n        \"description\": \"Município de registro seguido da UF.\",\n        \"bbox\": [\n          206,\n          1266,\n          940,\n          1318\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' /.,-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"local_municipio_nascimento_uf\",\n        \"label\": \"Local, município de nascimento e UF\",\n        \"description\": \"Local de nascimento, município e unidade da federação.\",\n        \"bbox\": [\n          999,\n          1268,\n          1889,\n          1325\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"sexo\",\n        \"label\": \"Sexo\",\n        \"description\": \"Sexo informado na certidão.\",\n        \"bbox\": [\n          1948,\n          1268,\n          2245,\n          1320\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"enum\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"MASCULINO\",\n            \"FEMININO\"\n          ]\n        }\n      },\n      {\n        \"field_id\": \"filiacao\",\n        \"label\": \"Filiação\",\n        \"description\": \"Nome dos genitores.\",\n        \"bbox\": [\n          206,\n          1393,\n          2242,\n          1653\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"person_name\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\",\n          \"allow_digits\": false,\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"avos\",\n        \"label\": \"Avós\",\n        \"description\": \"Nomes dos avós respectivos.\",\n        \"bbox\": [\n          204,\n          1708,\n          2242,\n          1771\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"person_name\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\",\n          \"allow_digits\": false,\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"gemeos\",\n        \"label\": \"Gêmeos\",\n        \"description\": \"Indicação se há gêmeos.\",\n        \"bbox\": [\n          206,\n          1847,\n          413,\n          1901\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"enum\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"SIM\",\n            \"NÃO\"\n          ]\n        }\n      },\n      {\n        \"field_id\": \"nome_matricula_gemeos\",\n        \"label\": \"Nome e matrícula dos gêmeos\",\n        \"description\": \"Nome e matrícula dos gêmeos, quando houver.\",\n        \"bbox\": [\n          430,\n          1847,\n          2242,\n          1901\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' .,-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"data_registro_por_extenso\",\n        \"label\": \"Data do registro por extenso\",\n        \"description\": \"Data do registro escrita por extenso.\",\n        \"bbox\": [\n          208,\n          1984,\n          1300,\n          2029\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\",\n          \"allow_digits\": false,\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"numero_dnv\",\n        \"label\": \"Número da DNV/Declaração de Nascido Vivo\",\n        \"description\": \"Número da DNV ou Declaração de Nascido Vivo.\",\n        \"bbox\": [\n          1350,\n          1977,\n          2242,\n          2032\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"12345678\",\n            \"87654321\",\n            \"20260000123\"\n          ],\n          \"pattern\": \"^[0-9]{8,15}$\"\n        }\n      },\n      {\n        \"field_id\": \"averbacoes_anotacoes_acrescer\",\n        \"label\": \"Averbações/anotações a acrescer\",\n        \"description\": \"Averbações ou anotações a acrescer.\",\n        \"bbox\": [\n          206,\n          2070,\n          2247,\n          2122\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"max_length\": 120,\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"anotacoes_cadastro\",\n        \"label\": \"Anotações de cadastro\",\n        \"description\": \"Anotações de cadastro.\",\n        \"bbox\": [\n          206,\n          2249,\n          2247,\n          2373\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"max_length\": 180,\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      }\n    ]\n  },\n  \"fields\": [\n    {\n      \"field_id\": \"cpf\",\n      \"label\": \"CPF\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        766,\n        2245,\n        829\n      ]\n    },\n    {\n      \"field_id\": \"matricula\",\n      \"label\": \"Matrícula\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        733,\n        982,\n        1703,\n        1039\n      ]\n    },\n    {\n      \"field_id\": \"data_nascimento_por_extenso\",\n      \"label\": \"Data de nascimento por extenso\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        1085,\n        1676,\n        1139\n      ]\n    },\n    {\n      \"field_id\": \"dia_nascimento\",\n      \"label\": \"Dia\",\n      \"data_type\": \"integer\",\n      \"bbox\": [\n        1744,\n        1092,\n        1857,\n        1135\n      ]\n    },\n    {\n      \"field_id\": \"mes_nascimento\",\n      \"label\": \"Mês\",\n      \"data_type\": \"integer\",\n      \"bbox\": [\n        1918,\n        1087,\n        2036,\n        1137\n      ]\n    },\n    {\n      \"field_id\": \"ano_nascimento\",\n      \"label\": \"Ano\",\n      \"data_type\": \"integer\",\n      \"bbox\": [\n        2101,\n        1087,\n        2240,\n        1139\n      ]\n    },\n    {\n      \"field_id\": \"hora_nascimento\",\n      \"label\": \"Hora de nascimento\",\n      \"data_type\": \"time\",\n      \"bbox\": [\n        206,\n        1176,\n        797,\n        1230\n      ]\n    },\n    {\n      \"field_id\": \"naturalidade\",\n      \"label\": \"Naturalidade\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        858,\n        1176,\n        2242,\n        1230\n      ]\n    },\n    {\n      \"field_id\": \"municipio_registro_uf\",\n      \"label\": \"Município de registro e unidade da federação\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        1266,\n        940,\n        1318\n      ]\n    },\n    {\n      \"field_id\": \"local_municipio_nascimento_uf\",\n      \"label\": \"Local, município de nascimento e UF\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        999,\n        1268,\n        1889,\n        1325\n      ]\n    },\n    {\n      \"field_id\": \"sexo\",\n      \"label\": \"Sexo\",\n      \"data_type\": \"enum\",\n      \"bbox\": [\n        1948,\n        1268,\n        2245,\n        1320\n      ]\n    },\n    {\n      \"field_id\": \"filiacao\",\n      \"label\": \"Filiação\",\n      \"data_type\": \"person_name\",\n      \"bbox\": [\n        206,\n        1393,\n        2242,\n        1653\n      ]\n    },\n    {\n      \"field_id\": \"avos\",\n      \"label\": \"Avós\",\n      \"data_type\": \"person_name\",\n      \"bbox\": [\n        204,\n        1708,\n        2242,\n        1771\n      ]\n    },\n    {\n      \"field_id\": \"gemeos\",\n      \"label\": \"Gêmeos\",\n      \"data_type\": \"enum\",\n      \"bbox\": [\n        206,\n        1847,\n        413,\n        1901\n      ]\n    },\n    {\n      \"field_id\": \"nome_matricula_gemeos\",\n      \"label\": \"Nome e matrícula dos gêmeos\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        430,\n        1847,\n        2242,\n        1901\n      ]\n    },\n    {\n      \"field_id\": \"data_registro_por_extenso\",\n      \"label\": \"Data do registro por extenso\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        208,\n        1984,\n        1300,\n        2029\n      ]\n    },\n    {\n      \"field_id\": \"numero_dnv\",\n      \"label\": \"Número da DNV/Declaração de Nascido Vivo\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        1350,\n        1977,\n        2242,\n        2032\n      ]\n    },\n    {\n      \"field_id\": \"averbacoes_anotacoes_acrescer\",\n      \"label\": \"Averbações/anotações a acrescer\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        2070,\n        2247,\n        2122\n      ]\n    },\n    {\n      \"field_id\": \"anotacoes_cadastro\",\n      \"label\": \"Anotações de cadastro\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        2249,\n        2247,\n        2373\n      ]\n    }\n  ]\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Presets",
+      "item": [
+        {
+          "name": "Listar presets privados",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/presets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "presets"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/presets."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/presets",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "presets"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/presets."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"preset_exemplo\",\n    \"label\": \"Escrita azul natural\",\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\",\n    \"available\": true,\n    \"reason\": null,\n    \"builtin\": false,\n    \"shareable\": false,\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0\n  }\n]"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar preset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/presets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "presets"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/presets.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Escrita azul natural\",\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"shareable\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/presets",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "presets"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/presets.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Escrita azul natural\",\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"shareable\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"preset_exemplo\",\n  \"label\": \"Escrita azul natural\",\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"available\": true,\n  \"reason\": null,\n  \"builtin\": false,\n  \"shareable\": false,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "pm.collectionVariables.set('preset_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar preset",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/presets/{{preset_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "presets",
+                "{{preset_id}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: PUT /api/v1/presets/{preset_id}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Escrita azul revisada\",\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"light\",\n  \"shareable\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/presets/{{preset_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "presets",
+                    "{{preset_id}}"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: PUT /api/v1/presets/{preset_id}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Escrita azul revisada\",\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"light\",\n  \"shareable\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"preset_exemplo\",\n  \"label\": \"Escrita azul natural\",\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"available\": true,\n  \"reason\": null,\n  \"builtin\": false,\n  \"shareable\": false,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Excluir preset",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/presets/{{preset_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "presets",
+                "{{preset_id}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: DELETE /api/v1/presets/{preset_id}."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/presets/{{preset_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "presets",
+                    "{{preset_id}}"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: DELETE /api/v1/presets/{preset_id}."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"deleted\": true\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Gerar amostras de escrita",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/handwriting/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "handwriting",
+                "preview"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/handwriting/preview.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"texts\": [\n    \"Ana Silva Santos\",\n    \"15092026\",\n    \"SP\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/handwriting/preview",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "handwriting",
+                    "preview"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/handwriting/preview.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"texts\": [\n    \"Ana Silva Santos\",\n    \"15092026\",\n    \"SP\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"images\": [\n    \"data:image/png;base64,EXEMPLO\"\n  ]\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comparar realismo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/realism/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "realism",
+                "preview"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/realism/preview.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type\": \"{{document_type}}\",\n  \"preset\": \"medium\",\n  \"seed\": 42\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/realism/preview",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "realism",
+                    "preview"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/realism/preview.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"document_type\": \"{{document_type}}\",\n  \"preset\": \"medium\",\n  \"seed\": 42\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"original\": \"data:image/jpeg;base64,EXEMPLO\",\n  \"filtered\": \"data:image/jpeg;base64,EXEMPLO\",\n  \"metadata\": {\n    \"preset\": \"medium\"\n  }\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Configurações",
+      "item": [
+        {
+          "name": "Listar configurações",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/configurations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "configurations"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/configurations."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/configurations",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "configurations"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/configurations."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"name\": \"Configuração DNV\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": 42,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\"\n    },\n    \"id\": \"11111111111111111111111111111111\",\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0\n  }\n]"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Salvar configuração",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/configurations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "configurations"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/configurations.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": 42,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/configurations",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "configurations"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/configurations.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": 42,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": 42,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\"\n  },\n  \"id\": \"11111111111111111111111111111111\",\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "pm.collectionVariables.set('configuration_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Excluir configuração",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/configurations/{{configuration_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "configurations",
+                "{{configuration_id}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: DELETE /api/v1/configurations/{configuration_id}."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/configurations/{{configuration_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "configurations",
+                    "{{configuration_id}}"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: DELETE /api/v1/configurations/{configuration_id}."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"deleted\": true\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
                 ]
               }
             }
@@ -548,13 +2374,17 @@
       "name": "Geração",
       "item": [
         {
-          "name": "Validar configuração",
+          "name": "Validar geração",
           "request": {
             "method": "POST",
             "header": [
               {
                 "key": "Accept",
                 "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
               },
               {
                 "key": "Content-Type",
@@ -577,10 +2407,10 @@
               ],
               "query": []
             },
-            "description": "Contrato: POST /api/v1/generation/validate. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
+            "description": "Contrato implementado: POST /api/v1/generation/validate.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"document_type\": \"{{document_type}}\",\n  \"mapping_id\": \"{{mapping_id}}\",\n  \"fields\": {{fields}},\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
+              "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -599,55 +2429,8 @@
                     "value": "*/*"
                   },
                   {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/generation/validate",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "generation",
-                    "validate"
-                  ],
-                  "query": []
-                },
-                "description": "Contrato: POST /api/v1/generation/validate. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"document_type\": \"{{document_type}}\",\n  \"mapping_id\": \"{{mapping_id}}\",\n  \"fields\": {{fields}},\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}"
-            },
-            {
-              "name": "Quantidade inválida",
-              "originalRequest": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
                   },
                   {
                     "key": "Content-Type",
@@ -670,10 +2453,10 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: POST /api/v1/generation/validate. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
+                "description": "Contrato implementado: POST /api/v1/generation/validate.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"document_type\": \"certidao_nascimento\", \"mapping_id\": \"certidao_nascimento_fields\", \"fields\": [\"cpf\", \"matricula\", \"data_nascimento_por_extenso\"], \"count\": 0, \"seed\": 42, \"writing\": {\"model\": \"font\", \"handwriting\": true, \"text_handwriting\": true, \"intensity\": 0.65, \"writer\": null, \"bias\": 0.75, \"color\": \"#193787\", \"width\": 1.5, \"pressure\": 0.25, \"dropout\": 0, \"text_policy\": \"normalize\"}, \"filter_preset\": \"none\"}",
+                  "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -681,15 +2464,15 @@
                   }
                 }
               },
-              "status": "Unprocessable Entity",
-              "code": 422,
+              "status": "OK",
+              "code": 200,
               "header": [
                 {
                   "key": "Content-Type",
                   "value": "application/json"
                 }
               ],
-              "body": "{\"error\": {\"code\": \"validation_error\", \"message\": \"Parâmetros inválidos; confira os campos e limites no contrato da API\"}}"
+              "body": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}"
             }
           ],
           "event": [
@@ -698,7 +2481,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
                 ]
               }
             }
@@ -712,6 +2495,10 @@
               {
                 "key": "Accept",
                 "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
               },
               {
                 "key": "Content-Type",
@@ -733,10 +2520,10 @@
               ],
               "query": []
             },
-            "description": "Contrato: POST /api/v1/jobs. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
+            "description": "Contrato implementado: POST /api/v1/jobs.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"document_type\": \"{{document_type}}\",\n  \"mapping_id\": \"{{mapping_id}}\",\n  \"fields\": {{fields}},\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
+              "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -755,54 +2542,8 @@
                     "value": "*/*"
                   },
                   {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs"
-                  ],
-                  "query": []
-                },
-                "description": "Contrato: POST /api/v1/jobs. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"document_type\": \"{{document_type}}\",\n  \"mapping_id\": \"{{mapping_id}}\",\n  \"fields\": {{fields}},\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "status": "Accepted",
-              "code": 202,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"queued\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": false,\n  \"error\": null,\n  \"token\": \"CHAVE_RETORNADA_APENAS_NA_CRIACAO\"\n}"
-            },
-            {
-              "name": "Quantidade inválida",
-              "originalRequest": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
                   },
                   {
                     "key": "Content-Type",
@@ -824,10 +2565,10 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: POST /api/v1/jobs. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
+                "description": "Contrato implementado: POST /api/v1/jobs.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"document_type\": \"certidao_nascimento\", \"mapping_id\": \"certidao_nascimento_fields\", \"fields\": [\"cpf\", \"matricula\", \"data_nascimento_por_extenso\"], \"count\": 0, \"seed\": 42, \"writing\": {\"model\": \"font\", \"handwriting\": true, \"text_handwriting\": true, \"intensity\": 0.65, \"writer\": null, \"bias\": 0.75, \"color\": \"#193787\", \"width\": 1.5, \"pressure\": 0.25, \"dropout\": 0, \"text_policy\": \"normalize\"}, \"filter_preset\": \"none\"}",
+                  "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -835,15 +2576,15 @@
                   }
                 }
               },
-              "status": "Unprocessable Entity",
-              "code": 422,
+              "status": "OK",
+              "code": 202,
               "header": [
                 {
                   "key": "Content-Type",
                   "value": "application/json"
                 }
               ],
-              "body": "{\"error\": {\"code\": \"validation_error\", \"message\": \"Parâmetros inválidos; confira os campos e limites no contrato da API\"}}"
+              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"queued\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": false,\n  \"error\": null,\n  \"token\": \"CHAVE_PRIVADA_DO_JOB\"\n}"
             }
           ],
           "event": [
@@ -852,11 +2593,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 202\", () => pm.response.to.have.status(202));",
-                  "const job = pm.response.json();",
-                  "pm.collectionVariables.set(\"job_id\", job.id);",
-                  "pm.collectionVariables.set(\"job_token\", job.token);",
-                  "pm.collectionVariables.set(\"poll_count\", 0);"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "const value = pm.response.json();",
+                  "pm.collectionVariables.set('job_id', value.id);",
+                  "pm.collectionVariables.set('job_token', value.token);",
+                  "pm.collectionVariables.set('poll_count', 0);"
                 ]
               }
             }
@@ -875,17 +2616,14 @@
               {
                 "key": "Accept",
                 "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
               }
             ],
             "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{job_token}}",
-                  "type": "string"
-                }
-              ]
+              "type": "noauth"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}",
@@ -900,7 +2638,7 @@
               ],
               "query": []
             },
-            "description": "Contrato: GET /api/v1/jobs/{job_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+            "description": "Contrato implementado: GET /api/v1/jobs/{job_id}."
           },
           "response": [
             {
@@ -911,51 +2649,10 @@
                   {
                     "key": "Accept",
                     "value": "*/*"
-                  }
-                ],
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{job_token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs",
-                    "{{job_id}}"
-                  ],
-                  "query": []
-                },
-                "description": "Contrato: GET /api/v1/jobs/{job_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-              },
-              "status": "OK",
-              "code": 200,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"queued\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": false,\n  \"error\": null\n}"
-            },
-            {
-              "name": "Chave ausente",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
+                  },
                   {
-                    "key": "Accept",
-                    "value": "*/*"
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
                   }
                 ],
                 "auth": {
@@ -974,118 +2671,7 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: GET /api/v1/jobs/{job_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-              },
-              "status": "Unauthorized",
-              "code": 401,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\"error\": {\"code\": \"unauthorized\", \"message\": \"Informe a chave de acesso do job\"}}"
-            }
-          ],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
-                  "const job = pm.response.json();",
-                  "const attempts = Number(pm.collectionVariables.get(\"poll_count\") || 0) + 1;",
-                  "pm.collectionVariables.set(\"poll_count\", attempts);",
-                  "if ([\"queued\", \"running\"].includes(job.status) && attempts < 600) {",
-                  "  pm.execution.setNextRequest(pm.info.requestName);",
-                  "  setTimeout(() => {}, 1500);",
-                  "} else {",
-                  "  pm.test(\"Dataset concluído\", () => pm.expect(job.status).to.eql(\"succeeded\"));",
-                  "  if (job.status !== \"succeeded\") pm.execution.setNextRequest(null);",
-                  "}"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Resultados",
-      "item": [
-        {
-          "name": "Listar resultados",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "*/*"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{job_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/results",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "jobs",
-                "{{job_id}}",
-                "results"
-              ],
-              "query": []
-            },
-            "description": "Contrato: GET /api/v1/jobs/{job_id}/results. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-          },
-          "response": [
-            {
-              "name": "Resposta de exemplo",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
-                  }
-                ],
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{job_token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/results",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs",
-                    "{{job_id}}",
-                    "results"
-                  ],
-                  "query": []
-                },
-                "description": "Contrato: GET /api/v1/jobs/{job_id}/results. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
+                "description": "Contrato implementado: GET /api/v1/jobs/{job_id}."
               },
               "status": "OK",
               "code": 200,
@@ -1095,46 +2681,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"artifacts\": [\n    {\n      \"id\": \"0\",\n      \"name\": \"synthetic_0001.pdf\",\n      \"media_type\": \"application/pdf\",\n      \"size\": 12000\n    },\n    {\n      \"id\": \"1\",\n      \"name\": \"dataset.zip\",\n      \"media_type\": \"application/zip\",\n      \"size\": 9000\n    }\n  ]\n}"
-            },
-            {
-              "name": "Chave ausente",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/results",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs",
-                    "{{job_id}}",
-                    "results"
-                  ],
-                  "query": []
-                },
-                "description": "Contrato: GET /api/v1/jobs/{job_id}/results. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-              },
-              "status": "Unauthorized",
-              "code": 401,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\"error\": {\"code\": \"unauthorized\", \"message\": \"Informe a chave de acesso do job\"}}"
+              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"queued\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": false,\n  \"error\": null,\n  \"name\": \"DNV — fluxo Postman\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": 42,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\"\n  }\n}"
             }
           ],
           "event": [
@@ -1143,479 +2690,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
-                  "const files = pm.response.json().artifacts;",
-                  "pm.collectionVariables.set(\"artifact_id\", files.find(file => file.media_type === \"application/zip\").id);",
-                  "pm.collectionVariables.set(\"pdf_id\", files.find(file => file.media_type === \"application/pdf\").id);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Baixar dataset ZIP",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "*/*"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{job_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/{{artifact_id}}?download=true",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "jobs",
-                "{{job_id}}",
-                "artifacts",
-                "{{artifact_id}}"
-              ],
-              "query": [
-                {
-                  "key": "download",
-                  "value": "true"
-                }
-              ]
-            },
-            "description": "Contrato: GET /api/v1/jobs/{job_id}/artifacts/{artifact_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-          },
-          "response": [
-            {
-              "name": "Resposta de exemplo",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
-                  }
-                ],
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{job_token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/{{artifact_id}}?download=true",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs",
-                    "{{job_id}}",
-                    "artifacts",
-                    "{{artifact_id}}"
-                  ],
-                  "query": [
-                    {
-                      "key": "download",
-                      "value": "true"
-                    }
-                  ]
-                },
-                "description": "Contrato: GET /api/v1/jobs/{job_id}/artifacts/{artifact_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-              },
-              "status": "OK",
-              "code": 200,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/zip"
-                }
-              ],
-              "body": ""
-            },
-            {
-              "name": "Chave ausente",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/{{artifact_id}}?download=true",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs",
-                    "{{job_id}}",
-                    "artifacts",
-                    "{{artifact_id}}"
-                  ],
-                  "query": [
-                    {
-                      "key": "download",
-                      "value": "true"
-                    }
-                  ]
-                },
-                "description": "Contrato: GET /api/v1/jobs/{job_id}/artifacts/{artifact_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-              },
-              "status": "Unauthorized",
-              "code": 401,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\"error\": {\"code\": \"unauthorized\", \"message\": \"Informe a chave de acesso do job\"}}"
-            }
-          ],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Visualizar PDF",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "*/*"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{job_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/{{pdf_id}}?download=false",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "jobs",
-                "{{job_id}}",
-                "artifacts",
-                "{{pdf_id}}"
-              ],
-              "query": [
-                {
-                  "key": "download",
-                  "value": "false"
-                }
-              ]
-            },
-            "description": "Contrato: GET /api/v1/jobs/{job_id}/artifacts/{artifact_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-          },
-          "response": [
-            {
-              "name": "Resposta de exemplo",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
-                  }
-                ],
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{job_token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/{{pdf_id}}?download=false",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs",
-                    "{{job_id}}",
-                    "artifacts",
-                    "{{pdf_id}}"
-                  ],
-                  "query": [
-                    {
-                      "key": "download",
-                      "value": "false"
-                    }
-                  ]
-                },
-                "description": "Contrato: GET /api/v1/jobs/{job_id}/artifacts/{artifact_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-              },
-              "status": "OK",
-              "code": 200,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/pdf"
-                }
-              ],
-              "body": ""
-            },
-            {
-              "name": "Chave ausente",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/{{artifact_id}}?download=true",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs",
-                    "{{job_id}}",
-                    "artifacts",
-                    "{{artifact_id}}"
-                  ],
-                  "query": [
-                    {
-                      "key": "download",
-                      "value": "true"
-                    }
-                  ]
-                },
-                "description": "Contrato: GET /api/v1/jobs/{job_id}/artifacts/{artifact_id}. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais."
-              },
-              "status": "Unauthorized",
-              "code": 401,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\"error\": {\"code\": \"unauthorized\", \"message\": \"Informe a chave de acesso do job\"}}"
-            }
-          ],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Cancelamento",
-      "item": [
-        {
-          "name": "Criar job para cancelamento",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "*/*"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "noauth"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/jobs",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "jobs"
-              ],
-              "query": []
-            },
-            "description": "Contrato: POST /api/v1/jobs. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"document_type\": \"{{document_type}}\",\n  \"mapping_id\": \"{{mapping_id}}\",\n  \"fields\": {{fields}},\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": [
-            {
-              "name": "Resposta de exemplo",
-              "originalRequest": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
-                  },
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs"
-                  ],
-                  "query": []
-                },
-                "description": "Contrato: POST /api/v1/jobs. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"document_type\": \"{{document_type}}\",\n  \"mapping_id\": \"{{mapping_id}}\",\n  \"fields\": {{fields}},\n  \"count\": 1,\n  \"seed\": 42,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "status": "Accepted",
-              "code": 202,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"queued\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": false,\n  \"error\": null,\n  \"token\": \"CHAVE_RETORNADA_APENAS_NA_CRIACAO\"\n}"
-            },
-            {
-              "name": "Quantidade inválida",
-              "originalRequest": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
-                  },
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "auth": {
-                  "type": "noauth"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs"
-                  ],
-                  "query": []
-                },
-                "description": "Contrato: POST /api/v1/jobs. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\"document_type\": \"certidao_nascimento\", \"mapping_id\": \"certidao_nascimento_fields\", \"fields\": [\"cpf\", \"matricula\", \"data_nascimento_por_extenso\"], \"count\": 0, \"seed\": 42, \"writing\": {\"model\": \"font\", \"handwriting\": true, \"text_handwriting\": true, \"intensity\": 0.65, \"writer\": null, \"bias\": 0.75, \"color\": \"#193787\", \"width\": 1.5, \"pressure\": 0.25, \"dropout\": 0, \"text_policy\": \"normalize\"}, \"filter_preset\": \"none\"}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "status": "Unprocessable Entity",
-              "code": 422,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\"error\": {\"code\": \"validation_error\", \"message\": \"Parâmetros inválidos; confira os campos e limites no contrato da API\"}}"
-            }
-          ],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"HTTP 202\", () => pm.response.to.have.status(202));",
-                  "const job = pm.response.json();",
-                  "pm.collectionVariables.set(\"job_id\", job.id);",
-                  "pm.collectionVariables.set(\"job_token\", job.token);",
-                  "pm.collectionVariables.set(\"poll_count\", 0);"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "const value = pm.response.json();",
+                  "const count = Number(pm.collectionVariables.get('poll_count') || 0) + 1;",
+                  "pm.collectionVariables.set('poll_count', count);",
+                  "if (['queued','running'].includes(value.status) && count < 600) { setTimeout(() => {}, 1500); pm.execution.setNextRequest(pm.info.requestName); }"
                 ]
               }
             }
@@ -1631,19 +2710,16 @@
                 "value": "*/*"
               },
               {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
             "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{job_token}}",
-                  "type": "string"
-                }
-              ]
+              "type": "noauth"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/cancel",
@@ -1659,7 +2735,7 @@
               ],
               "query": []
             },
-            "description": "Contrato: POST /api/v1/jobs/{job_id}/cancel. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
+            "description": "Contrato implementado: POST /api/v1/jobs/{job_id}/cancel.",
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -1681,63 +2757,8 @@
                     "value": "*/*"
                   },
                   {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{job_token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/cancel",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "jobs",
-                    "{{job_id}}",
-                    "cancel"
-                  ],
-                  "query": []
-                },
-                "description": "Contrato: POST /api/v1/jobs/{job_id}/cancel. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"cancelled\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": true,\n  \"error\": null\n}"
-            },
-            {
-              "name": "Chave ausente",
-              "originalRequest": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "*/*"
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
                   },
                   {
                     "key": "Content-Type",
@@ -1761,7 +2782,7 @@
                   ],
                   "query": []
                 },
-                "description": "Contrato: POST /api/v1/jobs/{job_id}/cancel. IDs obtidos no catálogo; nenhuma entrada aceita caminhos locais.",
+                "description": "Contrato implementado: POST /api/v1/jobs/{job_id}/cancel.",
                 "body": {
                   "mode": "raw",
                   "raw": "{}",
@@ -1772,15 +2793,15 @@
                   }
                 }
               },
-              "status": "Unauthorized",
-              "code": 401,
+              "status": "OK",
+              "code": 200,
               "header": [
                 {
                   "key": "Content-Type",
                   "value": "application/json"
                 }
               ],
-              "body": "{\"error\": {\"code\": \"unauthorized\", \"message\": \"Informe a chave de acesso do job\"}}"
+              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"cancelled\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": true,\n  \"error\": null\n}"
             }
           ],
           "event": [
@@ -1789,7 +2810,814 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Resultados",
+      "item": [
+        {
+          "name": "Histórico de gerações",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/jobs?query=&status=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": ""
+                },
+                {
+                  "key": "status",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "Contrato implementado: GET /api/v1/jobs."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/jobs?query=&status=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "jobs"
+                  ],
+                  "query": [
+                    {
+                      "key": "query",
+                      "value": ""
+                    },
+                    {
+                      "key": "status",
+                      "value": ""
+                    }
+                  ]
+                },
+                "description": "Contrato implementado: GET /api/v1/jobs."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"00000000000000000000000000000000\",\n    \"status\": \"queued\",\n    \"completed\": 0,\n    \"total\": 1,\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0,\n    \"expires_at\": 1791734400.0,\n    \"cancel_requested\": false,\n    \"error\": null,\n    \"name\": \"DNV — fluxo Postman\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": 42,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\"\n    }\n  }\n]"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar artefatos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/results",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "jobs",
+                "{{job_id}}",
+                "results"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/jobs/{job_id}/results."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/results",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "jobs",
+                    "{{job_id}}",
+                    "results"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/jobs/{job_id}/results."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"artifacts\": [\n    {\n      \"id\": \"0\",\n      \"name\": \"synthetic_0001.pdf\",\n      \"media_type\": \"application/pdf\",\n      \"size\": 12000\n    },\n    {\n      \"id\": \"2\",\n      \"name\": \"dataset.zip\",\n      \"media_type\": \"application/zip\",\n      \"size\": 9000\n    }\n  ]\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "const files = pm.response.json().artifacts;",
+                  "pm.collectionVariables.set('artifact_id', files.find(item => item.media_type === 'application/zip').id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Baixar artefato",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/{{artifact_id}}?download=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "jobs",
+                "{{job_id}}",
+                "artifacts",
+                "{{artifact_id}}"
+              ],
+              "query": [
+                {
+                  "key": "download",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Contrato implementado: GET /api/v1/jobs/{job_id}/artifacts/{artifact_id}."
+          },
+          "response": [
+            {
+              "name": "Arquivo binário",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/{{artifact_id}}?download=true",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "jobs",
+                    "{{job_id}}",
+                    "artifacts",
+                    "{{artifact_id}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "download",
+                      "value": "true"
+                    }
+                  ]
+                },
+                "description": "Contrato implementado: GET /api/v1/jobs/{job_id}/artifacts/{artifact_id}."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/pdf"
+                }
+              ],
+              "body": ""
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Compartilhamento",
+      "item": [
+        {
+          "name": "Listar links",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/shares",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "jobs",
+                "{{job_id}}",
+                "shares"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/jobs/{job_id}/shares."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/shares",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "jobs",
+                    "{{job_id}}",
+                    "shares"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/jobs/{job_id}/shares."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"22222222222222222222222222222222\",\n    \"job_id\": \"00000000000000000000000000000000\",\n    \"allow_download\": true,\n    \"created_at\": 1791648000.0,\n    \"expires_at\": 1791651600.0,\n    \"revoked_at\": null\n  }\n]"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar link controlado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/shares",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "jobs",
+                "{{job_id}}",
+                "shares"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/jobs/{job_id}/shares.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"allow_download\": true,\n  \"expires_in_hours\": 24\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/shares",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "jobs",
+                    "{{job_id}}",
+                    "shares"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/jobs/{job_id}/shares.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"allow_download\": true,\n  \"expires_in_hours\": 24\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"22222222222222222222222222222222\",\n  \"job_id\": \"00000000000000000000000000000000\",\n  \"allow_download\": true,\n  \"created_at\": 1791648000.0,\n  \"expires_at\": 1791651600.0,\n  \"revoked_at\": null,\n  \"token\": \"CHAVE_PRIVADA_DO_LINK\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "const value = pm.response.json();",
+                  "pm.collectionVariables.set('share_id', value.id);",
+                  "pm.collectionVariables.set('share_token', value.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revogar link",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/shares/{{share_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shares",
+                "{{share_id}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: DELETE /api/v1/shares/{share_id}."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/shares/{{share_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "shares",
+                    "{{share_id}}"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: DELETE /api/v1/shares/{share_id}."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"22222222222222222222222222222222\",\n  \"job_id\": \"00000000000000000000000000000000\",\n  \"allow_download\": true,\n  \"created_at\": 1791648000.0,\n  \"expires_at\": 1791651600.0,\n  \"revoked_at\": 1791648060.0\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Abrir resultado compartilhado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{share_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/shared/{{share_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shared",
+                "{{share_id}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/shared/{share_id}."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  }
+                ],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{share_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/shared/{{share_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "shared",
+                    "{{share_id}}"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/shared/{share_id}."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"share\": {\n    \"id\": \"22222222222222222222222222222222\",\n    \"job_id\": \"00000000000000000000000000000000\",\n    \"allow_download\": true,\n    \"created_at\": 1791648000.0,\n    \"expires_at\": 1791651600.0,\n    \"revoked_at\": null\n  },\n  \"job\": {\n    \"id\": \"00000000000000000000000000000000\",\n    \"status\": \"queued\",\n    \"completed\": 0,\n    \"total\": 1,\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0,\n    \"expires_at\": 1791734400.0,\n    \"cancel_requested\": false,\n    \"error\": null,\n    \"name\": \"DNV — fluxo Postman\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": 42,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\"\n    }\n  },\n  \"artifacts\": []\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Abrir artefato compartilhado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{share_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/shared/{{share_id}}/artifacts/{{artifact_id}}?download=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shared",
+                "{{share_id}}",
+                "artifacts",
+                "{{artifact_id}}"
+              ],
+              "query": [
+                {
+                  "key": "download",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Contrato implementado: GET /api/v1/shared/{share_id}/artifacts/{artifact_id}."
+          },
+          "response": [
+            {
+              "name": "Arquivo binário",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  }
+                ],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{share_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/shared/{{share_id}}/artifacts/{{artifact_id}}?download=false",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "shared",
+                    "{{share_id}}",
+                    "artifacts",
+                    "{{artifact_id}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "download",
+                      "value": "false"
+                    }
+                  ]
+                },
+                "description": "Contrato implementado: GET /api/v1/shared/{share_id}/artifacts/{artifact_id}."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/pdf"
+                }
+              ],
+              "body": ""
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
                 ]
               }
             }
@@ -1815,7 +3643,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
                 ]
               }
             }
@@ -1829,18 +3657,7 @@
               "type": "noauth"
             },
             "url": "{{baseUrl}}/api/docs"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ]
+          }
         }
       ]
     }

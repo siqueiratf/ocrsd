@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, page_header %}
+{% block title %}Resultados{% endblock %}
+{% block content %}
+{% call page_header("Etapa 3 · Resultados", "Datasets gerados", "Acompanhe execuções, examine os arquivos e compartilhe resultados sintéticos com controle de acesso.") %}
+  <form id="filtros" class="filters" role="search" hx-get="/resultados/lista" hx-target="#tabela-jobs" hx-swap="outerHTML" hx-trigger="input delay:300ms, change, submit" hx-sync="this:replace" hx-disinherit="*">
+    <label class="search-field">{{ icon('search') }}<input type="search" name="busca" value="{{ search }}" maxlength="120" placeholder="Buscar geração…" aria-label="Buscar gerações"></label>
+    <select name="status" aria-label="Filtrar por status">
+      <option value="">Todos os status</option>
+      {% for key, label in STATUS.items() %}<option value="{{ key }}" {% if key == status %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    {% include "partials/selected_input.html" %}
+  </form>
+  <a class="btn btn-primary" href="/geracao">{{ icon('generate') }}Nova geração</a>
+{% endcall %}
+{% include "partials/jobs_table.html" %}
+<div id="detalhe" class="result-detail">
+  {% if result %}{% include "partials/result_body.html" %}{% endif %}
+</div>
+{% endblock %}

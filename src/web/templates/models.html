@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, page_header %}
+{% block title %}Modelos{% endblock %}
+{% block content %}
+{% call page_header("Etapa 1 · Modelagem", "Modelos de documentos", "Cadastre templates PDF, delimite as áreas de preenchimento e mantenha mapas compatíveis com o motor OCRSD.") %}
+  <button type="button" class="btn btn-primary" hx-get="/modelos/novo" hx-target="#modal">{{ icon('add') }}Novo modelo</button>
+{% endcall %}
+<ol class="flow" aria-label="Fluxo de trabalho">
+  <li class="is-current"><b>1</b><span>Modele o documento</span></li>
+  <li><b>2</b><span>Gere o dataset</span></li>
+  <li><b>3</b><span>Explore e compartilhe</span></li>
+</ol>
+<div class="model-grid">
+  {% for model in models %}
+  <article class="card model-card">
+    <div class="model-thumb">
+      <img src="/modelos/{{ model.id }}/previa.png" alt="Prévia de {{ model.label }}" decoding="async">
+    </div>
+    <div class="model-body">
+      <div class="tags">
+        {% if model.status == 'published' %}<span class="tag tag-green">Disponível</span>{% else %}<span class="tag tag-yellow">Rascunho</span>{% endif %}
+        <span class="tag tag-blue">{{ model.field_count }} campos</span>
+        {% if model.builtin %}<span class="tag">Catálogo</span>{% endif %}
+      </div>
+      <h2>{{ model.label }}</h2>
+      <p>{{ model.description or "Sem descrição." }}</p>
+      <dl class="model-meta">
+        <div><dt>Origem</dt><dd>{{ "Catálogo institucional" if model.builtin else "Modelo privado" }}</dd></div>
+        <div><dt>Versão</dt><dd>v{{ model.version }}</dd></div>
+        {% if model.updated_at %}<div><dt>Atualizado</dt><dd>{{ model.updated_at|data }}</dd></div>{% endif %}
+      </dl>
+      <div class="model-actions">
+        {% if model.builtin and not model.editable %}
+        <button type="button" class="btn" hx-post="/modelos/{{ model.id }}/copia" hx-disabled-elt="this">{{ icon('copy') }}Criar cópia editável<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+        {% else %}
+        <a class="btn" href="/modelos/{{ model.id }}/editor">{{ icon('pen') }}Editar mapeamento</a>
+        {% endif %}
+        <a class="btn btn-primary" href="/geracao?modelo={{ model.id|urlencode }}">{{ icon('generate') }}Gerar</a>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+  <button type="button" class="model-new" hx-get="/modelos/novo" hx-target="#modal">
+    <span class="model-new-icon">{{ icon('add') }}</span>
+    <b>Adicionar novo documento</b>
+    <small>Envie um PDF de página única e comece a mapear os campos.</small>
+  </button>
+</div>
+{% endblock %}
