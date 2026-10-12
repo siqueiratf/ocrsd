@@ -41,6 +41,11 @@
       "type": "string"
     },
     {
+      "key": "key",
+      "value": "custom.referencia_local",
+      "type": "string"
+    },
+    {
       "key": "fields",
       "value": "[\"cpf\", \"matricula\", \"data_nascimento_por_extenso\"]",
       "type": "string"
@@ -625,6 +630,210 @@
               "body": "{\n  \"models\": [\n    {\n      \"id\": \"font\",\n      \"label\": \"Fonte manuscrita (local)\",\n      \"available\": true,\n      \"reason\": null\n    },\n    {\n      \"id\": \"sjvasquez\",\n      \"label\": \"sjvasquez\",\n      \"available\": false,\n      \"reason\": \"Requer habilitação administrativa e pesos locais completos\"\n    },\n    {\n      \"id\": \"aaron1259\",\n      \"label\": \"aaron1259\",\n      \"available\": false,\n      \"reason\": \"Requer habilitação administrativa e pesos locais completos\"\n    },\n    {\n      \"id\": \"wpvnteam\",\n      \"label\": \"wpvnteam\",\n      \"available\": false,\n      \"reason\": \"Requer habilitação administrativa e pesos locais completos\"\n    }\n  ],\n  \"filters\": [\n    \"none\",\n    \"light\",\n    \"medium\",\n    \"strong\"\n  ],\n  \"max_count\": 10,\n  \"retention_hours\": 24\n}"
             }
           ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar definições semânticas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/semantic-definitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "semantic-definitions"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/semantic-definitions."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar definição semântica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/semantic-definitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "semantic-definitions"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/semantic-definitions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"custom.referencia_local\",\n  \"label\": \"Referência local\",\n  \"description\": \"Código fictício\",\n  \"data_type\": \"text\",\n  \"generator\": {\n    \"type\": \"choices\",\n    \"values\": [\n      \"A1\",\n      \"B2\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar definição semântica",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/semantic-definitions/{{key}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "semantic-definitions",
+                "{{key}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: PUT /api/v1/semantic-definitions/{key}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"custom.referencia_local\",\n  \"label\": \"Referência local\",\n  \"description\": \"Código fictício\",\n  \"data_type\": \"text\",\n  \"generator\": {\n    \"type\": \"choices\",\n    \"values\": [\n      \"A1\",\n      \"B2\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Excluir definição semântica",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/semantic-definitions/{{key}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "semantic-definitions",
+                "{{key}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: DELETE /api/v1/semantic-definitions/{key}."
+          },
+          "response": [],
           "event": [
             {
               "listen": "test",

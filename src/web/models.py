@@ -147,6 +147,14 @@ class MappingUpdate(StrictModel):
     definition: dict[str, Any]
 
 
+class SemanticDefinitionCreate(StrictModel):
+    key: Annotated[str, Field(pattern=r"^custom(?:\.[a-z][a-z0-9_]*){1,5}$", max_length=100)]
+    label: Annotated[str, Field(min_length=1, max_length=100)]
+    description: Annotated[str, Field(min_length=1, max_length=500)]
+    data_type: Literal["text", "integer", "boolean", "date", "time"]
+    generator: dict[str, Any]
+
+
 class WritingPresetCreate(StrictModel):
     name: Annotated[str, Field(min_length=1, max_length=120)]
     writing: Writing

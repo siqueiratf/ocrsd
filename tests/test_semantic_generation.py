@@ -321,9 +321,10 @@ class SemanticPlanTests(unittest.TestCase):
                     "validation": {"format": "DD/MM/AAAA", "semantic_key": "nasc"}},
                    {"field_id": "outra", "label": "Outra data", "data_type": "date", "bbox": box(1),
                     "validation": {"format": "DD de mês de AAAA", "semantic_key": "nasc"}},
-                   {"field_id": "sexo", "label": "Sexo", "data_type": "sex", "bbox": box(2), "validation": {"format": "abreviado"}},
+                   {"field_id": "sexo", "label": "Sexo", "data_type": "sex", "bbox": box(2), "semantic": "newborn.sex",
+                    "validation": {"format": "abreviado"}},
                    {"field_id": "dnv", "label": "DNV", "data_type": "dnv_number", "bbox": box(3), "validation": {"format": "digitos"}}]
-        for truth in self.run_mapping("tipos", entries):
+        for truth in self.run_mapping("certidao_nascimento", entries):
             by_id, record = fields(truth), truth["semantic_record"]
             self.assertNotIn("semantic", by_id["outra"])
             self.assertEqual(by_id["outra"]["date"], record["birth.date"])

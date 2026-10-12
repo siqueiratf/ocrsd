@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from src.semantic.custom import validate_custom_definition
 from src.web.models import GenerationOptions, JobDetail, JobResponse
 from src.web.services import ServiceError
 from src.web.settings import Settings
@@ -82,6 +83,13 @@ class JobStore:
                     description TEXT NOT NULL, base_type TEXT NOT NULL, config TEXT NOT NULL,
                     created_at REAL NOT NULL, updated_at REAL NOT NULL, UNIQUE(owner_id, slug)
                 );
+                CREATE TABLE IF NOT EXISTS custom_semantics (
+                    id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, key TEXT NOT NULL,
+                    label TEXT NOT NULL, description TEXT NOT NULL, data_type TEXT NOT NULL,
+                    generator TEXT NOT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL,
+                    UNIQUE(owner_id, key)
+                );
+                CREATE INDEX IF NOT EXISTS custom_semantics_owner ON custom_semantics(owner_id, label);
                 CREATE TABLE IF NOT EXISTS preset_grants (
                     preset_id TEXT NOT NULL, workspace_id TEXT NOT NULL, created_at REAL NOT NULL,
                     PRIMARY KEY (preset_id, workspace_id)
@@ -476,6 +484,55 @@ class JobStore:
         with self.connection() as db:
             if not db.execute("DELETE FROM field_types WHERE id=? AND owner_id=?", (identifier, owner_id)).rowcount:
                 raise ServiceError(404, "not_found", "Tipo personalizado não encontrado")
+
+    def list_custom_semantics(self, owner_id: str) -> list[dict]:
+        with self.connection() as db:
+            rows = db.execute("SELECT * FROM custom_semantics WHERE owner_id=? ORDER BY label COLLATE NOCASE, key", (owner_id,)).fetchall()
+        return [{**dict(row), "generator": json.loads(row["generator"]), "status": "approved"} for row in rows]
+
+    def custom_semantic(self, owner_id: str, key: str) -> dict:
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM custom_semantics WHERE owner_id=? AND key=?", (owner_id, key)).fetchone()
+        if row is None:
+            raise ServiceError(404, "not_found", "Definição semântica não encontrada")
+        return {**dict(row), "generator": json.loads(row["generator"]), "status": "approved"}
+
+    def save_custom_semantic(self, owner_id: str, key: str, label: str, description: str, data_type: str,
+                             generator: dict) -> dict:
+        try:
+            definition = validate_custom_definition(key, label, description, data_type, generator)
+        except (TypeError, ValueError) as exc:
+            raise ServiceError(422, "invalid_custom_semantic", str(exc)) from exc
+        identifier = uuid4().hex
+        now = time.time()
+        with self.connection() as db:
+            try:
+                db.execute("INSERT INTO custom_semantics VALUES (?,?,?,?,?,?,?,?,?)",
+                           (identifier, owner_id, definition["key"], definition["label"], definition["description"],
+                            definition["data_type"], json.dumps(definition["generator"], ensure_ascii=False), now, now))
+            except sqlite3.IntegrityError as exc:
+                raise ServiceError(409, "custom_semantic_exists", "Já existe uma definição semântica com este identificador") from exc
+        return self.custom_semantic(owner_id, key)
+
+    def update_custom_semantic(self, owner_id: str, key: str, label: str, description: str, data_type: str,
+                               generator: dict) -> dict:
+        try:
+            definition = validate_custom_definition(key, label, description, data_type, generator)
+        except (TypeError, ValueError) as exc:
+            raise ServiceError(422, "invalid_custom_semantic", str(exc)) from exc
+        with self.connection() as db:
+            updated = db.execute("UPDATE custom_semantics SET label=?,description=?,data_type=?,generator=?,updated_at=? "
+                                 "WHERE owner_id=? AND key=?",
+                                 (definition["label"], definition["description"], definition["data_type"],
+                                  json.dumps(definition["generator"], ensure_ascii=False), time.time(), owner_id, key))
+            if not updated.rowcount:
+                raise ServiceError(404, "not_found", "Definição semântica não encontrada")
+        return self.custom_semantic(owner_id, key)
+
+    def delete_custom_semantic(self, owner_id: str, key: str) -> None:
+        with self.connection() as db:
+            if not db.execute("DELETE FROM custom_semantics WHERE owner_id=? AND key=?", (owner_id, key)).rowcount:
+                raise ServiceError(404, "not_found", "Definição semântica não encontrada")
 
     def delete_model(self, identifier: str, owner_id: str) -> None:
         self.model(identifier, owner_id)

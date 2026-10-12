@@ -16,6 +16,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from src.document_types import discover_document_types
 from src.field_rules import COMPOSITE_TYPES, DATE_PARTS, SEPARATED_DATE, apply_shared_rules, rule_errors
 from src.semantic.plan import semantic_plan
+from src.semantic.custom import validate_custom_definition
 from src.web.models import DocumentModelResponse, GenerationOptions, PresetResponse, Writing
 from src.web.settings import Settings
 from src.writing_presets import list_presets
@@ -179,21 +180,25 @@ def writing_issues(definition: dict, field_ids, writing: Writing) -> list[dict]:
     wanted = {str(item) for item in field_ids}
     fields = json.dumps([field for field in definition.get("fields", []) if str(field["field_id"]) in wanted], sort_keys=True)
     shared = json.dumps(definition.get("shared_rules") or {}, sort_keys=True)
+    custom = json.dumps(definition.get("semantic_definitions") or {}, sort_keys=True)
     return [dict(item) for item in sampled_writing_issues(fields, shared, writing.text_policy, writing.handwriting, writing.text_handwriting,
-                                                          str(definition.get("template_id") or ""))]
+                                                          str(definition.get("template_id") or ""), custom)]
 
 
 @functools.lru_cache(maxsize=256)
-def sampled_writing_issues(fields: str, shared: str, policy: str, numbers: bool, texts: bool, document: str = "") -> tuple:
+def sampled_writing_issues(fields: str, shared: str, policy: str, numbers: bool, texts: bool, document: str = "",
+                           custom: str = "{}") -> tuple:
     from src.neural_handwriting import apply_text_policy, unsupported_characters
     from src.synthetic_dataset import field_texts, is_numeric_text
     issues = []
+    definitions = json.loads(custom)
     for field in apply_shared_rules({"fields": json.loads(fields), "shared_rules": json.loads(shared)})["fields"]:
         if field.get("render_as_printed"):
             continue
         characters, too_long = set(), False
         for sample in range(WRITING_SAMPLES):
-            for value in field_texts(field, random.Random(sample), {"document": document or None}):
+            for value in field_texts(field, random.Random(sample),
+                                     {"document": document or None, "semantic_definitions": definitions}):
                 if not value.strip() or not (numbers if is_numeric_text(value) else texts):
                     continue
                 text = apply_text_policy(value, policy)
@@ -231,7 +236,8 @@ def create_model(store, settings: Settings, owner_id: str, label: str, descripti
     if len(pdf) > settings.max_upload_bytes:
         raise ServiceError(413, "too_large", "O PDF excede o limite de upload")
     page_size = template_page_size(pdf)
-    definition = validate_mapping(mapping or {"template_id": "modelo_web", "dpi": 300, "page_size_px": list(page_size), "fields": []}, page_size)
+    source = mapping or {"template_id": "modelo_web", "dpi": 300, "page_size_px": list(page_size), "fields": []}
+    definition = validate_mapping(with_approved_semantics(store, owner_id, source), page_size)
     return store.create_model(owner_id, label, description, mapping_id, pdf, definition)
 
 
@@ -267,8 +273,24 @@ def save_mapping(catalog: Catalog, store, model_id: str, owner_id: str, definiti
     if model_id in catalog.types:
         raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
     model = store.model(model_id, owner_id)
-    store.update_mapping(model_id, owner_id, validate_mapping(definition))
+    validated = validate_mapping(with_approved_semantics(store, owner_id, definition))
+    store.update_mapping(model_id, owner_id, validated)
+    if model["status"] == "published" and mapping_issues(validated):
+        store.set_status(model_id, owner_id, "draft")
     return model["mapping_id"]
+
+
+def with_approved_semantics(store, owner_id: str, definition: dict) -> dict:
+    keys = {field.get("semantic") for field in definition.get("fields", [])
+            if isinstance(field, dict) and isinstance(field.get("semantic"), str)
+            and field["semantic"].startswith("custom.")}
+    if not keys:
+        return definition
+    specs = {}
+    for key in sorted(keys):
+        approved = store.custom_semantic(owner_id, key)
+        specs[key] = {name: approved[name] for name in ("key", "label", "description", "data_type", "generator")}
+    return {**definition, "semantic_definitions": specs}
 
 
 def mark_pdf(path: Path) -> None:
@@ -302,6 +324,18 @@ def validate_mapping(definition: dict, page_size: tuple[int, int] | None = None)
         raise ServiceError(422, "invalid_mapping", "DPI ou dimensões da página inválidos")
     if dpi < 72 or dpi > 600 or len(size) != 2 or min(size) < 100 or max(size) > 20000:
         raise ServiceError(422, "invalid_mapping", "DPI ou dimensões da página fora dos limites")
+    custom_definitions = definition.get("semantic_definitions") or {}
+    if not isinstance(custom_definitions, dict) or len(custom_definitions) > 100:
+        raise ServiceError(422, "invalid_mapping", "Catálogo semântico personalizado inválido")
+    for key, spec in custom_definitions.items():
+        if not isinstance(spec, dict):
+            raise ServiceError(422, "invalid_mapping", f"Definição semântica inválida: {key}")
+        try:
+            normalized = validate_custom_definition(*(spec[name] for name in ("key", "label", "description", "data_type", "generator")))
+        except (KeyError, ValueError) as exc:
+            raise ServiceError(422, "invalid_mapping", f"Definição semântica inválida: {key}: {exc}") from exc
+        if normalized != spec or key != normalized["key"]:
+            raise ServiceError(422, "invalid_mapping", f"Definição semântica inválida: {key}")
     identifiers: set[str] = set()
 
     def bbox(value: object) -> list[int]:
@@ -320,7 +354,7 @@ def validate_mapping(definition: dict, page_size: tuple[int, int] | None = None)
         if not identifier or len(identifier) > 100 or identifier in identifiers:
             raise ServiceError(422, "invalid_mapping", "IDs de campos devem ser únicos e não vazios")
         identifiers.add(identifier)
-        errors = rule_errors(str(raw.get("data_type") or "text"), raw.get("validation")) or semantic_errors(raw, definition.get("template_id"))
+        errors = rule_errors(str(raw.get("data_type") or "text"), raw.get("validation")) or semantic_errors(raw, definition.get("template_id"), custom_definitions)
         if errors:
             raise ServiceError(422, "invalid_mapping", f"Campo {identifier}: {errors[0]}")
         field = {**raw, "field_id": identifier, "label": str(raw.get("label") or identifier), "bbox": bbox(raw.get("bbox"))}
@@ -433,9 +467,20 @@ def revision(*paths: Path) -> str:
     return digest.hexdigest()[:16]
 
 
-def semantic_errors(field: dict, document: str | None = None) -> list[str]:
+def semantic_errors(field: dict, document: str | None = None, custom_definitions: dict | None = None) -> list[str]:
     if field.get("semantic") in (None, ""):
         return []
+    key = field.get("semantic")
+    if isinstance(key, str) and key.startswith("custom."):
+        definition = (custom_definitions or {}).get(key)
+        if definition is None:
+            return [f"Definição semântica personalizada ausente: {key}"]
+        compatible = {"text": {"text", "enum", "person_name", "occupation", "checkbox"},
+                      "integer": {"integer", "decimal", "digit_sequence", "checkbox"},
+                      "boolean": {"checkbox", "text", "enum"}, "date": {"date", "digit_sequence"},
+                      "time": {"time", "digit_sequence"}}
+        return [] if field.get("data_type", "text") in compatible[definition["data_type"]] else [
+            f"O tipo do campo é incompatível com a definição {key}"]
     decision = semantic_plan([field], document).decisions[str(field.get("field_id", ""))]
     return [decision.issue] if decision.invalid else []
 
@@ -451,6 +496,12 @@ def semantic_inferred(definition: dict, document: str | None) -> dict[str, str |
 def mapping_issues(definition: dict) -> list[str]:
     fields = definition.get("fields") or []
     issues = [] if fields else ["Adicione ao menos um campo ao documento"]
+    if any(isinstance(field.get("suggestion"), dict) and field["suggestion"].get("status", "suggested") == "suggested"
+           for field in fields):
+        issues.append("Revise todas as sugestões antes de publicar o modelo")
+    provenance = definition.get("provenance")
+    if isinstance(provenance, dict) and provenance.get("reviewed") is False:
+        issues.append("Confirme a revisão do mapeamento assistido antes de publicar")
     for field in fields:
         name, data_type = field.get("label") or field["field_id"], field.get("data_type", "text")
         validation = field.get("validation") or {}
@@ -467,7 +518,17 @@ def mapping_issues(definition: dict) -> list[str]:
         if data_type == "dnv_number" and validation.get("format") == "caixas" and len(field.get("elements") or []) != 11:
             issues.append(f"{name}: o número da DNV em caixas precisa de 11 caixas, uma por algarismo")
     if fields:
-        issues.extend(semantic_plan(apply_shared_rules(definition)["fields"], definition.get("template_id")).issues)
+        standard = [field for field in apply_shared_rules(definition)["fields"]
+                    if not (isinstance(field.get("semantic"), str) and field["semantic"].startswith("custom."))]
+        issues.extend(semantic_plan(standard, definition.get("template_id")).issues)
+        for field in fields:
+            key = field.get("semantic")
+            if isinstance(key, str) and key.startswith("custom."):
+                spec = (definition.get("semantic_definitions") or {}).get(key)
+                if spec is None:
+                    issues.append(f"{field['field_id']}: definição semântica personalizada ausente")
+                elif spec["generator"]["type"] == "unavailable":
+                    issues.append(f"{field['field_id']}: configure um gerador validado para {key}")
     return issues
 
 

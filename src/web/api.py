@@ -9,8 +9,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.exceptions import HTTPException
 
 from src.web.jobs import JobStore
-from src.web.models import Artifact, Capabilities, DocumentModelResponse, DocumentTypeResponse, ErrorResponse, GenerationConfigCreate, GenerationConfigResponse, GenerationOptions, HandwritingPreviewRequest, HandwritingPreviewResponse, Health, Identifier, JobDetail, JobResponse, MappingResponse, MappingUpdate, ModelCreate, ModelUpdate, PresetResponse, RealismPreviewRequest, RealismPreviewResponse, Results, ShareCreate, ShareCreated, ShareResponse, SharedResult, SubmittedJob, WorkspaceResponse, WritingPresetCreate, WritingPresetStored
-from src.web.services import Catalog, ServiceError, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, realism_previews, render_preview, save_mapping
+from src.web.models import Artifact, Capabilities, DocumentModelResponse, DocumentTypeResponse, ErrorResponse, GenerationConfigCreate, GenerationConfigResponse, GenerationOptions, HandwritingPreviewRequest, HandwritingPreviewResponse, Health, Identifier, JobDetail, JobResponse, MappingResponse, MappingUpdate, ModelCreate, ModelUpdate, PresetResponse, RealismPreviewRequest, RealismPreviewResponse, Results, SemanticDefinitionCreate, ShareCreate, ShareCreated, ShareResponse, SharedResult, SubmittedJob, WorkspaceResponse, WritingPresetCreate, WritingPresetStored
+from src.web.services import Catalog, ServiceError, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, mapping_issues, realism_previews, render_preview, save_mapping
 from src.web.settings import Settings
 from src.web.ui import file_response, mount_ui
 
@@ -200,6 +200,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.put("/api/v1/models/{model_id}", response_model=DocumentModelResponse, tags=["Modelos"])
     async def update_model(model_id: Identifier, payload: ModelUpdate, owner_id: Annotated[str, Depends(workspace_required)]):
+        if payload.status == "published":
+            model = store.model(model_id, owner_id)
+            definition = catalog.definition(model_id, model["mapping_id"], owner_id)
+            issues = mapping_issues(definition)
+            if issues:
+                raise ServiceError(422, "publication_blocked", "Resolva antes de publicar: " + "; ".join(issues[:3]))
         return custom_model(store.update_model(model_id, owner_id, payload.label, payload.description, payload.status))
 
     @app.delete("/api/v1/models/{model_id}", tags=["Modelos"])
@@ -230,6 +236,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def capabilities():
         return Capabilities(models=catalog.models(), filters=["none", "light", "medium", "strong"],
                             max_count=settings.max_count, retention_hours=settings.retention_hours)
+
+    @app.get("/api/v1/semantic-definitions", tags=["Catálogo"])
+    async def semantic_definitions(owner_id: Annotated[str, Depends(workspace_required)]):
+        return store.list_custom_semantics(owner_id)
+
+    @app.post("/api/v1/semantic-definitions", status_code=201, tags=["Catálogo"])
+    async def create_semantic_definition(payload: SemanticDefinitionCreate,
+                                         owner_id: Annotated[str, Depends(workspace_required)]):
+        return store.save_custom_semantic(owner_id, **payload.model_dump())
+
+    @app.put("/api/v1/semantic-definitions/{key:path}", tags=["Catálogo"])
+    async def update_semantic_definition(key: str, payload: SemanticDefinitionCreate,
+                                         owner_id: Annotated[str, Depends(workspace_required)]):
+        if key != payload.key:
+            raise ServiceError(422, "invalid_semantic", "A chave da definição não pode ser alterada")
+        return store.update_custom_semantic(owner_id, **payload.model_dump())
+
+    @app.delete("/api/v1/semantic-definitions/{key:path}", tags=["Catálogo"])
+    async def delete_semantic_definition(key: str, owner_id: Annotated[str, Depends(workspace_required)]):
+        store.delete_custom_semantic(owner_id, key)
+        return {"deleted": True}
 
     @app.get("/api/v1/writing-presets", response_model=list[PresetResponse], tags=["Catálogo"])
     async def writing_presets():

@@ -333,7 +333,10 @@ class _Analyzer:
         self.squares = [s for s in self._squares(words) if geo.holds(form, geo.center(s.box))]
         self.cells = [c for c in geo.cells(self.h, self.v, 0.015 * dpi, unit) if geo.area(c) >= (1.5 * unit) ** 2
                       and not any(geo.iou(c, s.box) >= 0.3 for s in self.squares) and geo.ring_ink(self.bw, c, 0.2 * unit, 0.6 * unit) < 0.5]
-        self.runs = [geo.run_elements(run, dpi) for run in geo.comb_runs(self.bw, h0, dpi, unit)]
+        self.runs = [elements for run in geo.comb_runs(self.bw, h0, dpi, unit)
+                     if (elements := geo.run_elements(run, dpi))
+                     and not any(geo.contained(element, square.box) >= 0.3
+                                 for element in elements for square in self.squares if square.kind == "checkbox")]
         self.bars = geo.bars(gray, unit, xs[0] + 0.12 * (xs[-1] - xs[0]) if xs.size else 0.15 * gray.shape[1])
         self.timings["geometry"] = round(time.perf_counter() - started, 3)
         started = time.perf_counter()

@@ -9,7 +9,7 @@ import secrets
 import string
 import unicodedata
 from dataclasses import asdict, dataclass, replace
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -24,6 +24,7 @@ from src.field_rules import (DATE_PARTS, DNV_TEST_PREFIX, SEPARATED_DATE, SEX_VA
                               document_number, format_date, format_dnv, masked_value, sex_text)
 from src.neural_handwriting import NeuralPen, load_model, prepare_text, render_strokes
 from src.semantic import REGISTRY, VERSION as SEMANTIC_VERSION, SemanticRecord
+from src.semantic.custom import generate_custom_value, validate_custom_definition
 from src.semantic.data import CITIES, COMPLEMENTS, FIRST_NAMES, LAST_NAMES, LOCATION_PROFILES, OCCUPATIONS, STREETS, UF_VALUES
 from src.semantic.plan import semantic_plan
 from src.semantic.present import checkbox_choice, present_elements, present_text, validation_rules, value_kind
@@ -627,6 +628,15 @@ def field_texts(field: dict, rng: random.Random, context: dict | None = None) ->
     if field.get("data_type") == "checkbox" and field.get("elements"):
         return []
     context = {} if context is None else context
+    key = field.get("semantic")
+    if isinstance(key, str) and key.startswith("custom."):
+        definition = (context.get("semantic_definitions") or {}).get(key)
+        if definition is None:
+            raise ValueError(f"Definição semântica personalizada ausente: {key}")
+        value = generate_custom_value(definition, rng)
+        binding = Binding(key, source="custom")
+        text, parts, _ = _bound_values(field, binding, value)
+        return [character for _, character in parts] if parts is not None else [text]
     record = _record(context, rng)
     binding = semantic_plan([field], context.get("document")).apply(record).get(str(field.get("field_id", "")))
     if binding is not None:
@@ -720,13 +730,30 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
     generation_context = _semantic_context(field_map.get("template_id") or infer_document_type_key(template_path), rng.getrandbits(64))
     record = generation_context["record"]
     selected = [field for field in field_map.get("fields", []) if str(field["field_id"]) in selected_ids]
-    plan = semantic_plan(selected, generation_context["document"])
+    custom_definitions = field_map.get("semantic_definitions") or {}
+    custom_fields = [field for field in selected if isinstance(field.get("semantic"), str)
+                     and field["semantic"].startswith("custom.")]
+    custom_values = {}
+    for field in custom_fields:
+        key = field["semantic"]
+        definition = custom_definitions.get(key)
+        if definition is None:
+            raise ValueError(f"Definição semântica personalizada ausente: {key}")
+        validate_custom_definition(*(definition[name] for name in ("key", "label", "description", "data_type", "generator")))
+        if key not in custom_values:
+            custom_values[key] = generate_custom_value(definition, random.Random(f"{record.seed}:custom:{key}"))
+    plan = semantic_plan([field for field in selected if field not in custom_fields], generation_context["document"])
     linked = plan.bindings
     generation_context["links"] = {key: linked[str(field["field_id"])].key for field in selected
                                    if str(field["field_id"]) in linked and (key := validation_rules(field).get("semantic_key"))}
-    bindings = plan.apply(record, [key for field in selected if str(field["field_id"]) not in linked
+    bindings = plan.apply(record, [key for field in selected if field not in custom_fields and str(field["field_id"]) not in linked
                                    for key in _legacy_keys(field, generation_context)])
+    bindings.update({str(field["field_id"]): Binding(field["semantic"], source="custom") for field in custom_fields})
     snapshot = record.snapshot()
+    snapshot.update({key: value.isoformat() if isinstance(value, (date, time)) else value for key, value in custom_values.items()})
+
+    def semantic_value(binding: Binding):
+        return custom_values[binding.key] if binding.source == "custom" else record.value(binding.key)
 
     def insert_value(rect_values: list[int], text: str, font_size: float | None = None,
                      pencil: bool = False, force_printed: bool = False) -> tuple[str, dict]:
@@ -796,7 +823,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             continue
         if field.get("data_type") == "checkbox" and elements:
             if binding:
-                selected_elements = checkbox_choice(field, binding, record.value(binding.key))
+                selected_elements = checkbox_choice(field, binding, semantic_value(binding))
             else:
                 count = 1 if field.get("selection_mode", "single") == "single" else rng.randint(1, len(elements))
                 selected_elements = rng.sample(elements, count)
@@ -825,7 +852,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             })
             continue
         if binding:
-            value, parts, semantic = _bound_values(field, binding, record.value(binding.key))
+            value, parts, semantic = _bound_values(field, binding, semantic_value(binding))
             composite = None if parts is None else (value, parts, semantic)
         else:
             composite = element_values(field, rng, generation_context)
@@ -888,7 +915,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         "semantic_version": SEMANTIC_VERSION,
         "semantic_seed": record.seed,
         "semantic_context": record.context,
-        "semantic_record": record.snapshot(),
+        "semantic_record": snapshot,
         "generation": reproduction,
     }
     json_path.write_text(json.dumps(ground_truth, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

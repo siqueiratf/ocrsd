@@ -444,7 +444,7 @@ class ProposalTests(unittest.TestCase):
         matches = match_candidates(analysis, DO)
         definition = build_proposal(analysis, matches, DO, {"provider": "none", "model": None})
         validated = validate_mapping(definition, (2480, 3508))
-        self.assertEqual(mapping_issues(validated), [])
+        self.assertTrue(any("Revise todas as sugestões" in issue for issue in mapping_issues(validated)))
         fields = {field["suggestion"]["candidate_id"]: field for field in definition["fields"]}
         self.assertNotIn("c11", fields)
         self.assertEqual((definition["template_id"], definition["dpi"], definition["page_size_px"]), (DO, 300, [2480, 3508]))
@@ -472,10 +472,8 @@ class ProposalTests(unittest.TestCase):
         self.assertTrue(any("c11" in warning for warning in provenance["warnings"]))
         self.assertEqual(provenance["timings"], {"total": 0.5})
         json.dumps(definition)
-        stripped = strip_suggestions(definition)
-        self.assertFalse(any("suggestion" in field for field in stripped["fields"]))
-        self.assertFalse(stripped["provenance"]["reviewed"])
-        self.assertEqual(mapping_issues(validate_mapping(stripped, (2480, 3508))), [])
+        with self.assertRaisesRegex(ValueError, "pendente"):
+            strip_suggestions(definition)
         reviewed = strip_suggestions({**definition, "fields": [accept_suggestion(field) for field in definition["fields"]]})
         self.assertTrue(reviewed["provenance"]["reviewed"])
         chosen = accept_suggestion(fields["c7"], "death.place.uf")
@@ -497,13 +495,14 @@ class ProposalTests(unittest.TestCase):
         analysis = PageAnalysis(1, 300, tuple(printed["page_size_px"]), 12.0, "text_layer", tuple(candidates))
         definition = build_proposal(analysis, match_candidates(analysis, "dnv"), "dnv", {"provider": "openai", "model": "fake"})
         validated = validate_mapping(definition)
-        self.assertEqual(mapping_issues(validated), [])
+        self.assertTrue(any("Revise todas as sugestões" in issue for issue in mapping_issues(validated)))
         self.assertEqual((definition["provenance"]["provider"], definition["provenance"]["model"]), ("openai", "fake"))
         fields = {field["suggestion"]["candidate_id"]: field for field in definition["fields"]}
         self.assertEqual((fields["2"]["semantic"], fields["2"]["data_type"]), ("birth.date", "digit_sequence"))
         self.assertEqual((fields["46"]["semantic"], len(fields["46"]["elements"])), ("filling.date", 6))
         self.assertEqual(fields["5"]["semantic"], "newborn.sex")
-        self.assertEqual(mapping_issues(validate_mapping(strip_suggestions(definition))), [])
+        accepted = {**definition, "fields": [accept_suggestion(field) for field in definition["fields"]]}
+        self.assertEqual(mapping_issues(validate_mapping(strip_suggestions(accepted))), [])
 
     def test_certidao_date_parts(self):
         definition = json.loads(CERTIDAO.read_text(encoding="utf-8"))
@@ -514,7 +513,7 @@ class ProposalTests(unittest.TestCase):
         fields = {field["suggestion"]["candidate_id"]: field for field in proposal["fields"]}
         self.assertEqual(fields["dia_nascimento"]["semantic"], {"key": "birth.date", "part": "day"})
         self.assertEqual(fields["dia_nascimento"]["data_type"], "integer")
-        self.assertEqual(mapping_issues(validate_mapping(proposal)), [])
+        self.assertTrue(any("Revise todas as sugestões" in issue for issue in mapping_issues(validate_mapping(proposal))))
 
 
 if __name__ == "__main__":

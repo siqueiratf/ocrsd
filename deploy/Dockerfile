@@ -3,6 +3,7 @@ FROM python:3.11-slim-bookworm
 COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 OCRSD_STORAGE=/data OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+RUN apt-get update && apt-get install --no-install-recommends -y tesseract-ocr tesseract-ocr-por && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --extra web --no-dev --no-install-project
 COPY src ./src

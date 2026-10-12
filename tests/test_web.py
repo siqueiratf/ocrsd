@@ -369,6 +369,55 @@ class WebTests(unittest.TestCase):
         self.assertEqual(edited.status_code, 200, edited.text)
         self.assertEqual(mapping_path.read_bytes(), original)
 
+    def test_unreviewed_assisted_mapping_cannot_be_published_by_api(self):
+        token = self.client.post("/api/v1/workspaces", json={}).json()["token"]
+        headers = {"X-Workspace-Token": token}
+        copy = self.client.post("/api/v1/models/certidao_nascimento/duplicate", json={}, headers=headers).json()
+        model_id, mapping_id = copy["id"], copy["mapping_id"]
+        path = f"/api/v1/document-types/{model_id}/mappings/{mapping_id}"
+        definition = self.client.get(path, headers=headers).json()["definition"]
+        definition["fields"][0]["suggestion"] = {"status": "suggested", "candidate_id": "c001"}
+        definition["provenance"] = {"method": "ocrsd-hybrid", "reviewed": False}
+        self.assertEqual(self.client.put(f"/api/v1/models/{model_id}/mapping",
+                                         json={"definition": definition}, headers=headers).status_code, 200)
+        payload = {"label": copy["label"], "description": copy["description"], "status": "published"}
+        blocked = self.client.put(f"/api/v1/models/{model_id}", json=payload, headers=headers)
+        self.assertEqual(blocked.status_code, 422, blocked.text)
+        self.assertEqual(blocked.json()["error"]["code"], "publication_blocked")
+        definition["fields"][0].pop("suggestion")
+        definition["provenance"]["reviewed"] = True
+        self.assertEqual(self.client.put(f"/api/v1/models/{model_id}/mapping",
+                                         json={"definition": definition}, headers=headers).status_code, 200)
+        published = self.client.put(f"/api/v1/models/{model_id}", json=payload, headers=headers)
+        self.assertEqual(published.status_code, 200, published.text)
+        self.assertEqual(published.json()["status"], "published")
+        definition["fields"][0]["suggestion"] = {"status": "suggested", "candidate_id": "c002"}
+        definition["provenance"]["reviewed"] = False
+        self.assertEqual(self.client.put(f"/api/v1/models/{model_id}/mapping",
+                                         json={"definition": definition}, headers=headers).status_code, 200)
+        self.assertEqual(self.store.model(model_id, token.partition(".")[0])["status"], "draft")
+
+    def test_custom_semantic_definition_is_approved_and_embedded_in_mapping(self):
+        token = self.client.post("/api/v1/workspaces", json={}).json()["token"]
+        headers = {"X-Workspace-Token": token}
+        spec = {"key": "custom.referencia_local", "label": "Referência local", "description": "Código fictício",
+                "data_type": "text", "generator": {"type": "choices", "values": ["A1", "B2"]}}
+        created = self.client.post("/api/v1/semantic-definitions", json=spec, headers=headers)
+        self.assertEqual(created.status_code, 201, created.text)
+        self.assertEqual(created.json()["status"], "approved")
+        self.assertEqual(len(self.client.get("/api/v1/semantic-definitions", headers=headers).json()), 1)
+        copy = self.client.post("/api/v1/models/certidao_nascimento/duplicate", json={}, headers=headers).json()
+        model_id, mapping_id = copy["id"], copy["mapping_id"]
+        definition = self.client.get(f"/api/v1/document-types/{model_id}/mappings/{mapping_id}",
+                                     headers=headers).json()["definition"]
+        definition["fields"][0]["semantic"] = spec["key"]
+        definition["fields"][0]["data_type"] = "text"
+        saved = self.client.put(f"/api/v1/models/{model_id}/mapping", json={"definition": definition}, headers=headers)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertEqual(saved.json()["definition"]["semantic_definitions"][spec["key"]], spec)
+        other = self.client.post("/api/v1/workspaces", json={}).json()["token"]
+        self.assertEqual(self.client.get("/api/v1/semantic-definitions", headers={"X-Workspace-Token": other}).json(), [])
+
     def test_private_workspace_models_presets_history_and_revocable_sharing(self):
         workspace = self.client.post("/api/v1/workspaces", json={})
         self.assertEqual(workspace.status_code, 201, workspace.text)

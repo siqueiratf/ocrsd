@@ -226,8 +226,11 @@ class OpenAICompatibleAssistant:
         except AssistantError as exc:
             self._record(False)
             return ProviderStatus(False, self.provider, self.model, f"Assistente indisponível: {exc}")
-        models = [str(item.get("id")) for item in reply.get("data") or [] if isinstance(item, dict)]
-        if models and self.model not in models:
+        listed = reply.get("data")
+        if not isinstance(listed, list):
+            return ProviderStatus(False, self.provider, self.model, "Servidor não informou os modelos disponíveis")
+        models = [item["id"] for item in listed if isinstance(item, dict) and isinstance(item.get("id"), str)]
+        if self.model not in models:
             return ProviderStatus(False, self.provider, self.model, f"Modelo {self.model} não encontrado no servidor")
         return ProviderStatus(True, self.provider, self.model, f"Assistente local disponível ({self.model})")
 

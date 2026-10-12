@@ -93,6 +93,8 @@ def build_collection() -> dict:
         "update_model": "Atualizar metadados", "delete_model": "Excluir modelo", "template": "Template PDF",
         "model_preview": "Prévia PNG do template", "mapping": "Mapeamento e campos", "update_mapping": "Salvar mapeamento",
         "capabilities": "Modelos, filtros e limites", "writing_presets": "Presets incluídos", "presets": "Listar presets privados",
+        "semantic_definitions": "Listar definições semânticas", "create_semantic_definition": "Criar definição semântica",
+        "update_semantic_definition": "Atualizar definição semântica", "delete_semantic_definition": "Excluir definição semântica",
         "create_preset": "Criar preset", "update_preset": "Atualizar preset", "delete_preset": "Excluir preset",
         "handwriting_preview": "Gerar amostras de escrita", "realism_preview": "Comparar realismo",
         "configurations": "Listar configurações", "create_configuration": "Salvar configuração",
@@ -106,6 +108,10 @@ def build_collection() -> dict:
         "create_model": {"label": "Meu modelo", "description": "Template de pesquisa", "filename": "template.pdf", "pdf_base64": "{{pdfBase64}}", "mapping_id": "default", "mapping": None},
         "duplicate_model": {}, "update_model": {"label": "Meu modelo", "description": "Versão revisada", "status": "draft"},
         "update_mapping": {"definition": "__MAPPING__"},
+        "create_semantic_definition": {"key": "custom.referencia_local", "label": "Referência local", "description": "Código fictício",
+                                       "data_type": "text", "generator": {"type": "choices", "values": ["A1", "B2"]}},
+        "update_semantic_definition": {"key": "custom.referencia_local", "label": "Referência local", "description": "Código fictício",
+                                       "data_type": "text", "generator": {"type": "choices", "values": ["A1", "B2"]}},
         "create_preset": {"name": "Escrita azul natural", "writing": Writing().model_dump(), "filter_preset": "none", "shareable": False},
         "update_preset": {"name": "Escrita azul revisada", "writing": Writing().model_dump(), "filter_preset": "light", "shareable": False},
         "handwriting_preview": {"writing": Writing().model_dump(), "texts": ["Ana Silva Santos", "15092026", "SP"]},
@@ -119,7 +125,7 @@ def build_collection() -> dict:
         for method, operation in methods.items():
             function = operation["operationId"].split("_api_v1")[0]
             resolved = path
-            for parameter in ("document_type", "mapping_id", "model_id", "preset_id", "configuration_id", "job_id", "artifact_id", "share_id"):
+            for parameter in ("document_type", "mapping_id", "model_id", "preset_id", "configuration_id", "job_id", "artifact_id", "share_id", "key"):
                 resolved = resolved.replace("{" + parameter + "}", "{{" + parameter + "}}")
             query = [{"key": parameter["name"], "value": str(parameter["schema"].get("default", "")).lower()}
                      for parameter in operation.get("parameters", []) if parameter["in"] == "query"]
@@ -165,7 +171,7 @@ def build_collection() -> dict:
             groups.setdefault(operation["tags"][0], []).append({"name": names[function], "request": request, "response": response_items, "event": event(tests)})
     variables = {
         "baseUrl": "http://127.0.0.1:8000", "workspace_token": "", "document_type": document["id"], "mapping_id": mapping_id,
-        "model_id": document["id"], "preset_id": "", "configuration_id": "", "fields": json.dumps(options.fields),
+        "model_id": document["id"], "preset_id": "", "configuration_id": "", "key": "custom.referencia_local", "fields": json.dumps(options.fields),
         "mappingDefinition": json.dumps(mapping["definition"], ensure_ascii=False), "pdfBase64": "COLE_BASE64_DO_PDF",
         "job_id": "", "job_token": "", "artifact_id": "", "share_id": "", "share_token": "", "poll_count": "0",
     }

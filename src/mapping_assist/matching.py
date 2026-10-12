@@ -7,6 +7,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Iterable
 
+from src.semantic.custom import validate_custom_definition
 from src.semantic.registry import CONTEXTS, REGISTRY
 from src.semantic.resolve import document_context, excluded_terms, normalize, resolve_field
 
@@ -270,6 +271,13 @@ def match_one(candidate: FieldCandidate, document: str | None, min_score: float 
     if binding and binding.key in allowed_keys(document, None, candidate.kind, count):
         return Match(candidate.id, None, "ambiguous", "rules", None, _alternatives(ranked, binding.key),
                      f"A regra indica “{REGISTRY[binding.key].label}”, que não pertence à seção {section}; revisar.")
+    if section and candidate.kind == "digit_sequence" and text in {"data", "hora", "horario"}:
+        expected = "date" if text == "data" else "time"
+        choices = [key for key in allowed if REGISTRY[key].kind == expected]
+        if len(choices) == 1:
+            key = choices[0]
+            return Match(candidate.id, key, "matched", "rules", 1.0, _alternatives(ranked, key),
+                         f"A seção {section} e {count} caixas identificam “{REGISTRY[key].label}”.")
     if term := _has(text, excluded_terms(document)):
         return new(f"O termo “{term}” é clínico, estatístico ou administrativo e não tem chave no registro semântico.")
     if not allowed:
@@ -356,9 +364,79 @@ def _assisted(matches: list[Match], candidates: list[FieldCandidate], document: 
     return [updates.get(match.candidate_id, match) for match in matches]
 
 
+def _custom_definitions(definitions: Any) -> list[dict]:
+    entries = definitions.values() if isinstance(definitions, dict) else definitions or ()
+    approved = []
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("status", "approved") != "approved":
+            continue
+        try:
+            definition = validate_custom_definition(*(entry[name] for name in
+                                                      ("key", "label", "description", "data_type", "generator")))
+        except (KeyError, TypeError, ValueError):
+            continue
+        approved.append(definition)
+    return approved
+
+
+def _custom_kind_fits(candidate: FieldCandidate, definition: dict) -> bool:
+    data_type = definition["data_type"]
+    if candidate.kind == "text":
+        return True
+    if candidate.kind == "digit_sequence":
+        return data_type == "date" and len(candidate.elements) in {6, 8} or \
+            data_type == "time" and len(candidate.elements) == 4 or \
+            data_type == "integer" and bool(candidate.elements)
+    if candidate.kind == "checkbox" and len(candidate.elements) >= 2:
+        generator = definition["generator"]
+        if generator["type"] != "choices" or data_type not in {"text", "integer", "boolean"}:
+            return False
+        options = {normalize(element.get(name)) for element in candidate.elements for name in ("label", "code")
+                   if element.get(name) is not None}
+        values = generator["values"]
+        if data_type == "boolean":
+            return set(values) == {True, False} and bool(options & {"sim", "yes"}) and bool(options & {"nao", "no"})
+        return all(normalize(value) in options for value in values)
+    return False
+
+
+def _match_custom(candidate: FieldCandidate, match: Match, definitions: list[dict]) -> Match:
+    if match.status == "matched" or not definitions:
+        return match
+    label = normalize(candidate.label)
+    significant = [word for word in label.split() if word not in STOPWORDS]
+    if not label or len(significant) < 2 and len(label) < 5:
+        return match
+    applicable = [entry for entry in definitions if _custom_kind_fits(candidate, entry)]
+    if not applicable:
+        return match
+    index = NgramIndex((entry["key"], entry["label"]) for entry in applicable)
+    ranked = index.scores(label, (entry["key"] for entry in applicable))
+    if not ranked:
+        return match
+    labels = {entry["key"]: normalize(entry["label"]) for entry in applicable}
+    exact = [key for key, _ in ranked if label == labels[key]]
+    if len(exact) == 1:
+        key, score = exact[0], 1.0
+    elif len(exact) > 1:
+        return match
+    else:
+        key, score = ranked[0]
+        margin = score - (ranked[1][1] if len(ranked) > 1 else 0.0)
+        overlap = set(significant) & set(labels[key].split())
+        if len(significant) < 2 or score < 0.9 or margin < 0.15 or not overlap:
+            return match
+    return Match(candidate.id, key, "matched", "custom", round(score, 3), ((key, round(score, 3)),),
+                 f"Rótulo associado à definição semântica aprovada “{key}”; revisar antes de publicar.")
+
+
 def match_candidates(analysis_or_candidates: Any, document: str | None, provider: Any = None, *,
-                     min_score: float = MIN_SCORE, min_margin: float = MIN_MARGIN) -> list[Match]:
+                     min_score: float = MIN_SCORE, min_margin: float = MIN_MARGIN,
+                     custom_definitions: Any = None) -> list[Match]:
     candidates = list(getattr(analysis_or_candidates, "candidates", analysis_or_candidates))
     document = document_context(document)
     matches = [match_one(candidate, document, min_score, min_margin) for candidate in candidates]
+    definitions = _custom_definitions(custom_definitions)
+    if definitions:
+        matches = [_match_custom(candidate, match, definitions) for candidate, match in zip(candidates, matches)]
     return _assisted(matches, candidates, document, provider) if provider is not None else matches

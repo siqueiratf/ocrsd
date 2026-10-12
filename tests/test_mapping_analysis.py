@@ -15,6 +15,9 @@ import pymupdf
 from src.mapping_assist import ocr
 from src.mapping_assist.analysis import FieldCandidate, PageAnalysis, analyze_document, page_count
 from src.mapping_assist.geometry import iou
+from src.mapping_assist.matching import Match, match_candidates
+from src.mapping_assist.proposal import accept_suggestion, build_proposal
+from src.web.services import mapping_issues, validate_mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 S = 300 / 72
@@ -148,6 +151,11 @@ class SyntheticTextLayerTest(unittest.TestCase):
         two = synthetic_pdf(pages=2)
         self.assertEqual(page_count(two), 2)
         self.assertTrue(any("2 páginas" in w for w in analyze_document(two).warnings))
+        second = analyze_document(two, page=1)
+        proposal = build_proposal(second, match_candidates(second, "dnv"), "dnv")
+        self.assertEqual((second.page, second.candidates), (1, ()))
+        self.assertEqual((proposal["provenance"]["page"], proposal["fields"]), (1, []))
+        self.assertTrue(any("página 2" in warning for warning in proposal["provenance"]["warnings"]))
         with self.assertRaises(ValueError):
             analyze_document(two, page=5)
 
@@ -215,6 +223,29 @@ class PlacementTest(unittest.TestCase):
             self.assertTrue(any(near(box, expected) for box in found), (expected, found))
 
 
+class CustomProposalTest(unittest.TestCase):
+    def test_approved_definition_is_embedded_for_generation(self):
+        spec = {"key": "custom.registro.volume", "label": "Volume", "description": "Volume do registro",
+                "data_type": "text", "generator": {"type": "choices", "values": ["A", "B"]}, "status": "approved"}
+        candidate = FieldCandidate("c001", "Volume", (100, 100, 300, 120), (100, 120, 500, 180), "text")
+        analysis = PageAnalysis(0, 300, (2480, 3509), 12, "text_layer", (candidate,))
+        match = Match("c001", spec["key"], "matched", "custom", 1.0, ((spec["key"], 1.0),), "Definição aprovada")
+        proposal = validate_mapping(build_proposal(analysis, [match], "do", custom_definitions=[spec]))
+        self.assertEqual(proposal["fields"][0]["semantic"], spec["key"])
+        self.assertEqual(proposal["semantic_definitions"][spec["key"]]["generator"]["values"], ["A", "B"])
+        self.assertEqual(proposal["fields"][0]["suggestion"]["alternatives"][0]["label"], "Volume")
+        self.assertEqual(accept_suggestion(proposal["fields"][0], spec["key"], custom_definitions=[spec])["semantic"], spec["key"])
+
+    def test_boolean_definition_uses_supported_field_type(self):
+        spec = {"key": "custom.registro.conferido", "label": "Conferido", "description": "Confirmação",
+                "data_type": "boolean", "generator": {"type": "choices", "values": [True, False]}, "status": "approved"}
+        candidate = FieldCandidate("c001", "Conferido", (100, 100, 300, 120), (100, 120, 500, 180), "text")
+        analysis = PageAnalysis(0, 300, (2480, 3509), 12, "text_layer", (candidate,))
+        match = Match("c001", spec["key"], "matched", "custom", 1.0, (), "Definição aprovada")
+        proposal = validate_mapping(build_proposal(analysis, [match], "do", custom_definitions=[spec]))
+        self.assertEqual(proposal["fields"][0]["data_type"], "text")
+
+
 @unittest.skipIf(TESSERACT is None, NO_TESSERACT)
 class RealDocumentsTest(unittest.TestCase):
     def test_declaracao_de_obito(self):
@@ -227,6 +258,7 @@ class RealDocumentsTest(unittest.TestCase):
             self.assertGreaterEqual(similar(labels, query), 0.85, query)
         self.assertEqual({c.section for c in a.candidates if c.section}, {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"})
         self.assertLess(a.timings["total"], 30)
+        self.check_isolated_checkbox_proposals(a, "do", 3)
 
     def test_declaracao_de_nascido_vivo(self):
         a = analyze_document(ROOT / "documents/dnv/template.pdf")
@@ -242,6 +274,26 @@ class RealDocumentsTest(unittest.TestCase):
                 self.assertGreaterEqual(hits, 0.8 * len(f["elements"]), f["field_id"])
         self.assertTrue(any("baixa resolução" in w for w in a.warnings))
         self.assertLess(a.timings["total"], 30)
+        self.check_isolated_checkbox_proposals(a, "dnv", 2)
+
+    def check_isolated_checkbox_proposals(self, analysis: PageAnalysis, context: str, expected: int):
+        isolated = {candidate.id for candidate in analysis.candidates
+                    if candidate.kind == "checkbox" and len(candidate.elements) == 1}
+        self.assertEqual(len(isolated), expected)
+        proposal = validate_mapping(build_proposal(analysis, match_candidates(analysis, context), context))
+        fields = {field["suggestion"]["candidate_id"]: field for field in proposal["fields"]}
+        sex_key = "newborn.sex" if context == "dnv" else "deceased.sex"
+        sex = [field for field in fields.values() if field.get("semantic") == sex_key]
+        self.assertEqual(len(sex), 1)
+        self.assertEqual({element["value"] for element in sex[0]["elements"] if element["value"] in {"M", "F"}}, {"M", "F"})
+        for identifier in isolated:
+            field = fields[identifier]
+            self.assertEqual(field["data_type"], "text")
+            self.assertNotIn("elements", field)
+            self.assertNotIn("semantic", field)
+            self.assertEqual(field["suggestion"]["match"], "ambiguous")
+            self.assertTrue(field["suggestion"]["issues"])
+        self.assertFalse(any("checkbox precisa" in issue for issue in mapping_issues(proposal)))
 
     def test_certidao_text_layer(self):
         a = analyze_document(ROOT / "documents/certidao_nascimento/certidao_nascimento.pdf")
