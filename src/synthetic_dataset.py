@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import io
+import hashlib
 import random
 import re
+import secrets
 import string
 import unicodedata
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable
@@ -643,6 +645,15 @@ def _safe_name(value: str) -> str:
     return cleaned or "synthetic"
 
 
+def _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
+                        numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset, style_preset_uid) -> dict:
+    return {"handwriting": handwriting, "handwriting_intensity": handwriting_intensity,
+            "text_handwriting": text_handwriting, "neural_pen": asdict(neural_pen) if neural_pen else None,
+            "numeric_neural_pen": asdict(numeric_neural_pen) if numeric_neural_pen else None,
+            "text_neural_pen": asdict(text_neural_pen) if text_neural_pen else None,
+            "realistic_filters": realistic_filters, "filter_preset": filter_preset, "style_preset_uid": style_preset_uid}
+
+
 def generate_document(template_path: Path, field_map: dict, selected_ids: set[str],
                       output_dir: Path, document_id: str, rng: random.Random,
                       handwriting: bool = True, handwriting_intensity: float = 0.65,
@@ -651,8 +662,17 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                       text_neural_pen: NeuralPen | None = None,
                       handwriting_model=None, realistic_filters: bool = False,
                       filter_preset: str = "medium",
-                      style_preset_uid: str | None = None) -> SyntheticDocument:
+                      style_preset_uid: str | None = None,
+                      generation_metadata: dict | None = None) -> SyntheticDocument:
     field_map = apply_shared_rules(field_map)
+    reproduction = dict(generation_metadata or {})
+    if not reproduction:
+        reproduction = {"random_state": rng.getstate(), "mapping_snapshot": field_map,
+                        "template_sha256": hashlib.sha256(template_path.read_bytes()).hexdigest(),
+                        "selected_ids": sorted(selected_ids),
+                        "options": _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
+                                                       numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset,
+                                                       style_preset_uid)}
     output_dir.mkdir(parents=True, exist_ok=True)
     document = fitz.open(template_path)
     if len(document) == 0:
@@ -866,7 +886,10 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         "style_preset_uid": style_preset_uid,
         "visual_filters": visual_filters,
         "semantic_version": SEMANTIC_VERSION,
+        "semantic_seed": record.seed,
+        "semantic_context": record.context,
         "semantic_record": record.snapshot(),
+        "generation": reproduction,
     }
     json_path.write_text(json.dumps(ground_truth, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return SyntheticDocument(pdf_path=pdf_path, json_path=json_path, values=values)
@@ -892,7 +915,20 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
         document_type = infer_document_type_key(template_path, mapping_path)
         output_dir = build_dataset_run_dir(document_type, count)
     field_map = json.loads(mapping_path.read_text(encoding="utf-8"))
+    field_map = apply_shared_rules(field_map)
+    requested_seed = seed
+    seed = secrets.randbits(32) if seed is None else seed
     rng = random.Random(seed)
+    options = _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
+                                  numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset, style_preset_uid)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    mapping_bytes = (json.dumps(field_map, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    mapping_hash = hashlib.sha256(mapping_bytes).hexdigest()
+    reproduction = {"schema_version": 1, "mapping_snapshot": field_map,
+                    "mapping_sha256": mapping_hash,
+                    "mapping_version": field_map.get("version", field_map.get("mapping_version", mapping_hash)),
+                    "template_sha256": hashlib.sha256(template_path.read_bytes()).hexdigest(),
+                    "selected_ids": sorted(selected_ids), "options": options}
     split_neural_pens = numeric_neural_pen is not None or text_neural_pen is not None
     if split_neural_pens:
         numeric_neural_pen = numeric_neural_pen or neural_pen
@@ -916,6 +952,8 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
             handwriting_model=handwriting_model,
             realistic_filters=realistic_filters, filter_preset=filter_preset,
             style_preset_uid=style_preset_uid,
+            generation_metadata={"manifest": "dataset.json", "seed": seed, "index": index,
+                                 "mapping_sha256": mapping_hash, "template_sha256": reproduction["template_sha256"]},
         )
         generated.append(document)
         if progress_callback is not None:
@@ -930,6 +968,8 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
     manifest = {
         "template": str(template_path), "mapping": str(mapping_path),
         "seed": seed, "count": len(generated),
+        "requested_seed": requested_seed,
+        "reproduction": reproduction,
         "handwriting": {
             **handwriting_metadata,
             "enabled": handwriting, "numbers_enabled": handwriting,

@@ -673,7 +673,8 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
     def finalize_document(index: int, total: int, document) -> None:
         mark_pdf(document.pdf_path)
         data = json.loads(document.json_path.read_text())
-        data.update(source_template=options.document_type, synthetic=True, notice=NOTICE, generation_seed=options.seed)
+        data.update(source_template=options.document_type, synthetic=True, notice=NOTICE,
+                    generation_seed=data["generation"]["seed"])
         temporary = document.json_path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(document.json_path)
@@ -690,8 +691,8 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
     )
     manifest_path = output / "dataset.json"
     manifest = json.loads(manifest_path.read_text())
-    manifest.update(template=options.document_type, mapping=options.mapping_id, seed=options.seed, synthetic=True, notice=NOTICE,
-                    options=options.model_dump())
+    manifest.update(template=options.document_type, mapping=options.mapping_id, synthetic=True, notice=NOTICE,
+                    options={**options.model_dump(), "seed": manifest["seed"]})
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     files = sorted(path for path in output.iterdir() if path.suffix in {".pdf", ".json"})
     with ZipFile(output / "dataset.zip", "w", ZIP_DEFLATED) as archive:

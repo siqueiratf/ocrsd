@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-VERSION = "1"
+VERSION = "2"
 KINDS = frozenset({
     "name", "sex", "date", "time", "integer", "uf", "municipality", "cep", "ibge", "cnes", "cpf", "cns", "dnv_number",
     "matricula", "document_number", "issuer", "street", "house_number", "complement", "neighborhood", "occupation", "text",
@@ -213,6 +213,22 @@ FIELDS = [
     _field("certifier.registration", "CRM do médico", "document_number", "Médico atestante",
            "Número de registro no conselho profissional (CRM), de 4 a 6 algarismos", DO, ("crm", "registro no conselho")),
 ]
+FIELDS.extend([
+    _field("birth.pregnancy_type", "Tipo de gravidez", "text", "Nascimento", "Única ou dupla, coerente com a gemelaridade", DNV,
+           ("tipo de gravidez",), ("birth.twins",)),
+    _field("birth.delivery_type", "Tipo de parto", "text", "Nascimento", "Via de parto sintética", DNV, ("tipo de parto",)),
+    _field("birth.cesarean_before_labor", "Cesárea antes do trabalho de parto", "text", "Nascimento",
+           "Não se aplica no parto vaginal; ignorado quando o início do trabalho de parto não é informado", DNV,
+           ("cesarea ocorreu antes do trabalho de parto iniciar",), ("birth.delivery_type",)),
+    _field("newborn.anomaly_status", "Anomalia congênita", "text", "Recém-nascido",
+           "Ignorado: o gerador não produz diagnósticos médicos", DNV, ("detectada alguma anomalia congenita",)),
+    _field("newborn.anomaly_description", "Descrição das anomalias", "text", "Recém-nascido",
+           "Vazio na ausência de diagnóstico validado", DNV, ("descrever todas as anomalias congenitas observadas",),
+           ("newborn.anomaly_status",), optional=True),
+    _field("mother.occupation_cbo", "CBO da ocupação da mãe", "document_number", "Mãe",
+           "Código CBO apenas quando a ocupação tem correspondência documentada; vazio nos demais casos", DNV,
+           ("codigo cbo", "cbo 2002"), ("mother.occupation",), optional=True),
+])
 REGISTRY: dict[str, SemanticField] = {field.key: field for field in FIELDS}
 ENTITY_KEYS: dict[str, tuple[str, ...]] = {
     entity: tuple(field.key for field in FIELDS if field.entity == entity) for entity in dict.fromkeys(field.entity for field in FIELDS)

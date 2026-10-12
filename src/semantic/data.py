@@ -59,3 +59,14 @@ REGISTRY_OFFICE_NAMES = (
 ISSUERS = ("SSP", "SESP", "SDS", "PC", "IFP", "DETRAN", "SJS", "IGP")
 COMPLEMENTS = ("Apto 101", "Apto 302", "Bloco B", "Casa 2", "Fundos", "Sala 4", "Casa", "Térreo")
 PROFILES_BY_IBGE = {profile["ibge"]: profile for profile in LOCATION_PROFILES}
+
+OCCUPATION_CODES = {
+    "Técnico de enfermagem": "322205",
+    "Psicólogo clínico": "251510",
+    "Assistente administrativo": "411010",
+}
+OCCUPATION_CODE_SOURCES = (
+    "https://bvsms.saude.gov.br/bvs/saudelegis/sas/2009/prt0416_24_11_2009.html",
+    "https://www.gov.br/conab/pt-br/acesso-a-informacao/licitacoes-e-contratos/editais-de-chamamento/suregs/se/edital-processo-seletivo-programa-jovem-aprendiz-n-o-02-2023-conab-se",
+)
+DNV_CATEGORIES_SOURCE = "https://www.gov.br/saude/pt-br/centrais-de-conteudo/publicacoes/svsa/vigilancia/declaracao-de-nascido-vivo-manual-de-instrucoes-para-preenchimento"

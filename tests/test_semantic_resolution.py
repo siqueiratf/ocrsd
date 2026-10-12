@@ -1,3 +1,4 @@
+from src.semantic import REGISTRY
 import json
 import unittest
 from datetime import date, time
@@ -14,6 +15,9 @@ DNV_MAPPINGS = ROOT / "documents" / "dnv" / "mappings"
 CERTIDAO = ROOT / "documents" / "certidao_nascimento" / "certidao_nascimento_fields.json"
 LEAP_DAY = date(2024, 2, 29)
 DNV_EXPECTED = {
+    "6": "newborn.anomaly_status", "17_codigo_cbo": "mother.occupation_cbo",
+    "35": "birth.pregnancy_type", "38": "birth.delivery_type", "39": "birth.cesarean_before_labor",
+    "41": "newborn.anomaly_description",
     "1": "newborn.name", "2": "birth.date", "2_hora": "birth.time", "3": "newborn.sex", "8": "birth.establishment.name",
     "8_codigo_cnes": "birth.establishment.cnes", "9": "birth.place.street", "9_numero": "birth.place.number",
     "10": "birth.place.cep", "11": "birth.place.neighborhood", "12": "birth.place.municipality", "12_codigo": "birth.place.ibge",
@@ -44,9 +48,10 @@ CERTIDAO_EXPECTED = {
     "averbacoes_anotacoes_acrescer": None, "anotacoes_cadastro": None,
 }
 CLINICAL_TERMS = ("apgar", "peso", "comprimento", "perimetro", "raca", "escolaridade", "situacao conjugal", "funcao",
-                  "tipo de documento", "tipo de gravidez", "tipo de parto", "apresentacao", "induzido", "anomalia",
-                  "metodo", "cbo")
+                  "tipo de documento", "apresentacao", "induzido", "metodo")
 SAMPLE = {
+    "birth.pregnancy_type": "Única", "birth.delivery_type": "Vaginal", "birth.cesarean_before_labor": "Não se aplica",
+    "newborn.anomaly_status": "Ignorado", "newborn.anomaly_description": None, "mother.occupation_cbo": "411010",
     "newborn.name": "Ana Souza Lima", "newborn.sex": "F", "newborn.cpf": "52998224725",
     "newborn.naturalidade": "Recife/PE", "birth.date": LEAP_DAY, "birth.time": time(7, 5),
     "birth.establishment.name": "Hospital Municipal", "birth.establishment.cnes": "2077485",
@@ -104,7 +109,7 @@ class ResolutionTests(unittest.TestCase):
                         self.assertIn(binding.key, KEYS)
                         self.assertFalse(any(f" {term} " in text for term in CLINICAL_TERMS), binding)
                         if field.get("data_type") == "checkbox":
-                            self.assertTrue(binding.key.endswith(".sex"))
+                            self.assertTrue(binding.key.endswith(".sex") or binding.key in {"birth.pregnancy_type", "birth.delivery_type", "birth.cesarean_before_labor", "newborn.anomaly_status"})
 
     def test_other_dnv_mappings_known_bindings(self):
         fields = _fields(DNV_MAPPINGS / "20260831.json")
@@ -282,6 +287,9 @@ class PresentationTests(unittest.TestCase):
                     continue
                 with self.subTest(field_id=field_id, key=binding.key):
                     value = SAMPLE[binding.key]
+                    if value is None:
+                        self.assertTrue(REGISTRY[binding.key].optional)
+                        continue
                     self.assertTrue(kind_compatible(field, binding, value))
                     ordered = sorted(field.get("elements") or [], key=lambda item: item.get("index", 10_000))
                     if field.get("data_type") == "digit_sequence":

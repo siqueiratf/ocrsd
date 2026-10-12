@@ -238,6 +238,18 @@ def resolve_field(field: dict, document: str | None = None) -> Binding | None:
     document = document_context(document)
     label, description = str(field.get("label") or ""), str(field.get("description") or "")
     text = normalize(" ".join((str(field.get("field_id") or ""), label, description)))
+    if document == "dnv":
+        categories = (
+            (("tipo de gravidez",), "birth.pregnancy_type"),
+            (("tipo de parto",), "birth.delivery_type"),
+            (("cesarea ocorreu antes do trabalho de parto iniciar",), "birth.cesarean_before_labor"),
+            (("detectada alguma anomalia congenita", "detectada alguma anomalia"), "newborn.anomaly_status"),
+            (("descrever todas as anomalias congenitas observadas",), "newborn.anomaly_description"),
+            (("codigo cbo", "cbo 2002"), "mother.occupation_cbo"),
+        )
+        for phrases, key in categories:
+            if _has(text, phrases):
+                return Binding(key)
     blocks = BLOCK_ROLES.get(document or "", {})
     if not text or _has(text, excluded_terms(document)) or (_block(field) in blocks and blocks[_block(field)] is None):
         return None

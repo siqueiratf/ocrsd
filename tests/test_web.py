@@ -167,6 +167,19 @@ class WebTests(unittest.TestCase):
             outputs.append((ground_truth, raster))
         self.assertEqual(outputs[0], outputs[1])
 
+    def test_generated_seed_is_preserved_for_web_reproduction(self):
+        options = self.options.model_copy(update={"seed": None})
+        output = Path(self.temporary.name) / "unseeded"
+        generate(options, output, self.settings, lambda completed: None)
+        manifest = json.loads((output / "dataset.json").read_text())
+        truth = json.loads((output / "synthetic_0001.json").read_text())
+        self.assertIsInstance(manifest["seed"], int)
+        self.assertEqual(manifest["seed"], truth["generation_seed"])
+        self.assertEqual(manifest["seed"], manifest["options"]["seed"])
+        repeated = Path(self.temporary.name) / "repeated"
+        generate(GenerationOptions.model_validate(manifest["options"]), repeated, self.settings, lambda completed: None)
+        self.assertEqual(truth["fields"], json.loads((repeated / "synthetic_0001.json").read_text())["fields"])
+
     def test_artifact_isolation_cancel_and_expiration(self):
         first, headers = self.submit()
         second, second_headers = self.submit()

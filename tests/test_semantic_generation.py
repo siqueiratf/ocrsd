@@ -75,6 +75,22 @@ class SemanticGenerationTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.directory.cleanup()
 
+    def test_dnv_conditional_fields_follow_the_semantic_record(self):
+        pregnancy = {"Única": "tipo_gravidez_0", "Dupla": "tipo_gravidez_1"}
+        delivery = {"Vaginal": "tipo_parto_0", "Cesáreo": "tipo_parto_1"}
+        cesarean = {"Não se aplica": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_2",
+                    "Ignorado": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_3"}
+        for truth in self.dnv:
+            record, by_id = truth["semantic_record"], fields(truth)
+            self.assertEqual(by_id["35"]["value"], pregnancy[record["birth.pregnancy_type"]])
+            self.assertEqual(by_id["38"]["value"], delivery[record["birth.delivery_type"]])
+            self.assertEqual(by_id["39"]["value"], cesarean[record["birth.cesarean_before_labor"]])
+            self.assertEqual(record["birth.pregnancy_type"], "Dupla" if record["birth.twins"] else "Única")
+            self.assertEqual(by_id["6"]["semantic"]["value"], "Ignorado")
+            self.assertEqual(by_id["41"]["value"], "")
+            self.assertTrue(by_id["41"]["blank"])
+            self.assertEqual(by_id["17_codigo_cbo"]["value"], record["mother.occupation_cbo"] or "")
+
     def test_dnv_values_come_from_one_coherent_record(self):
         self.assertEqual(self.manifest["semantic_version"], VERSION)
         for truth in self.dnv:

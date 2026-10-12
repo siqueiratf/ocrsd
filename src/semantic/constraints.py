@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Callable, Mapping
 
-from src.semantic.data import LOCATION_PROFILES
+from src.semantic.data import LOCATION_PROFILES, OCCUPATION_CODES
 from src.semantic.registry import REGISTRY
 
 ADDRESS_PARTS = {"municipality": "city", "uf": "uf", "ibge": "ibge", "cep": "cep"}
@@ -37,15 +37,13 @@ def completed_years(born: date, on: date) -> int:
     return on.year - born.year - ((on.month, on.day) < (born.month, born.day))
 
 
-def _age_rule(person: str, event: str, low: int, high: int, title: str) -> Callable[[Mapping[str, Any]], str | None]:
+def _age_rule(person: str, event: str, title: str) -> Callable[[Mapping[str, Any]], str | None]:
     def check(values: Mapping[str, Any]) -> str | None:
         born, on, age = values[f"{person}.birth_date"], values[event], values[f"{person}.age"]
         if born > on:
             return f"a data de nascimento de {title} ({born.isoformat()}) é posterior a {event} ({on.isoformat()})"
         if age != completed_years(born, on):
             return f"a idade de {title} ({age}) difere dos anos completos em {event} ({completed_years(born, on)})"
-        if not low <= age <= high:
-            return f"a idade de {title} ({age}) precisa estar entre {low} e {high} anos"
         return None
     return check
 
@@ -53,7 +51,7 @@ def _age_rule(person: str, event: str, low: int, high: int, title: str) -> Calla
 def _mother_age(values: Mapping[str, Any]) -> str | None:
     if values["mother.birth_date"] >= values["birth.date"]:
         return "a mãe precisa ter nascido antes do nascimento do recém-nascido"
-    return _age_rule("mother", "birth.date", 10, 60, "mãe")(values)
+    return _age_rule("mother", "birth.date", "mãe")(values)
 
 
 def _between(key: str, low: int, high: int, title: str) -> Constraint:
@@ -78,10 +76,6 @@ def _obstetric(values: Mapping[str, Any]) -> str | None:
         "previous_pregnancies", "vaginal_births", "cesareans", "live_births", "fetal_losses"))
     if min(pregnancies, vaginal, cesareans, live, losses) < 0:
         return "os contadores obstétricos não podem ser negativos"
-    if vaginal + cesareans != pregnancies - losses:
-        return f"partos vaginais ({vaginal}) + cesáreas ({cesareans}) ≠ gestações ({pregnancies}) − perdas ({losses})"
-    if live > vaginal + cesareans:
-        return f"nascidos vivos ({live}) excedem os partos ({vaginal + cesareans})"
     return None
 
 
@@ -148,12 +142,6 @@ def surnames_of(name: str | None) -> set[str]:
     return set(str(name or "").split()[1:])
 
 
-def _newborn_surname(values: Mapping[str, Any]) -> str | None:
-    if surnames_of(values["newborn.name"]) & surnames_of(values["mother.name"]):
-        return None
-    return "o nome do recém-nascido precisa ter ao menos um sobrenome da mãe"
-
-
 def _guardian(values: Mapping[str, Any]) -> str | None:
     name, age = values["guardian.name"], values["guardian.age"]
     if (name is None) != (age is None):
@@ -180,14 +168,21 @@ def _summary(key: str, parts: tuple[str, ...], template: str) -> Constraint:
 
 
 CONSTRAINTS: tuple[Constraint, ...] = (
+    Constraint("gravidez_e_gemelaridade", ("birth.twins", "birth.pregnancy_type"), ("birth",),
+               lambda v: None if v["birth.pregnancy_type"] == ("Dupla" if v["birth.twins"] else "Única") else "tipo de gravidez difere da gemelaridade"),
+    Constraint("cesarea_e_via_de_parto", ("birth.delivery_type", "birth.cesarean_before_labor"), ("birth",),
+               lambda v: None if v["birth.cesarean_before_labor"] == ("Não se aplica" if v["birth.delivery_type"] == "Vaginal" else "Ignorado") else "indicação de cesárea incompatível com a via de parto"),
+    Constraint("anomalia_sem_diagnostico", ("newborn.anomaly_status", "newborn.anomaly_description"), ("newborn",),
+               lambda v: None if v["newborn.anomaly_status"] == "Ignorado" and v["newborn.anomaly_description"] is None else "diagnóstico não validado"),
+    Constraint("ocupacao_e_cbo", ("mother.occupation", "mother.occupation_cbo"), ("mother",),
+               lambda v: None if v["mother.occupation_cbo"] == OCCUPATION_CODES.get(v["mother.occupation"]) else "CBO não corresponde à ocupação documentada"),
     Constraint("idade_da_mae_no_nascimento", ("mother.birth_date", "mother.age", "birth.date"), ("mother",), _mother_age),
     Constraint("idade_do_pai_no_nascimento", ("father.birth_date", "father.age", "birth.date"), ("father",),
-               _age_rule("father", "birth.date", 12, 90, "pai")),
+               _age_rule("father", "birth.date", "pai")),
     Constraint("responsavel_legal_coerente", ("guardian.name", "guardian.age"), ("guardian",), _guardian),
     Constraint("responsavel_legal_diferente_da_mae", ("guardian.name", "mother.name"), ("guardian",),
                lambda values: None if values["guardian.name"] != values["mother.name"]
                else "o responsável legal não pode ser a própria mãe"),
-    Constraint("sobrenome_materno_do_recem_nascido", ("newborn.name", "mother.name"), ("newborn",), _newborn_surname),
     Constraint("gemeos_coerentes", ("birth.twins", "twin.name_matricula", "newborn.name"), ("twin",), _twin),
     *(_until_reference(key) for key in EVENT_DATES),
     Constraint("registro_do_obito_apos_obito", ("death_registration.date", "death.date"), ("death_registration",),
@@ -207,7 +202,7 @@ CONSTRAINTS: tuple[Constraint, ...] = (
         "previous_pregnancies", "vaginal_births", "cesareans", "live_births", "fetal_losses")), ("mother",), _obstetric),
     *(_address(prefix) for prefix in ADDRESS_PREFIXES),
     Constraint("idade_do_falecido_no_obito", ("deceased.birth_date", "deceased.age", "death.date"), ("deceased",),
-               _age_rule("deceased", "death.date", 0, 110, "falecido")),
+               _age_rule("deceased", "death.date", "falecido")),
     _sex("newborn.sex"),
     _sex("deceased.sex"),
     Constraint("filiacao_coerente", ("parents.names", "mother.name", "father.name"), ("parents",), _parents),

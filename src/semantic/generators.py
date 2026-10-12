@@ -10,7 +10,7 @@ from typing import Any, Callable
 from src.field_rules import DNV_TEST_PREFIX, cpf
 from src.semantic.constraints import REFERENCE_END, completed_years
 from src.semantic.data import (COMPLEMENTS, ESTABLISHMENT_NAMES, FEMALE_ASSOCIATED_FIRST_NAMES, ISSUERS, LOCATION_PROFILES,
-                               MALE_ASSOCIATED_FIRST_NAMES, OCCUPATIONS, PROFILES_BY_IBGE, REGISTRY_OFFICE_NAMES, SURNAMES)
+                               MALE_ASSOCIATED_FIRST_NAMES, OCCUPATIONS, OCCUPATION_CODES, PROFILES_BY_IBGE, REGISTRY_OFFICE_NAMES, SURNAMES)
 from src.semantic.present import format_matricula
 
 EVENT_START, EVENT_END = date(1980, 1, 1), REFERENCE_END
@@ -40,7 +40,9 @@ PREGNANCY_COUNT_WEIGHTS = (20, 22, 18, 14, 10, 7, 4, 3, 2)
 
 class DateSpan:
     def __init__(self, start: date, end: date):
-        self.start, self.size = start, max(1, (end - start).days + 1)
+        if end < start:
+            raise ValueError(f"Intervalo de datas invertido: {start.isoformat()} a {end.isoformat()}")
+        self.start, self.size = start, (end - start).days + 1
 
     def __len__(self) -> int:
         return self.size
@@ -76,11 +78,12 @@ def cpf_digits(rng: random.Random) -> str:
 
 
 def cns_digits(rng: random.Random) -> str:
-    while True:
+    for _ in range(128):
         body = rng.choice("789") + digits(rng, 13)
         check = -sum(int(digit) * weight for digit, weight in zip(body, range(15, 1, -1))) % 11
         if check < 10:
             return body + str(check)
+    raise ValueError("Não foi possível produzir um CNS válido após 128 tentativas")
 
 
 def first_name(record, rng: random.Random, sex: str) -> str:
@@ -168,7 +171,10 @@ def birth(record, rng: random.Random) -> dict[str, Any]:
                   ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge")),
         "birth.place.summary": f"{establishment}, {profile['city']} - {profile['uf']}",
     }
-    return {**values, "birth.twins": record.pick(rng, "birth.twins", (False, True), (98, 2))}
+    twins = record.pick(rng, "birth.twins", (False, True), (98, 2))
+    delivery = record.pick(rng, "birth.delivery_type", ("Vaginal", "Cesáreo"))
+    return {**values, "birth.twins": twins, "birth.pregnancy_type": "Dupla" if twins else "Única",
+            "birth.delivery_type": delivery, "birth.cesarean_before_labor": "Não se aplica" if delivery == "Vaginal" else "Ignorado"}
 
 
 def mother(record, rng: random.Random) -> dict[str, Any]:
@@ -179,11 +185,13 @@ def mother(record, rng: random.Random) -> dict[str, Any]:
     cities = [profile["city"] for profile in LOCATION_PROFILES]
     naturalidade = record.pick(rng, "mother.naturalidade", cities,
                                [0.55 if city == residence["city"] else 0.45 / (len(cities) - 1) for city in cities])
+    occupation = record.pick(rng, lambda value: {"mother.occupation": value, "mother.occupation_cbo": OCCUPATION_CODES.get(value)},
+                             (*OCCUPATIONS, *OCCUPATION_CODES))
     return {
         "mother.name": name, "mother.birth_date": born, "mother.age": age,
         "mother.cpf": record.draw("mother.cpf", rng, lambda: cpf_digits(rng)),
         "mother.cns": record.draw("mother.cns", rng, lambda: cns_digits(rng)),
-        "mother.occupation": record.pick(rng, "mother.occupation", OCCUPATIONS),
+        "mother.occupation": occupation, "mother.occupation_cbo": OCCUPATION_CODES.get(occupation),
         "mother.naturalidade": naturalidade,
         **address("mother.residence", residence, house_number(record, rng, "mother.residence.number"),
                   ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge")),
@@ -204,6 +212,7 @@ def newborn(record, rng: random.Random) -> dict[str, Any]:
     family = rng.choices(([maternal, paternal], [maternal]), (85, 15))[0]
     cities = (record.value("birth.place.municipality"), record.value("mother.residence.municipality"))
     return {
+        "newborn.anomaly_status": "Ignorado", "newborn.anomaly_description": None,
         "newborn.name": record.draw("newborn.name", rng, lambda: person_name(record, rng, sex, list(dict.fromkeys(family)))),
         "newborn.sex": sex, "newborn.cpf": record.draw("newborn.cpf", rng, lambda: cpf_digits(rng)),
         "newborn.naturalidade": record.pick(rng, "newborn.naturalidade", cities, (60, 40)),
@@ -221,9 +230,11 @@ def guardian(record, rng: random.Random) -> dict[str, Any]:
 
     def sample() -> str:
         name = mother_name
-        while name == mother_name:
+        for _ in range(128):
             name = person_name(record, rng, sex, surnames(rng, paternal=rng.choice(family), inherit=0.7))
-        return name
+            if name != mother_name:
+                return name
+        raise ValueError("Não foi possível gerar um responsável distinto após 128 tentativas")
     return {"guardian.name": record.draw("guardian.name", rng, sample),
             "guardian.age": record.pick(rng, "guardian.age", range(18, 91), weights)}
 
@@ -234,8 +245,12 @@ def twin(record, rng: random.Random) -> dict[str, Any]:
     newborn_name, matricula = record.value("newborn.name"), record.value("registration.matricula")
     sex = rng.choice(("F", "M"))
     name = newborn_name
-    while name == newborn_name:
+    for _ in range(128):
         name = person_name(record, rng, sex, family_names(newborn_name))
+        if name != newborn_name:
+            break
+    else:
+        raise ValueError("Não foi possível gerar um gêmeo distinto após 128 tentativas")
     sibling = matricula[:23] + f"{int(matricula[23:30]) % 9999999 + 1:07d}" + digits(rng, 2)
     return {"twin.name_matricula": f"{name}, {format_matricula(sibling)}"}
 

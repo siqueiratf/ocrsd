@@ -26,6 +26,7 @@ registration.place.summary deceased.name deceased.sex deceased.birth_date deceas
 deceased.father_name deceased.occupation deceased.residence.street deceased.residence.number deceased.residence.neighborhood
 deceased.residence.cep deceased.residence.municipality deceased.residence.uf deceased.residence.ibge death.date death.time
 death.place.establishment.name death.place.municipality death.place.uf death.place.ibge certifier.name certifier.registration
+birth.pregnancy_type birth.delivery_type birth.cesarean_before_labor newborn.anomaly_status newborn.anomaly_description mother.occupation_cbo
 birth.twins twin.name_matricula death_registration.date death_registration.number death_registration.office.name
 death_registration.office.municipality death_registration.office.uf death_registration.place.summary
 """.split()
@@ -184,12 +185,12 @@ class SemanticRecordTests(unittest.TestCase):
             inherited += bool(set(names["newborn.name"].split()[1:]) & family)
         self.assertGreater(inherited, 160)
 
-    def test_newborn_always_carries_a_maternal_surname(self):
+    def test_maternal_surname_is_a_generator_preference_not_a_constraint(self):
         for seed in range(300):
             values = SemanticRecord(seed).resolve(["newborn.name", "mother.name"])
             self.assertTrue(set(values["newborn.name"].split()[1:]) & set(values["mother.name"].split()[1:]), values)
         broken = {**resolved(3)[1], "newborn.name": "Ana Zzz"}
-        self.assertIn("sobrenome_materno_do_recem_nascido", {constraint.name for constraint, _ in violations(broken)})
+        self.assertNotIn("sobrenome_materno_do_recem_nascido", {constraint.name for constraint, _ in violations(broken)})
 
     def test_optional_guardian_and_twins(self):
         minors = adults = minor_guardians = adult_guardians = twins = 0

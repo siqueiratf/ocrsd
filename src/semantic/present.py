@@ -9,7 +9,7 @@ from src.semantic.resolve import Binding, normalize
 CATEGORICAL_TYPES = frozenset({"enum", "uf", "sex"})
 IDENTIFIER_KINDS = frozenset({"cpf", "cns", "cep", "matricula", "dnv", "digits"})
 SUFFIX_KINDS = {"sex": "sex", "cpf": "cpf", "cns": "cns", "cep": "cep", "matricula": "matricula", "dnv_number": "dnv",
-                "uf": "uf", "ibge": "digits", "cnes": "digits", "number": "digits", "document_number": "digits"}
+                "uf": "uf", "ibge": "digits", "cnes": "digits", "number": "digits", "document_number": "digits", "occupation_cbo": "digits"}
 TYPE_KINDS = {
     "date": {"date"}, "time": {"time"}, "sex": {"sex"}, "dnv_number": {"dnv"}, "cep": {"cep"}, "cns": {"cns"},
     "uf": {"uf"}, "integer": {"int", "digits", "date"}, "decimal": {"int"}, "document": {"cpf", "cns", "digits"},
@@ -151,7 +151,27 @@ def present_text(field: dict, binding: Binding, value) -> str:
     return next((item for item in allowed if normalize(item) == normalize(text)), text)
 
 
+DNV_CHOICES = {
+    "birth.pregnancy_type": (("Única", "Dupla", "Tripla ou mais", "Ignorado"), ("1", "2", "3", "9"), "tipo_gravidez"),
+    "birth.delivery_type": (("Vaginal", "Cesáreo", "Ignorado"), ("1", "2", "9"), "tipo_parto"),
+    "birth.cesarean_before_labor": (("Sim", "Não", "Não se aplica", "Ignorado"), ("1", "2", "3", "9"), "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar"),
+    "newborn.anomaly_status": (("Sim", "Não", "Ignorado"), ("1", "2", "9"), "anomalia"),
+}
+
+
 def checkbox_choice(field: dict, binding: Binding, value) -> list[dict] | None:
+    if binding.key in DNV_CHOICES:
+        labels, codes, prefix = DNV_CHOICES[binding.key]
+        target = normalize(value)
+        index = next((index for index, label in enumerate(labels) if normalize(label) == target), None)
+        if index is None:
+            return None
+        elements = field.get("elements") or []
+        matches = [element for element in elements if any(normalize(element.get(name)) in {target, codes[index], normalize(codes[index] + " " + labels[index])}
+                   for name in ("label", "value"))]
+        if not matches and {str(element.get("element_id")) for element in elements} == {f"{prefix}_{i}" for i in range(len(labels))}:
+            matches = [element for element in elements if str(element.get("element_id")) == f"{prefix}_{index}"]
+        return matches[:1] or None
     if value_kind(binding, value) == "sex":
         matches = _sex_elements(field, value)
     elif isinstance(value, bool):

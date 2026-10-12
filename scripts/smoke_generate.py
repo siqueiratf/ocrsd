@@ -9,6 +9,7 @@ import numpy as np
 from src.config import PipelineConfig
 from src.document_types import DOCUMENTS_ROOT
 from src.pipeline import run_pipeline
+from src.semantic.registry import REGISTRY
 from src.synthetic_dataset import generate_dataset
 
 
@@ -16,6 +17,26 @@ CASES = (
     ("dnv", "template.pdf", "mappings/mapeamento_seguindo_norma.json"),
     ("certidao_nascimento", "certidao_nascimento.pdf", "certidao_nascimento_fields.json"),
 )
+
+
+def expected_content(truth: dict) -> set[str]:
+    filled = set()
+    snapshot = truth.get("semantic_record") or {}
+    for field in truth["fields"]:
+        identifier = str(field["field_id"])
+        if field.get("value") != "":
+            if field.get("blank") or field.get("value") is None:
+                raise AssertionError(f"Ground truth inconsistente: {identifier}")
+            filled.add(identifier)
+            continue
+        semantic = field.get("semantic") or {}
+        key = semantic.get("key")
+        definition = REGISTRY.get(key)
+        if not (field.get("blank") is True and definition and definition.optional
+                and "value" in semantic and semantic["value"] is None
+                and key in snapshot and snapshot[key] is None):
+            raise AssertionError(f"Campo vazio sem justificativa semântica: {identifier}")
+    return filled
 
 
 def verify_document(key: str, template_name: str, mapping_name: str,
@@ -31,6 +52,7 @@ def verify_document(key: str, template_name: str, mapping_name: str,
     truth = json.loads(generated.json_path.read_text(encoding="utf-8"))
     if {str(field["field_id"]) for field in truth["fields"]} != selected:
         raise AssertionError(f"{key}: campos ausentes no documento sintético")
+    expected = expected_content(truth)
     with fitz.open(generated.pdf_path) as document, fitz.open(template) as blank:
         if len(document) != 1:
             raise AssertionError(f"{key}: número de páginas incorreto")
@@ -41,8 +63,11 @@ def verify_document(key: str, template_name: str, mapping_name: str,
         blank_pixels = np.frombuffer(blank_pixmap.samples, dtype=np.uint8).reshape(shape)
         for field in truth["fields"]:
             x1, y1, x2, y2 = field["bbox"]
-            if np.array_equal(filled_pixels[y1:y2, x1:x2], blank_pixels[y1:y2, x1:x2]):
+            changed = not np.array_equal(filled_pixels[y1:y2, x1:x2], blank_pixels[y1:y2, x1:x2])
+            if str(field["field_id"]) in expected and not changed:
                 raise AssertionError(f"{key}: campo não renderizado: {field['field_id']}")
+            if str(field["field_id"]) not in expected and changed:
+                raise AssertionError(f"{key}: campo semanticamente vazio foi renderizado: {field['field_id']}")
     processed = output / key / "pipeline"
     run_pipeline(
         str(generated.pdf_path), str(template), str(processed),
@@ -56,8 +81,11 @@ def verify_document(key: str, template_name: str, mapping_name: str,
     if {str(field["field_id"]) for field in entries} != selected:
         raise AssertionError(f"{key}: campos ausentes no processamento")
     filled = [field for field in entries if field["filled"]]
-    if {str(field["field_id"]) for field in filled} != selected:
-        raise AssertionError(f"{key}: nem todos os campos preenchidos foram detectados")
+    expected_redacted = expected | {str(field["field_id"]) for field in mapping["fields"] if field.get("always_redact")}
+    detected = {str(field["field_id"]) for field in filled}
+    if detected != expected_redacted:
+        raise AssertionError(f"{key}: detecção divergente: ausentes={sorted(expected_redacted - detected)}, "
+                             f"inesperados={sorted(detected - expected_redacted)}")
     for field in entries:
         if cv2.imread(str(processed / field["crop_path"])) is None:
             raise AssertionError(f"{key}: recorte ausente: {field['field_id']}")
@@ -74,6 +102,7 @@ def verify_document(key: str, template_name: str, mapping_name: str,
             if not np.array_equal(center, [255, 0, 0]):
                 raise AssertionError(f"{key}: campo sem ocultação: {field['field_id']}")
     return {"type": key, "seed": seed, "fields": len(entries),
+            "expected_filled": len(expected), "semantic_blanks": len(selected - expected),
             "detected": len(filled), "pdf": str(generated.pdf_path)}
 
 
