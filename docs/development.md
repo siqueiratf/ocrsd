@@ -14,13 +14,15 @@ suas entradas e algoritmos; os extras `web` e `test` são opcionais.
 | `pipeline.py`, `config.py` | Pipeline e configuração independentes: rasterização, alinhamento, diferenças, segmentação, OCR, ocultação e manifestos. Caminhos são aceitos no uso local; uma API futura deverá resolver IDs antes de chamá-los. |
 | `pipeline_gui.py` | Ainda contém orquestração adicional: escolha de modelos/tipos, pré-processamento por campo, OCR de sequências e agregação de previsões. Extrair esse caso de uso antes de migrar a tela; chamar só `run_pipeline` não reproduziria tudo. |
 | `gui.py` | Edição de imagem, histórico/crop, presets, processamento de pastas e subprocessos de benchmark com cancelamento/timeout. Os controles são Tkinter; operações do motor e seus parâmetros podem ser compartilhados. |
-| `field_mapper_gui.py` | O editor web implementa canvas, coordenadas originais, zoom, undo/redo e caixas; conserva `dpi`, `page_size_px`, `bbox`, `elements` e `validation`. Operações avançadas exclusivas do desktop continuam disponíveis nele. |
+| `field_mapper_gui.py` | O editor web implementa paleta de elementos, aba Contextos, canvas com zoom, ajuste, pan, undo/redo, alças de redimensionamento, subelementos de checkbox e sequências, tipos de campo personalizados, pré-visualização por geração real e publicação. Conserva `dpi`, `page_size_px`, `bbox`, `elements`, `validation` e metadados desconhecidos, como `bloco` e `official_variable`. Salvar exige a revisão carregada; outra janela não sobrescreve alterações. Os tipos de dados ficam em `field_rules.py`, compartilhado com o desktop e o motor. |
 | `fields.py`, `document_types.py` | Leitura/associação de mapas e descoberta de templates independentes. A web reutiliza o catálogo, incluindo `mappings/*.json` e o formato antigo `*_fields.json`. PDFs conservam o layout original. |
-| `writing_presets.py` | Biblioteca JSON independente; CRUD e descrições podem servir desktop/serviços. Na web há leitura e conversão de presets simples. Presets mistos são listados como indisponíveis. |
+| `writing_presets.py` | Biblioteca JSON independente do desktop; a web lê e converte presets simples como padrões somente leitura e acrescenta três padrões por fonte manuscrita. Presets da web ficam no SQLite com descrição, versão, compartilhamento por link e concessões por espaço de trabalho. As prévias usam o mesmo renderizador da geração, com modelos neurais carregados uma vez por processo e miniaturas em `previews/`. Presets mistos continuam indisponíveis na web. |
 | `ocr.py`, `ocr_bench.py`, `preprocess.py` | Reconhecimento, backends e filtros independentes. EasyOCR, TrOCR, Tesseract e Paddle têm pesos/dependências próprios; não são carregados pela API de geração. |
 | `neural_handwriting.py`, `sj_handwriting.py` | Canetas, alfabetos, inferência, verificação de pesos e conversão são reutilizáveis. A web não baixa pesos; modelos ficam desabilitados por padrão. Sjvasquez exige também checksum e arquivos dos 13 estilos. |
 | `document_filters.py` e GUI | Filtros e PDFs têm funções próprias e semente; a GUI mantém seleção, prévia e exportação. A web oferece os três presets existentes. |
 | Galeria e visualizador PDF | As prévias web chamam diretamente os renderizadores Python sem importar Tkinter. O visualizador usa somente artefatos autorizados e o leitor PDF do navegador. |
+
+Modelos em branco guardam `layout.json` com textos, linhas e caixas; ao salvar, o serviço gera o `template.pdf` usado pelo motor. Somente modelos publicados aparecem na Geração. Tipos de campo personalizados ficam na tabela `field_types` do espaço de trabalho e aceitam apenas regras declarativas: lista de valores, intervalo numérico, máscara, formato de data, tipo de documento e probabilidade de campo vazio.
 
 `src/web/models.py` define o contrato; `services.py` resolve recursos, valida opções
 e chama o motor, sem depender de HTTP. `jobs.py` persiste estados e controla acesso,
@@ -37,8 +39,8 @@ A interface está organizada em três áreas, mantendo o processamento no backen
 
 | Área | Escopo |
 | --- | --- |
-| Modelos | Cadastro de templates PDF, cópia editável do catálogo, metadados e canvas com caixas, zoom, movimentação, redimensionamento, busca, undo/redo, propriedades, validações e exportação do mapa no schema existente. |
-| Geração | Seleção de modelo, mapa e campos, quantidade, semente, escrita impressa/manuscrita, estilos distintos, presets privados, configurações reutilizáveis e realismo com prévia executada pelo backend. |
+| Modelos | Cadastro de templates PDF, modelos padrão protegidos com “Duplicar e editar”, metadados e canvas com caixas, zoom, movimentação, redimensionamento, busca, undo/redo, propriedades, validações e exportação do mapa no schema existente. |
+| Geração | Seleção de modelo (o mapa ativo do modelo é carregado sem escolha), campos, quantidade, semente única automática, escrita impressa/manuscrita, estilos distintos, presets privados, configurações reutilizáveis e realismo com prévia executada pelo backend. |
 | Resultados | Histórico privado persistente, busca/filtro, progresso, cancelamento, PDFs, ground truth, manifesto, downloads, repetição e compartilhamentos revogáveis com permissão de download. |
 
 Presets criados pela web são privados e armazenados por proprietário, sem um arquivo
@@ -62,7 +64,8 @@ O cancelamento encerra o subprocesso; saídas incompletas são removidas.
 
 Estados: `queued`, `running`, `succeeded`, `failed`, `cancelled`, `expired`.
 Ao reiniciar, jobs em execução são marcados como falhos, sem repetição silenciosa;
-jobs na fila são preservados. A mesma semente permite reenviar. SIGTERM/Ctrl+C no
+jobs na fila são preservados. Cada job recebe uma semente única e guarda uma cópia do mapa
+e do template; “Reproduzir exatamente” repete a geração com essa semente e essa cópia. SIGTERM/Ctrl+C no
 worker termina o job atual antes de sair. O filho morre se o supervisor morrer.
 A saúde retorna HTTP 200 com `status=degraded` quando não há heartbeat recente;
 `worker_ready=true` indica que o supervisor está ativo, não garante sucesso do modelo.

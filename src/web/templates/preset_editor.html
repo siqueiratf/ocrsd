@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% set title = entry.title if entry else "Novo preset" %}
+{% set suffix = '?retorno=' ~ retorno if retorno else '' %}
+{% block title %}{{ title }} · Presets de Escrita{% endblock %}
+{% block scripts %}<script src="/static/presets.js?v={{ VERSION }}" defer></script>{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Trilha"><span>Presets</span><span aria-hidden="true">/</span><a href="/presets/escrita{{ suffix }}" data-sair>Presets de Escrita</a><span aria-hidden="true">/</span><span>{{ title }}</span></nav>
+<form id="form-preset" class="preset-page" hx-post="/presets/escrita/salvar" hx-swap="none" hx-disinherit="*" data-preset-form data-modo="{{ mode }}">
+  <header class="preset-head">
+    <div class="preset-head-title">
+      <h1 data-preset-titulo>{{ title }}</h1>
+      {% if entry %}<span class="tag {{ {'padrao': 'tag-blue', 'meu': 'tag-green', 'compartilhado': 'tag-yellow'}[entry.kind] }}">{{ {'padrao': 'Padrão', 'meu': 'Meu preset', 'compartilhado': 'Compartilhado comigo'}[entry.kind] }}</span>{% endif %}
+      {% if mode == 'editar' %}<span class="tag" data-versao>versão {{ entry.version }}</span>{% endif %}
+    </div>
+    <div class="page-actions">
+      <span class="save-state" data-estado="{{ 'pendente' if mode == 'novo' else 'salvo' }}" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-estado-texto>{{ "Ainda não salvo" if mode == 'novo' else "Sem alterações" }}</span></span>
+      <a class="btn" href="/presets/escrita{{ suffix }}" data-sair>Cancelar</a>
+      {% if mode == 'editar' %}
+      <details class="menu menu-end">
+        <summary class="btn btn-icon" aria-label="Mais ações">{{ icon('more') }}</summary>
+        <div class="menu-list">
+          <button type="button" hx-post="/presets/escrita/{{ entry.id }}/duplicar" hx-vals='{{ {"retorno": retorno}|tojson }}' data-sair>{{ icon('copy') }}<span>Duplicar<small>Cria uma cópia independente</small></span></button>
+          <a href="#compartilhamento">{{ icon('share') }}<span>Compartilhar<small>Link para outros espaços de trabalho</small></span></a>
+          <button type="button" class="menu-danger" hx-post="/presets/escrita/{{ entry.id }}/excluir" hx-vals='{"origem": "editor"}' hx-confirm="Excluir este preset? Gerações anteriores mantêm a configuração usada." data-sair>{{ icon('trash') }}<span>Excluir preset</span></button>
+        </div>
+      </details>
+      {% endif %}
+      {% if entry and entry.writing and entry.available %}<a class="btn" href="{{ use_link(entry.id, retorno) }}" data-usar>{{ icon('generate') }}Usar na geração</a>{% endif %}
+      {% if mode != 'novo' %}<button type="submit" name="acao" value="novo" class="btn {{ '' if mode == 'editar' else 'btn-primary' }}" data-sair>{{ icon('copy') }}Salvar como novo preset</button>{% endif %}
+      {% if mode == 'editar' %}<button type="submit" name="acao" value="salvar" class="btn btn-primary" data-salvar-preset>{{ icon('save') }}Salvar alterações</button>
+      {% elif mode == 'novo' %}<button type="submit" name="acao" value="novo" class="btn btn-primary" data-sair>{{ icon('save') }}Salvar preset</button>{% endif %}
+    </div>
+  </header>
+  {% if mode == 'visualizar' %}
+  <p class="notice notice-warning">{{ icon('info') }}<span>{{ "Preset padrão do OCRSD." if entry.kind == 'padrao' else "Preset compartilhado por outro espaço de trabalho." }} Ele não pode ser alterado aqui: ajuste os parâmetros, compare a prévia e use “Salvar como novo preset” para criar sua versão.</span></p>
+  {% endif %}
+  {% if entry and not entry.writing %}
+  <p class="notice notice-warning">{{ icon('alert') }}<span>{{ entry.reason }}. A configuração abaixo começa com a fonte manuscrita.</span></p>
+  {% endif %}
+  <input type="hidden" name="id" value="{{ entry.id if entry else '' }}">
+  <input type="hidden" name="retorno" value="{{ retorno }}">
+  <div class="preset-layout">
+    <aside class="preset-config" aria-label="Configuração do preset">
+      <section class="config-section">
+        <h2>Identificação</h2>
+        <label class="field">Nome<input name="preset_name" required maxlength="120" value="{{ entry.title if entry else 'Novo preset de escrita' }}" {% if rename or mode == 'novo' %}autofocus{% endif %} data-nome-preset></label>
+        <label class="field">Descrição <span class="optional">opcional</span><textarea name="description" rows="2" maxlength="500" placeholder="Quando usar este estilo">{{ entry.description if entry else '' }}</textarea></label>
+      </section>
+      <section class="config-section">
+        <h2>Modelo de escrita</h2>
+        <div class="model-options" role="radiogroup" aria-label="Modelo de escrita" hx-post="/presets/escrita/controles" hx-trigger="change" hx-target="#controles-modelo">
+          {% for model in models %}
+          <label class="model-option {{ 'is-disabled' if not model.available }}" title="{{ model.description }}{{ ' · ' ~ model.reason if model.reason else '' }}">
+            <input type="radio" name="model" value="{{ model.id }}" {% if model.id == writing.model %}checked{% endif %} {% if not model.available %}disabled{% endif %}>
+            <span class="model-option-text"><b>{{ model.label }}</b><small><span class="mono">{{ model.id }}</span> · {{ model.kind }}</small></span>
+            <span class="tag {{ 'tag-green' if model.available else 'tag-red' }}">{{ "Disponível" if model.available else "Indisponível" }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <a class="subtle-link" href="/presets/escrita/modelos">Detalhes dos modelos e registro de novos modelos</a>
+      </section>
+      <div id="controles-modelo">{% include "partials/writing_controls.html" %}</div>
+      {% if mode == 'editar' %}
+      <section id="compartilhamento" class="config-section">{% include "partials/preset_share.html" %}</section>
+      {% endif %}
+    </aside>
+    <section class="playground-panel" aria-label="Prévia da escrita">
+      <div class="playground-toolbar">
+        <h2>Prévia</h2>
+        <fieldset class="segmented" hx-post="/presets/escrita/previa" hx-trigger="change" hx-target="#playground" hx-sync="#playground:drop" hx-indicator="#playground">
+          <legend>Variações</legend>
+          {% for count in (1, 2, 3) %}<label><input type="radio" name="variacoes" value="{{ count }}" {% if count == 1 %}checked{% endif %}><span>{{ count }}</span></label>{% endfor %}
+        </fieldset>
+        <button type="button" class="btn btn-primary" hx-post="/presets/escrita/previa" hx-target="#playground" hx-sync="#playground:drop" hx-indicator="#playground" hx-disabled-elt="this" data-atualizar-previa>{{ icon('reload') }}Atualizar prévia</button>
+      </div>
+      <p class="playground-stale" data-previa-desatualizada hidden>{{ icon('info') }}<span>A configuração mudou. Atualize a prévia para ver o resultado do motor.</span></p>
+      <div id="playground" class="playground" hx-post="/presets/escrita/previa" hx-trigger="load" hx-sync="#playground:drop" aria-live="polite" aria-busy="false">
+        <div class="sample-rows">
+          {% for label, sample in samples %}
+          <div class="sample-row"><div class="sample-ref"><b>{{ label }}</b><span class="mono">{{ sample }}</span></div><div class="sample-cells"><div class="sample-cell sample-loading"></div></div></div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  </div>
+</form>
+{% endblock %}

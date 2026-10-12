@@ -94,7 +94,17 @@ def _shadow_mask(height: int, width: int, strength: float, rng: random.Random) -
         blob = ((xx - cx) / max(1, rx)) ** 2 + ((yy - cy) / max(1, ry)) ** 2
         softness = np.clip(1.0 - blob, 0.0, 1.0)
         mask *= 1.0 - softness * rng.uniform(strength * 0.35, strength)
-    return cv2.GaussianBlur(mask, (0, 0), sigmaX=max(width, height) * 0.035)
+    return _wide_blur(mask, max(width, height) * 0.035)
+
+
+def _wide_blur(mask: np.ndarray, sigma: float) -> np.ndarray:
+    height, width = mask.shape
+    factor = max(1, int(sigma // 8))
+    if factor == 1:
+        return cv2.GaussianBlur(mask, (0, 0), sigmaX=sigma)
+    reduced = cv2.resize(mask, (max(1, width // factor), max(1, height // factor)), interpolation=cv2.INTER_AREA)
+    reduced = cv2.GaussianBlur(reduced, (0, 0), sigmaX=sigma / factor)
+    return cv2.resize(reduced, (width, height), interpolation=cv2.INTER_LINEAR)
 
 
 def _vignette(height: int, width: int, rng: random.Random) -> np.ndarray:

@@ -1,21 +1,12 @@
 {% extends "base.html" %}
 {% from "macros.html" import icon, page_header %}
-{% block title %}Presets{% endblock %}
+{% block title %}Comparação de realismo{% endblock %}
 {% block content %}
-{% call page_header("Ferramentas · Presets", "Presets de escrita e realismo", "Teste estilos de escrita com o motor real, salve presets privados e compare os efeitos de digitalização.") %}
+{% call page_header("Ferramentas", "Comparação de realismo", "Compare o template original com a versão após os filtros de digitalização.") %}
   <a class="btn" href="/geracao">{{ icon('generate') }}Ir para a geração</a>
 {% endcall %}
-<nav class="subnav" aria-label="Seções">
-  <a href="#escrita">{{ icon('pen') }}Escrita</a>
-  <a href="#realismo">{{ icon('realism') }}Realismo visual</a>
-</nav>
-<section id="escrita" class="card section-card">
-  <header class="section-title"><span class="step">{{ icon('pen') }}</span><div><h2>Laboratório de escrita</h2><p>Os presets privados aparecem na etapa 4 da geração.</p></div></header>
-  {% include "partials/lab.html" %}
-</section>
-<section id="realismo" class="card section-card">
-  <header class="section-title"><span class="step">{{ icon('realism') }}</span><div><h2>Realismo visual</h2><p>Compare o template original com a versão após os filtros de digitalização.</p></div></header>
-  <form class="realism-form" hx-post="/presets/realismo" hx-target="#comparacao" hx-disabled-elt="find button">
+<section class="card section-card">
+  <form class="realism-form" hx-post="/ferramentas/realismo" hx-target="#comparacao" hx-disabled-elt="find button" hx-disinherit="*">
     <label class="field">Modelo
       <select name="document_type">{% for item in types %}<option value="{{ item.id }}">{{ item.label }}</option>{% endfor %}</select>
     </label>

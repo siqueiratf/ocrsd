@@ -1,0 +1,42 @@
+{% from "macros.html" import icon %}
+{% set suffix = '?retorno=' ~ retorno if retorno else '' %}
+{% for item in cards %}
+{% set usable = item.writing and item.available %}
+<article class="preset-card {{ 'is-selected' if item.id == selected }}" {% if item.id == selected %}aria-current="true"{% endif %}>
+  <a class="preset-sample" href="/presets/escrita/{{ item.id }}{{ suffix }}" aria-label="Abrir {{ item.title }}">
+    {% if item.thumbnail %}
+    <img src="{{ item.thumbnail }}" alt="Amostras de escrita do preset {{ item.title }}" loading="lazy" decoding="async" width="520" height="464">
+    {% else %}
+    <span class="preset-sample-off">{{ icon('alert') }}<span>{{ item.reason or "Prévia indisponível" }}</span></span>
+    {% endif %}
+  </a>
+  <div class="preset-card-body">
+    <div class="preset-card-head">
+      <a class="preset-card-title" href="/presets/escrita/{{ item.id }}{{ suffix }}" title="{{ item.name }}">{{ item.title }}</a>
+      <details class="menu menu-end menu-card">
+        <summary class="icon-btn" aria-label="Ações de {{ item.title }}">{{ icon('more') }}</summary>
+        <div class="menu-list">
+          <a href="/presets/escrita/{{ item.id }}{{ suffix }}">{{ icon('eye') }}<span>{{ "Editar" if item.editable else "Visualizar" }}</span></a>
+          {% if usable %}<a href="{{ use_link(item.id, retorno) }}">{{ icon('generate') }}<span>Usar na geração</span></a>{% endif %}
+          {% if item.writing %}<button type="button" hx-post="/presets/escrita/{{ item.id }}/duplicar" hx-vals='{{ {"retorno": retorno}|tojson }}'>{{ icon('copy') }}<span>Duplicar</span></button>{% endif %}
+          {% if item.editable %}<a href="/presets/escrita/{{ item.id }}#compartilhamento">{{ icon('share') }}<span>Compartilhar</span></a>{% endif %}
+          {% if item.kind == 'meu' %}
+          <button type="button" class="menu-danger" hx-post="/presets/escrita/{{ item.id }}/excluir" hx-target="closest .preset-card" hx-swap="outerHTML" hx-confirm="Excluir o preset “{{ item.title }}”? Gerações anteriores mantêm a configuração usada.">{{ icon('trash') }}<span>Excluir</span></button>
+          {% elif item.kind == 'compartilhado' %}
+          <button type="button" class="menu-danger" hx-post="/presets/escrita/{{ item.id }}/excluir" hx-target="closest .preset-card" hx-swap="outerHTML" hx-confirm="Remover “{{ item.title }}” da sua coleção?">{{ icon('trash') }}<span>Remover da coleção</span></button>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+    <p class="preset-model" title="{{ model_info[item.writing.model].version if item.writing else '' }}">{% if item.writing %}{{ model_info[item.writing.model].label }} · <span class="mono">{{ item.writing.model }}</span>{% else %}Preset misto do desktop{% endif %}</p>
+    <div class="preset-card-foot">
+      <span class="tag {{ {'padrao': 'tag-blue', 'meu': 'tag-green', 'compartilhado': 'tag-yellow'}[item.kind] }}">{{ {'padrao': 'Padrão', 'meu': 'Meu', 'compartilhado': 'Compartilhado comigo'}[item.kind] }}</span>
+      {% if item.shared %}<span class="tag" title="Link de compartilhamento ativo">{{ icon('link') }}Link</span>{% endif %}
+      {% if usable %}<a class="btn btn-sm {{ 'btn-primary' if retorno else '' }} preset-use" href="{{ use_link(item.id, retorno) }}">Usar na geração</a>{% endif %}
+    </div>
+  </div>
+</article>
+{% endfor %}
+{% if more %}
+<button type="button" id="mais-presets-{{ pagina }}" class="btn preset-more" hx-get="/presets/escrita" hx-include="#filtros-presets" hx-vals='{"pagina": {{ pagina + 1 }}}' hx-target="this" hx-swap="outerHTML">Mostrar mais presets</button>
+{% endif %}

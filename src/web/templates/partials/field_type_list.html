@@ -1,0 +1,27 @@
+{% from "macros.html" import icon, toast %}
+{% if field_types %}
+<div class="table-scroll">
+  <table class="table">
+    <thead><tr><th scope="col">Tipo</th><th scope="col">Identificador</th><th scope="col">Tipo base</th><th scope="col">Regras</th><th scope="col"><span class="sr-only">Ações</span></th></tr></thead>
+    <tbody>
+      {% for item in field_types %}
+      {% set rules = item.config.validation or {} %}
+      <tr>
+        <td><b>{{ item.name }}</b><small>{{ item.description or "Sem descrição" }}</small></td>
+        <td class="mono">{{ item.slug }}</td>
+        <td>{{ TYPE_LABELS[item.base_type] }}</td>
+        <td>{% if rules.allowed_values %}{{ rules.allowed_values|length }} valores{% elif rules.mask %}Máscara {{ rules.mask }}{% elif rules.min_value is defined %}{{ rules.min_value }} a {{ rules.max_value }}{% else %}Padrão do tipo base{% endif %}{% if rules.blank_probability %} · {{ (rules.blank_probability * 100)|round|int }}% vazio{% endif %}</td>
+        <td class="row-action"><button type="button" class="btn btn-sm btn-danger" hx-post="/presets/tipos/{{ item.id }}/excluir" hx-target="#lista-tipos" hx-confirm="Excluir o tipo “{{ item.name }}”? Campos já mapeados mantêm a configuração.">Excluir</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">
+  <span class="empty-icon">{{ icon('sparkle') }}</span>
+  <h3>Nenhum tipo personalizado</h3>
+  <p>No editor de modelos, use “Criar campo personalizado” na paleta de elementos.</p>
+</div>
+{% endif %}
+{% if message %}{{ toast(message, 'sucesso', True) }}{% endif %}

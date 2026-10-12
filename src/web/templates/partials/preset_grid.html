@@ -1,0 +1,13 @@
+{% from "macros.html" import icon %}
+<div id="grade-presets" class="preset-results">
+  {% if cards %}
+  <div class="preset-grid">{% include "partials/preset_cards.html" %}</div>
+  {% else %}
+  <div class="empty card">
+    <span class="empty-icon">{{ icon('pen') }}</span>
+    <h3>{{ "Nenhum preset encontrado" if busca or modelo or aba != 'todos' else "Nenhum preset disponível" }}</h3>
+    <p>{{ "Ajuste a busca ou os filtros." if busca or modelo else "Crie um estilo de escrita reutilizável para a geração." }}</p>
+    <a class="btn btn-primary" href="/presets/escrita/novo{{ '?retorno=' ~ retorno if retorno }}">{{ icon('add') }}Criar preset</a>
+  </div>
+  {% endif %}
+</div>

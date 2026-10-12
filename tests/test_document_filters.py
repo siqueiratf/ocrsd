@@ -3,10 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cv2
 import fitz
 import numpy as np
 
-from src.document_filters import apply_document_filters, apply_realistic_filters_to_pdf
+from src.document_filters import _wide_blur, apply_document_filters, apply_realistic_filters_to_pdf
 
 
 class DocumentFilterTests(unittest.TestCase):
@@ -24,6 +25,16 @@ class DocumentFilterTests(unittest.TestCase):
         self.assertTrue(first_metadata["enabled"])
         self.assertEqual(first_metadata["preset"], "medium")
         self.assertFalse(np.array_equal(first, image))
+
+    def test_wide_shadow_blur_matches_full_resolution_blur(self):
+        yy, xx = np.ogrid[:900, :700]
+        mask = (1.0 - np.clip(1.0 - ((xx - 300) / 400) ** 2 - ((yy - 500) / 260) ** 2, 0, 1) * 0.2).astype(np.float32)
+
+        expected = cv2.GaussianBlur(mask, (0, 0), sigmaX=31.5)
+        approximated = _wide_blur(mask, 31.5)
+
+        self.assertEqual(approximated.shape, mask.shape)
+        self.assertLess(float(np.abs(expected - approximated).max()), 0.004)
 
     def test_applies_filters_to_pdf(self):
         with tempfile.TemporaryDirectory() as directory:

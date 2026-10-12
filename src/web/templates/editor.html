@@ -1,105 +1,141 @@
 {% extends "base.html" %}
-{% from "macros.html" import icon, page_header %}
-{% block title %}Editor · {{ model.label }}{% endblock %}
-{% block scripts %}<script src="/static/editor.js?v={{ VERSION }}" defer></script>{% endblock %}
+{% from "macros.html" import icon %}
+{% block title %}{{ model.label }} · Mapeamento{% endblock %}
+{% block body_class %}is-editor{% endblock %}
+{% block footer %}{% endblock %}
+{% block scripts %}<script src="/static/pdf_viewer.js?v={{ VERSION }}" defer></script><script src="/static/editor.js?v={{ VERSION }}" defer></script>{% endblock %}
 {% block content %}
-<nav class="breadcrumb" aria-label="Trilha"><a href="/modelos">Modelos</a><span aria-hidden="true">/</span><span>{{ model.label }}</span><span aria-hidden="true">/</span><span>Editor</span></nav>
-{% call page_header("Modelos · Editor visual", "Mapeamento de campos", "Delimite áreas no documento e edite as propriedades sem alterar o formato JSON do OCRSD.") %}
-  <a class="btn" href="/modelos" data-voltar>{{ icon('back') }}Voltar</a>
-  {% if not model.builtin %}
-  <button type="button" class="btn btn-danger" hx-post="/modelos/{{ model.id }}/excluir" hx-confirm="Excluir este modelo privado? Esta ação não pode ser desfeita." data-saida>{{ icon('trash') }}Excluir</button>
-  {% endif %}
-  <button type="button" class="btn" data-acao="exportar">{{ icon('download') }}Exportar JSON</button>
-  <button type="submit" class="btn btn-primary" form="form-salvar" data-salvar disabled>{{ icon('save') }}<span data-salvar-rotulo>Salvar mapeamento</span></button>
-{% endcall %}
-{% if model.builtin %}
-<p class="notice notice-info">{{ icon('alert') }}<span>Este mapeamento é compartilhado com o OCRSD desktop. Ao salvar aqui, o mesmo JSON do catálogo local é atualizado.</span></p>
-{% endif %}
-<section class="card editor" id="editor" data-tool="select">
-  <div class="editor-toolbar" role="toolbar" aria-label="Ferramentas do editor">
-    <div class="tool-group">
-      <button type="button" class="btn btn-sm" data-ferramenta="select" aria-pressed="true" title="Selecionar e mover (V)">{{ icon('select') }}<span>Selecionar</span></button>
-      <button type="button" class="btn btn-sm" data-ferramenta="draw" aria-pressed="false" title="Desenhar um campo (N)">{{ icon('box') }}<span>Campo</span></button>
-      <button type="button" class="btn btn-sm" data-acao="duplicar" title="Ctrl+D" disabled>{{ icon('copy') }}<span>Duplicar</span></button>
-      <button type="button" class="btn btn-sm" data-acao="excluir" title="Delete" disabled>{{ icon('trash') }}<span>Excluir</span></button>
-    </div>
-    <div class="tool-group">
-      <button type="button" class="btn btn-sm" data-acao="desfazer" title="Ctrl+Z" disabled>{{ icon('undo') }}<span>Desfazer</span></button>
-      <button type="button" class="btn btn-sm" data-acao="refazer" title="Ctrl+Shift+Z" disabled>{{ icon('redo') }}<span>Refazer</span></button>
-      <button type="button" class="btn btn-sm btn-icon" data-acao="recarregar" title="Recarregar o JSON salvo" aria-label="Recarregar o JSON salvo">{{ icon('reload') }}</button>
-    </div>
-    <div class="tool-group tool-zoom">
-      <button type="button" class="btn btn-sm btn-icon" data-acao="afastar" title="Ctrl+-" aria-label="Diminuir zoom">{{ icon('zoom-out') }}</button>
-      <output class="zoom-value" data-zoom aria-live="polite">100%</output>
-      <button type="button" class="btn btn-sm btn-icon" data-acao="aproximar" title="Ctrl++" aria-label="Aumentar zoom">{{ icon('zoom-in') }}</button>
-      <button type="button" class="btn btn-sm" data-acao="ajustar" title="Ctrl+0">{{ icon('fit') }}<span>Ajustar</span></button>
-    </div>
-  </div>
-  <div class="editor-grid">
-    <aside class="editor-fields" aria-label="Campos mapeados">
-      <div class="panel-title"><span>Campos</span><span class="tag tag-blue" data-total>0</span></div>
-      <label class="search-field">{{ icon('search') }}<input type="search" placeholder="Buscar campo…" aria-label="Buscar campo" data-busca></label>
-      <div class="field-nav" data-lista></div>
-    </aside>
-    <div class="editor-canvas" data-tela-container>
-      <div class="canvas-scroll">
-        <svg data-tela role="img" aria-label="Documento com as áreas mapeadas"></svg>
+<div class="editor-app" id="editor" data-tool="select">
+  <header class="editor-header">
+    <div class="editor-heading">
+      <nav class="breadcrumb" aria-label="Trilha">
+        <a href="/modelos" data-voltar>Galeria de Modelos</a><span aria-hidden="true">/</span>
+        <span data-trilha-nome>{{ model.label }}</span><span aria-hidden="true">/</span><span>{{ "Composição" if composed else "Mapeamento" }}</span>
+      </nav>
+      <div class="editor-title">
+        <h1 data-titulo>{{ model.label }}</h1>
+        <span class="tag">{{ "Padrão" if model.builtin else ("Documento composto" if composed else "PDF importado") }}</span>
       </div>
     </div>
-    <aside class="editor-inspector" aria-label="Propriedades">
-      <form id="form-salvar" hx-post="/modelos/{{ model.id }}/mapeamento" hx-swap="none" hx-disinherit="*">
-        {% if not model.builtin %}
-        <details class="model-data">
-          <summary>Dados do modelo</summary>
-          <div class="form-stack compact">
-            <label class="field">Nome<input name="label" value="{{ model.label }}" maxlength="120" required></label>
-            <label class="field">Descrição<textarea name="description" maxlength="500" rows="3">{{ model.description }}</textarea></label>
-            <label class="field">Status
-              <select name="status">
-                <option value="draft" {% if model.status == 'draft' %}selected{% endif %}>Rascunho</option>
-                <option value="published" {% if model.status == 'published' %}selected{% endif %}>Disponível</option>
-              </select>
-            </label>
-          </div>
-        </details>
-        {% endif %}
+    <div class="editor-actions">
+      {% if return_draft %}<a class="btn" href="/geracao?draft={{ return_draft }}&amp;etapa=1">Voltar à geração</a>{% endif %}
+      <span class="save-state" data-estado="salvo" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-estado-texto>Salvo</span></span>
+      <details class="menu menu-end">
+        <summary class="btn btn-icon" aria-label="Mais ações" data-tooltip="Mais ações">{{ icon('more') }}</summary>
+        <div class="menu-list">
+          <button type="button" data-acao="exportar">{{ icon('download') }}<span>Exportar JSON<small>Estado atual do mapeamento</small></span></button>
+          <button type="button" data-acao="recarregar">{{ icon('reload') }}<span>Recarregar versão salva<small>Descarta alterações locais</small></span></button>
+          {% if not model.builtin %}
+          <button type="button" class="menu-danger" hx-post="/modelos/{{ model.id }}/excluir" hx-confirm="Excluir este modelo? Esta ação não pode ser desfeita." data-saida>{{ icon('trash') }}<span>Excluir modelo<small>Remove template e mapeamento</small></span></button>
+          {% endif %}
+        </div>
+      </details>
+      <form class="inline-form" hx-post="/modelos/{{ model.id }}/previa" hx-target="#modal" hx-disabled-elt="find button" data-previa hx-disinherit="*">
+        <button type="submit" class="btn" data-tooltip="Gera um documento sintético com o estado atual">{{ icon('eye') }}Pré-visualizar<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
       </form>
-      <div class="panel-title"><span>Propriedades do campo</span></div>
-      <div data-inspetor></div>
+      <button type="submit" class="btn btn-save" form="form-salvar" data-salvar data-tooltip="Salvar (Ctrl+S)">{{ icon('save') }}<span data-salvar-rotulo>Salvar</span></button>
+      {% include "partials/publication.html" %}
+    </div>
+  </header>
+
+  <div class="editor-shell" data-shell>
+    <aside class="panel panel-left" data-painel="esquerdo" aria-label="Elementos e estrutura do documento">
+      <div class="panel-tabs" role="tablist" aria-label="Painel de elementos">
+        <button type="button" role="tab" id="tab-adicionar" aria-controls="aba-adicionar" aria-selected="true" data-aba="adicionar">{{ icon('add') }}Adicionar</button>
+        <button type="button" role="tab" id="tab-contextos" aria-controls="aba-contextos" aria-selected="false" data-aba="contextos" tabindex="-1">{{ icon('layers') }}Contextos<span class="count" data-total>0</span></button>
+        <button type="button" class="icon-btn panel-close" data-acao="painel-esquerdo" aria-label="Fechar painel de elementos">{{ icon('close') }}</button>
+      </div>
+      <div class="panel-body" id="aba-adicionar" role="tabpanel" aria-labelledby="tab-adicionar">
+        <label class="search-field">{{ icon('search') }}<input type="search" placeholder="Buscar elementos..." aria-label="Buscar elementos" data-busca-paleta autocomplete="off"></label>
+        <button type="button" class="btn btn-block btn-dashed" hx-get="/modelos/tipos/novo" hx-target="#modal">{{ icon('sparkle') }}Criar campo personalizado</button>
+        {% for group in groups %}
+        <section class="palette-group" data-grupo="{{ group.id }}">
+          <button type="button" class="group-toggle" aria-expanded="true">{{ icon('chevron') }}<span>{{ group.title }}</span><span class="count" data-contagem>{{ group['items']|length }}</span></button>
+          <div class="card-grid" {% if group.id == 'personalizados' %}id="tipos-personalizados" hx-get="/modelos/tipos/paleta" hx-trigger="tipos-atualizados from:body" hx-swap="innerHTML"{% endif %}>
+            {% include "partials/palette_group.html" %}
+          </div>
+        </section>
+        {% endfor %}
+        <p class="palette-empty" data-sem-resultados hidden>Nenhum elemento corresponde à busca.</p>
+      </div>
+      <div class="panel-body" id="aba-contextos" role="tabpanel" aria-labelledby="tab-contextos" hidden>
+        <label class="search-field">{{ icon('search') }}<input type="search" placeholder="Buscar campos do documento..." aria-label="Buscar campos do documento" data-busca-arvore autocomplete="off"></label>
+        <div class="tree" data-arvore role="tree" aria-label="Campos do documento"></div>
+      </div>
+    </aside>
+    <div class="resizer" data-redimensionar="esquerdo" role="separator" aria-orientation="vertical" aria-label="Redimensionar painel de elementos" tabindex="0"></div>
+
+    <section class="workspace" aria-label="Documento">
+      <div class="guide" data-guia>
+        <ol>
+          <li><b>1</b><span><strong>Adicione um elemento</strong>Escolha um tipo de campo.</span></li>
+          <li><b>2</b><span><strong>Posicione no documento</strong>Clique ou arraste para definir sua região.</span></li>
+          <li><b>3</b><span><strong>Ajuste as propriedades</strong>Configure o campo selecionado.</span></li>
+        </ol>
+        <button type="button" class="icon-btn" data-acao="fechar-guia" aria-label="Ocultar guia" data-tooltip="Ocultar guia">{{ icon('close') }}</button>
+      </div>
+      <div class="canvas-toolbar" role="toolbar" aria-label="Ferramentas do documento">
+        <div class="tool-group">
+          <button type="button" class="tool" data-acao="painel-esquerdo" aria-label="Mostrar ou ocultar elementos" data-tooltip="Elementos e contextos">{{ icon('panel-left') }}</button>
+        </div>
+        <div class="tool-group">
+          <button type="button" class="tool" data-ferramenta="select" aria-pressed="true" aria-label="Selecionar" data-tooltip="Selecionar e mover (V)">{{ icon('select') }}</button>
+          <button type="button" class="tool" data-ferramenta="pan" aria-pressed="false" aria-label="Mover a visualização" data-tooltip="Mover a visualização (H ou Espaço)">{{ icon('hand') }}</button>
+        </div>
+        <div class="tool-group">
+          <button type="button" class="tool" data-acao="desfazer" aria-label="Desfazer" data-tooltip="Desfazer (Ctrl+Z)" disabled>{{ icon('undo') }}</button>
+          <button type="button" class="tool" data-acao="refazer" aria-label="Refazer" data-tooltip="Refazer (Ctrl+Shift+Z)" disabled>{{ icon('redo') }}</button>
+        </div>
+        <div class="tool-group">
+          <button type="button" class="tool" data-acao="afastar" aria-label="Diminuir zoom" data-tooltip="Diminuir zoom (Ctrl+-)">{{ icon('zoom-out') }}</button>
+          <output class="zoom-value" data-zoom aria-label="Zoom atual">100%</output>
+          <button type="button" class="tool" data-acao="aproximar" aria-label="Aumentar zoom" data-tooltip="Aumentar zoom (Ctrl++)">{{ icon('zoom-in') }}</button>
+          <button type="button" class="tool" data-acao="ajustar" aria-label="Ajustar à página" data-tooltip="Ajustar à página (Ctrl+0)">{{ icon('fit') }}</button>
+          <button type="button" class="tool" data-acao="largura" aria-label="Ajustar à largura" data-tooltip="Ajustar à largura">{{ icon('fit-width') }}</button>
+        </div>
+        <span class="toolbar-spacer"></span>
+        <span class="page-indicator" data-tooltip="Templates OCRSD têm uma página">Página 1 de 1</span>
+        <div class="tool-group">
+          <button type="button" class="tool" data-acao="tela-cheia" aria-label="Tela cheia" data-tooltip="Área de trabalho em tela cheia">{{ icon('fullscreen') }}</button>
+          <button type="button" class="tool" data-acao="painel-direito" aria-label="Mostrar ou ocultar propriedades" data-tooltip="Propriedades">{{ icon('panel-right') }}</button>
+        </div>
+      </div>
+      <div class="canvas" data-tela-container>
+        <div class="canvas-stage"><svg data-tela role="img" aria-label="Documento {{ model.label }} com as áreas mapeadas"></svg></div>
+        <div class="placement-banner" data-banner hidden>
+          <span data-banner-texto></span>
+          <button type="button" class="btn btn-sm" data-acao="cancelar-insercao">Cancelar · Esc</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="resizer" data-redimensionar="direito" role="separator" aria-orientation="vertical" aria-label="Redimensionar painel de propriedades" tabindex="0"></div>
+    <aside class="panel panel-right" data-painel="direito" aria-label="Propriedades do campo">
+      <div class="panel-head">
+        <h2>Propriedades do campo</h2>
+        <button type="button" class="icon-btn panel-close" data-acao="painel-direito" aria-label="Fechar propriedades">{{ icon('close') }}</button>
+      </div>
+      <div class="panel-body">
+        <div data-inspetor></div>
+        <form id="form-salvar" class="document-panel" hx-post="/modelos/{{ model.id }}/mapeamento" hx-swap="none" hx-disinherit="*" data-documento>
+          <p class="empty-state">{{ icon('select') }}<span>Selecione um campo no documento para editar suas propriedades.</span></p>
+          <details class="inspector-section" open>
+            <summary>Documento</summary>
+            <div class="form-stack compact">
+              <label class="field">Nome do modelo<input name="label" value="{{ model.label }}" maxlength="120" required data-nome-modelo></label>
+              <label class="field">Descrição<textarea name="description" maxlength="500" rows="2">{{ model.description }}</textarea></label>
+              <dl class="facts" data-fatos></dl>
+            </div>
+          </details>
+          <details class="inspector-section" open>
+            <summary>Verificação para publicação</summary>
+            <ul class="issues" data-pendencias></ul>
+          </details>
+        </form>
+      </div>
     </aside>
   </div>
-  <p class="editor-help">Use <kbd>Ctrl</kbd>+<kbd>Z</kbd> para desfazer, <kbd>Ctrl</kbd>+<kbd>D</kbd> para duplicar, <kbd>Delete</kbd> para excluir e <kbd>Ctrl</kbd>+<kbd>S</kbd> para salvar.</p>
-</section>
-<template id="modelo-inspetor">
-  <div class="form-stack compact">
-    <span class="tag tag-blue" data-texto="tipo"></span>
-    <label class="field">ID do campo<input data-prop="field_id" autocomplete="off" spellcheck="false"></label>
-    <label class="field">Rótulo<input data-prop="label"></label>
-    <label class="field">Descrição<textarea data-prop="description" rows="2"></textarea></label>
-    <label class="field">Tipo de dado
-      <select data-prop="data_type">{% for item in data_types %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select>
-    </label>
-    <fieldset class="bbox">
-      <legend>Área de preenchimento</legend>
-      <div class="grid-2">
-        <label class="field">X<input type="number" data-prop="x" step="1"></label>
-        <label class="field">Y<input type="number" data-prop="y" step="1"></label>
-        <label class="field">Largura<input type="number" data-prop="w" step="1" min="1"></label>
-        <label class="field">Altura<input type="number" data-prop="h" step="1" min="1"></label>
-      </div>
-    </fieldset>
-    <label class="field">Modo de seleção
-      <select data-prop="selection_mode"><option value="single">Única</option><option value="multiple">Múltipla</option></select>
-    </label>
-    <label class="field">Validações JSON
-      <textarea class="code" data-prop="validation" rows="5" spellcheck="false"></textarea>
-      <small class="field-error" data-erro hidden>Use um objeto JSON válido.</small>
-    </label>
-    <label class="check"><input type="checkbox" data-prop="render_as_printed">Renderizar como impresso</label>
-    <label class="check"><input type="checkbox" data-prop="always_redact">Sempre ocultar no processamento</label>
-    <p class="hint" data-texto="elementos" hidden></p>
-  </div>
-</template>
-<template id="modelo-vazio"><p class="empty-hint">Selecione ou desenhe um campo para editar as propriedades.</p></template>
+</div>
+<template id="icones">{% for name in icon_names %}<span data-icone="{{ name }}">{{ icon(name) }}</span>{% endfor %}</template>
 <script type="application/json" id="dados-editor">{{ editor|tojson }}</script>
 {% endblock %}

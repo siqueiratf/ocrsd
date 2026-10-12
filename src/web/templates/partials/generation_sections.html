@@ -1,6 +1,7 @@
 {% from "macros.html" import icon, writing_controls %}
 <section class="card section-card">
   <header class="section-title"><span class="step">1</span><div><h2>Documento base</h2><p>Selecione o template e o mapeamento.</p></div></header>
+  {% if draft %}<p class="notice notice-warning">{{ icon('alert') }}<span>O modelo “{{ draft.label }}” ainda é um rascunho. <a href="/modelos/{{ draft.id }}/editor">Publique-o no editor</a> para usá-lo na geração.</span></p>{% endif %}
   <div class="grid-2">
     <label class="field">Modelo
       <select name="document_type" hx-post="/geracao/formulario" hx-target="#secoes" hx-trigger="change" hx-vals='{"acao": "documento"}'>
@@ -35,19 +36,25 @@
 </section>
 <section class="card section-card">
   <header class="section-title"><span class="step">4</span><div><h2>Escrita</h2><p>Use um preset ou personalize as opções suportadas.</p></div></header>
-  <div class="grid-2">
-    <label class="field">Preset
-      <span class="select-refresh" hx-get="/geracao/presets" hx-trigger="presets-atualizados from:body" hx-target="find select" hx-swap="innerHTML" hx-disinherit="*">
-        <select name="preset" hx-post="/geracao/formulario" hx-target="#secoes" hx-trigger="change" hx-vals='{"acao": "preset"}'>
-          {% include "partials/preset_options.html" %}
-        </select>
-      </span>
-    </label>
-    <div class="field field-action">
-      <span>Laboratório</span>
-      <button type="button" class="btn" hx-get="/presets/laboratorio" hx-target="#modal">{{ icon('pen') }}Testar e comparar escrita</button>
-    </div>
+  <div class="preset-strip-head">
+    <span class="field-label">Preset de escrita</span>
+    <button type="button" class="btn btn-sm" hx-post="/geracao/rascunho" hx-include="#form-geracao">{{ icon('pen') }}Ver todos os presets de escrita</button>
   </div>
+  <div class="preset-strip" role="radiogroup" aria-label="Presets de escrita" hx-post="/geracao/formulario" hx-target="#secoes" hx-trigger="change" hx-vals='{"acao": "preset"}'>
+    <label class="preset-chip preset-chip-custom">
+      <input type="radio" name="preset" value="" {% if not options.preset %}checked{% endif %}>
+      <span class="preset-chip-sample">{{ icon('pen') }}</span>
+      <span class="preset-chip-text"><b>Configuração personalizada</b><small>Parâmetros abaixo</small></span>
+    </label>
+    {% for item in strip %}
+    <label class="preset-chip" title="{{ item.summary }}">
+      <input type="radio" name="preset" value="{{ item.id }}" {% if item.id == options.preset %}checked{% endif %}>
+      <span class="preset-chip-sample"><img src="{{ item.thumbnail }}" alt="" loading="lazy" decoding="async" width="520" height="116"></span>
+      <span class="preset-chip-text"><b>{{ item.title }}</b><small>{{ {'padrao': 'Padrão', 'meu': 'Meu preset', 'compartilhado': 'Compartilhado'}[item.kind] }} · {{ item.writing.model }}</small></span>
+    </label>
+    {% endfor %}
+  </div>
+  {% if chosen_preset %}<p class="hint">Preset “{{ chosen_preset.title }}”{{ " ajustado nos parâmetros abaixo; a geração registra a configuração efetiva." if preset_adjusted else " aplicado. Ajustes abaixo valem somente para esta geração." }}</p>{% endif %}
   {{ writing_controls(options.writing, models, "/geracao/formulario", "#secoes", "geracao") }}
 </section>
 <section class="card section-card">

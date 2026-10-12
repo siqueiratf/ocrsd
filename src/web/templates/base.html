@@ -1,9 +1,9 @@
-{% from "macros.html" import icon %}<!doctype html>
+{% from "macros.html" import icon, toast %}<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#102c46">
+  <meta name="theme-color" content="#16446f">
   <meta name="color-scheme" content="light">
   <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyCacheSize":0,"attributesToSettle":["class","width","height"],"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true}]}'>
   <title>{% block title %}{% endblock %} · OCRSD | LabREC</title>
@@ -13,36 +13,56 @@
   <script src="/static/app.js?v={{ VERSION }}" defer></script>
   {% block scripts %}{% endblock %}
 </head>
-<body {% if request.state.workspace_token %}data-sessao-nova{% endif %}>
+<body class="{% block body_class %}{% endblock %}" {% if request.state.workspace_token %}data-sessao-nova{% endif %}>
   <a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="{% block home %}/modelos{% endblock %}">
-        <span class="brand-mark">Lab<b>REC</b></span>
-        <span class="brand-product"><strong>OCRSD</strong><small>Documentos sintéticos</small></span>
+      <a class="brand" href="{% block home %}/modelos{% endblock %}" title="Galeria de Modelos">
+        <img class="brand-logo" src="/static/labrec-logo.svg?v={{ VERSION }}" alt="LabREC" width="367" height="106">
+        <span class="brand-product"><b>OCRSD</b><small>Only Civil Registry Synthetic Dataset</small></span>
       </a>
       {% block nav %}
       <nav class="nav" aria-label="Navegação principal">
-        <a href="/modelos" {% if page == 'modelos' %}aria-current="page"{% endif %}>{{ icon('models') }}<span>Modelos</span></a>
-        <a href="/geracao" {% if page == 'geracao' %}aria-current="page"{% endif %}>{{ icon('generate') }}<span>Geração</span></a>
-        <a href="/resultados" {% if page == 'resultados' %}aria-current="page"{% endif %}>{{ icon('results') }}<span>Resultados</span></a>
-        <a href="/presets" {% if page == 'presets' %}aria-current="page"{% endif %}>{{ icon('presets') }}<span>Presets</span></a>
+        <a href="/modelos" {% if page == 'modelos' %}aria-current="page"{% endif %}><span class="nav-prefix">Galeria de </span>Modelos</a>
+        <a href="/geracao" {% if page == 'geracao' %}aria-current="page"{% endif %}>Geração</a>
+        <a href="/resultados" {% if page == 'resultados' %}aria-current="page"{% endif %}>Resultados</a>
       </nav>
+      <div class="nav-menus">
+        <details class="menu">
+          <summary {% if page == 'ferramentas' %}class="is-current"{% endif %}>Ferramentas{{ icon('chevron') }}</summary>
+          <div class="menu-list">
+            <a href="/ferramentas/realismo">{{ icon('realism') }}<span>Comparação de realismo<small>Antes e depois dos filtros</small></span></a>
+            <a href="/api/docs">{{ icon('code') }}<span>Documentação da API<small>Contrato OpenAPI interativo</small></span></a>
+          </div>
+        </details>
+        <details class="menu">
+          <summary {% if page == 'presets' %}class="is-current"{% endif %}>Presets{{ icon('chevron') }}</summary>
+          <div class="menu-list">
+            <a href="/presets/escrita">{{ icon('pen') }}<span>Presets de Escrita<small>Galeria e editor de estilos de escrita</small></span></a>
+            <a href="/presets/tipos">{{ icon('sparkle') }}<span>Tipos de campo<small>Campos personalizados reutilizáveis</small></span></a>
+          </div>
+        </details>
+      </div>
       {% endblock %}
-      <span class="topbar-badge">Sem validade legal</span>
     </div>
-    <div class="stripe" aria-hidden="true"><i></i><i></i><i></i></div>
   </header>
   <main id="conteudo" class="page">
     {% block content %}{% endblock %}
   </main>
+  {% block footer %}
   <footer class="footer">
     <div class="footer-inner">
-      <span><b>LabREC</b> · Laboratório do Registro Civil</span>
-      <span>OCRSD · material exclusivamente sintético para pesquisa e ensino</span>
+      <div class="footer-text">
+        <span><b>LabREC</b> · Laboratório de pesquisa e desenvolvimento do Registro Civil do Brasil</span>
+        <span>OCRSD · Only Civil Registry Synthetic Dataset</span>
+      </div>
+      <img class="footer-logo" src="/static/registro-civil-logo.svg?v={{ VERSION }}" alt="Registro Civil" width="213" height="76" loading="lazy">
     </div>
   </footer>
-  <div id="avisos" class="toasts" aria-live="polite"></div>
+  {% endblock %}
+  <div id="avisos" class="toasts" aria-live="polite" {% if page in ['modelos', 'geracao', 'resultados', 'presets', 'ferramentas'] %}data-activity-source="/geracao/atividade"{% endif %}></div>
+  <template id="modelo-aviso">{{ toast('', 'sucesso') }}</template>
+  <template id="modelo-aviso-erro">{{ toast('', 'erro') }}</template>
   <dialog id="modal" class="dialog" aria-labelledby="modal-titulo"></dialog>
 </body>
 </html>

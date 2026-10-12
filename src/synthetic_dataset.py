@@ -18,6 +18,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from src.document_types import build_dataset_run_dir, infer_document_type_key
 from src.document_filters import apply_realistic_filters_to_pdf
+from src.field_rules import (DATE_PARTS, DNV_TEST_PREFIX, SEPARATED_DATE, TEXT_TYPES, dnv_metadata, document_number, format_date,
+                              format_dnv, masked_value, sex_text)
 from src.neural_handwriting import NeuralPen, load_model, prepare_text, render_strokes
 from src.writing_presets import document_id_with_preset
 
@@ -39,6 +41,8 @@ LAST_NAMES = (
 )
 STREETS = ("Rua das Flores", "Avenida Brasil", "Rua São José", "Rua das Acácias", "Avenida Central")
 CITIES = ("São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Recife", "Salvador")
+OCCUPATIONS = ("Professora", "Enfermeiro", "Agricultora", "Comerciante", "Motorista", "Engenheira",
+               "Pedreiro", "Advogada", "Estudante", "Técnico em informática", "Auxiliar administrativo", "Costureira")
 UF_VALUES = ("AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO")
 LOCATION_PROFILES = (
     {"cep": "01001000", "uf": "SP", "city": "São Paulo", "neighborhood": "Sé", "street": "Praça da Sé", "ibge": "3550308"},
@@ -105,7 +109,7 @@ def _normalized_text(value: str) -> str:
 def _merged_validation(field: dict) -> dict:
     validation = dict(field.get("validation") or {})
     for key, value in field.items():
-        if key in {"allowed_values", "digit_count", "pattern", "min", "max", "min_value", "max_value", "allow_digits", "format"}:
+        if key in {"allowed_values", "digit_count", "pattern", "min", "max", "min_value", "max_value", "allow_digits", "format", "mask"}:
             validation.setdefault(key, value)
     return validation
 
@@ -480,11 +484,73 @@ def render_checkbox_mark(width: int, height: int, rng: random.Random,
     return _fit_mark_image(image, width, height, variant), {"rendering": metadata}
 
 
+def _shared(field: dict, context: dict | None, default_key: str | None, factory):
+    key = _merged_validation(field).get("semantic_key") or default_key
+    if context is None or not key:
+        return factory()
+    shared = context.setdefault("shared", {})
+    name = f'{field.get("data_type", "text")}:{key}'
+    if name not in shared:
+        shared[name] = factory()
+    return shared[name]
+
+
+def random_date(field: dict, rng: random.Random, context: dict | None = None) -> date:
+    return _shared(field, context, None, lambda: date(1980, 1, 1) + timedelta(days=rng.randrange(0, 46 * 365)))
+
+
+def random_sex(field: dict, rng: random.Random, context: dict | None = None) -> str:
+    return _shared(field, context, "sexo", lambda: rng.choice(("M", "F")))
+
+
+def random_dnv(field: dict, rng: random.Random, context: dict | None = None) -> str:
+    prefix = str(_merged_validation(field).get("prefix") or DNV_TEST_PREFIX)
+    return _shared(field, context, "dnv", lambda: prefix + f"{rng.randrange(10 ** 8):08d}" + str(rng.randrange(10)))
+
+
+def typed_value(field: dict, rng: random.Random, context: dict | None = None) -> tuple[str, dict]:
+    data_type = field.get("data_type", "text")
+    validation = _merged_validation(field)
+    if data_type == "date":
+        generated = random_date(field, rng, context)
+        return format_date(generated, validation.get("format")), {"date": generated.isoformat()}
+    if data_type == "sex":
+        code = random_sex(field, rng, context)
+        return sex_text(code, validation.get("format")), {"sex": code}
+    if data_type == "dnv_number":
+        digits = random_dnv(field, rng, context)
+        return format_dnv(digits, validation.get("format")), {"identifier": dnv_metadata(digits)}
+    return random_value(field, rng, context), {}
+
+
+def element_values(field: dict, rng: random.Random, context: dict | None = None) -> tuple[str, list[tuple[dict, str]], dict] | None:
+    elements = field.get("elements") or []
+    data_type = field.get("data_type", "text")
+    if not elements or data_type == "checkbox":
+        return None
+    ordered = sorted(elements, key=lambda item: item.get("index", 10_000))
+    if data_type in {"digit_sequence", "text_sequence"}:
+        sequence = sequence_value(field, ordered, rng, context)
+        return sequence, list(zip(ordered, sequence)), {}
+    if data_type == "date" and _merged_validation(field).get("format") == SEPARATED_DATE:
+        generated = random_date(field, rng, context)
+        parts = [(element, generated.strftime(DATE_PARTS[element["part"]][1])) for element in elements if element.get("part") in DATE_PARTS]
+        return format_date(generated, SEPARATED_DATE), parts, {"date": generated.isoformat()}
+    if data_type == "dnv_number" and _merged_validation(field).get("format") == "caixas":
+        digits = random_dnv(field, rng, context)
+        return digits, list(zip(ordered, digits)), {"identifier": dnv_metadata(digits)}
+    return None
+
+
 def random_value(field: dict, rng: random.Random, context: dict | None = None) -> str:
     data_type = field.get("data_type", "text")
     validation = _merged_validation(field)
     allowed = validation.get("allowed_values") or []
     label = _normalized_text(" ".join(str(field.get(key, "")) for key in ("field_id", "label", "description", "notes")))
+    if data_type == "digit_sequence":
+        return _random_digit_sequence(field, rng, context)
+    if data_type in {"date", "sex", "dnv_number"}:
+        return typed_value(field, rng, context)[0]
     profile = _location_profile(field, rng, context)
     if profile:
         if data_type == "uf" or " uf" in f" {label}" or label.endswith("uf"):
@@ -501,15 +567,25 @@ def random_value(field: dict, rng: random.Random, context: dict | None = None) -
             return profile["street"]
     if allowed:
         return str(rng.choice(allowed))
+    if validation.get("mask"):
+        return masked_value(str(validation["mask"]), rng)
+    if data_type == "municipality":
+        return profile["city"] if profile else rng.choice(CITIES)
+    if data_type == "address":
+        return profile["street"] if profile else f"{rng.choice(STREETS)}, {rng.randrange(1, 1500)}"
+    if data_type == "occupation":
+        return rng.choice(OCCUPATIONS)
+    if data_type == "document":
+        return document_number(str(validation.get("document_kind", "cpf")), rng)
+    if data_type == "signature":
+        return f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}"
     if data_type == "uf":
         return rng.choice(UF_VALUES)
-    if data_type == "digit_sequence":
-        return _random_digit_sequence(field, rng, context)
     if data_type == "person_name" or "nome" in label:
         return f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)} {rng.choice(LAST_NAMES)}"
     if data_type == "date" or "data" in label:
         generated = date(1980, 1, 1) + timedelta(days=rng.randrange(0, 46 * 365))
-        return generated.strftime("%d/%m/%Y")
+        return format_date(generated, validation.get("format") if data_type == "date" else None)
     if data_type == "time" or "hora" in label:
         return f"{rng.randrange(0, 24):02d}:{rng.randrange(0, 60):02d}"
     if data_type == "cep" or "cep" in label:
@@ -520,6 +596,10 @@ def random_value(field: dict, rng: random.Random, context: dict | None = None) -
     if data_type == "integer" or any(word in label for word in ("nº", "numero", "número", "idade", "quantidade")):
         return str(_bounded_integer(field, rng, context))
     if data_type == "decimal" or "peso" in label:
+        if data_type == "decimal" and ("min_value" in validation or "max_value" in validation or "decimals" in validation):
+            minimum = float(validation.get("min_value", 0))
+            maximum = float(validation.get("max_value", max(minimum, 100)))
+            return f"{rng.uniform(minimum, maximum):.{int(validation.get('decimals', 2))}f}".replace(".", ",")
         return f"{rng.uniform(2.0, 4.5):.3f}".replace(".", ",")
     if "município" in label or "municipio" in label or "cidade" in label:
         return rng.choice(CITIES)
@@ -530,6 +610,25 @@ def random_value(field: dict, rng: random.Random, context: dict | None = None) -
     max_length = int(validation.get("max_length", 24))
     value = rng.choice((rng.choice(CITIES), rng.choice(STREETS), "Não informado", "Hospital Municipal"))
     return _ensure_matches_validation(value[:max_length], field, rng, context)
+
+
+def sequence_value(field: dict, ordered: list[dict], rng: random.Random, context: dict | None = None) -> str:
+    if field.get("data_type") == "digit_sequence":
+        sequence = random_value({**field, "elements": ordered}, rng, context)
+    else:
+        sequence = "".join(rng.choice(string.ascii_uppercase) for _ in ordered)
+    if len(sequence) < len(ordered):
+        sequence = sequence + "".join(rng.choice(string.digits) for _ in range(len(ordered) - len(sequence)))
+    return sequence[:len(ordered)]
+
+
+def field_texts(field: dict, rng: random.Random, context: dict | None = None) -> list[str]:
+    if field.get("data_type") == "checkbox" and field.get("elements"):
+        return []
+    composite = element_values(field, rng, context)
+    if composite:
+        return [text for _, text in composite[1]]
+    return [typed_value(field, rng, context)[0]]
 
 
 def _safe_name(value: str) -> str:
@@ -597,6 +696,8 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                      pencil: bool = False, force_printed: bool = False) -> tuple[str, dict]:
         x1, y1, x2, y2 = rect_values
         rect = fitz.Rect(x1 * point_scale, y1 * point_scale, x2 * point_scale, y2 * point_scale)
+        if not text.strip():
+            return text, {}
         active_pen = numeric_neural_pen if is_numeric_text(text) else text_neural_pen
         neural_enabled = handwriting if is_numeric_text(text) else text_handwriting
         if (
@@ -645,6 +746,11 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         if field_id not in selected_ids:
             continue
         elements = field.get("elements") or []
+        blank_probability = float((field.get("validation") or {}).get("blank_probability") or 0)
+        if blank_probability > 0 and rng.random() < blank_probability:
+            values[field_id] = ""
+            entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"], "blank": True})
+            continue
         if field.get("data_type") == "checkbox" and elements:
             count = 1 if field.get("selection_mode", "single") == "single" else rng.randint(1, len(elements))
             selected_elements = rng.sample(elements, count)
@@ -672,41 +778,33 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                 "bbox": field["bbox"], "elements": element_entries,
             })
             continue
-        if field.get("data_type") in {"digit_sequence", "text_sequence"} and elements:
-            ordered = sorted(elements, key=lambda item: item.get("index", 10_000))
-            if field.get("data_type") == "digit_sequence":
-                sequence = random_value({**field, "elements": ordered}, rng, generation_context)
-            else:
-                sequence = "".join(rng.choice(string.ascii_uppercase) for _ in ordered)
-            if len(sequence) < len(ordered):
-                sequence = sequence + "".join(rng.choice(string.digits) for _ in range(len(ordered) - len(sequence)))
-            sequence = sequence[:len(ordered)]
+        composite = element_values(field, rng, generation_context)
+        if composite:
+            requested, parts, semantic = composite
             element_entries = []
-            for character, element in zip(sequence, ordered):
+            for element, character in parts:
                 rendered, metadata = insert_value(
                     element["bbox"], character,
                     pencil=field.get("data_type") == "text_sequence",
                     force_printed=bool(field.get("render_as_printed", False)),
                 )
                 element_entries.append({**element, "value": rendered, **metadata})
-            requested_sequence = sequence
-            sequence = "".join(element["value"] for element in element_entries)
+            sequence = "".join(element["value"] for element in element_entries) if field.get("data_type") in {"digit_sequence", "text_sequence"} else requested
             values[field_id] = sequence
             entries.append({
                 "field_id": field_id, "label": field.get("label", ""), "value": sequence,
-                "bbox": field["bbox"], "elements": element_entries,
-                **({"requested_value": requested_sequence} if (numeric_neural_pen or text_neural_pen) is not None else {}),
+                "bbox": field["bbox"], "elements": element_entries, **semantic,
+                **({"requested_value": requested} if (numeric_neural_pen or text_neural_pen) is not None else {}),
             })
             continue
-        value = random_value(field, rng, generation_context)
-        text_types = {"text", "person_name", "enum", "uf"}
+        value, semantic = typed_value(field, rng, generation_context)
         value, metadata = insert_value(
             field["bbox"], value,
-            pencil=field.get("data_type", "text") in text_types and not is_numeric_text(value),
+            pencil=field.get("data_type", "text") in TEXT_TYPES and not is_numeric_text(value),
             force_printed=bool(field.get("render_as_printed", False)),
         )
         values[field_id] = value
-        entries.append({"field_id": field_id, "label": field.get("label", ""), "value": value, "bbox": field["bbox"], **metadata})
+        entries.append({"field_id": field_id, "label": field.get("label", ""), "value": value, "bbox": field["bbox"], **semantic, **metadata})
 
     file_document_id = document_id_with_preset(document_id, style_preset_uid)
     safe_id = _safe_name(file_document_id)

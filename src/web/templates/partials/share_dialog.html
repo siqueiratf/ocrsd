@@ -2,9 +2,10 @@
 <form class="dialog-panel" hx-post="/resultados/{{ job.id }}/compartilhamentos" hx-target="#modal" hx-disabled-elt="find button[type=submit]" hx-disinherit="*">
   {{ dialog_head("Compartilhar resultado") }}
   <div class="dialog-body form-stack">
-    <p class="lead-small">O link é privado e pode ser revogado a qualquer momento. A chave fica somente no endereço enviado.</p>
+    <p class="lead-small">Crie um link privado que pode ser revogado a qualquer momento.</p>
     <label class="check"><input type="checkbox" name="allow_download">Permitir download dos arquivos</label>
     <label class="field">Validade do link em horas<input type="number" name="expires_in_hours" min="1" max="720" value="24" required><small class="hint">O link nunca ultrapassa a expiração do job ({{ job.expires_at|data }}).</small></label>
+    <div id="compartilhamentos">{% include "partials/shares.html" %}</div>
   </div>
   <footer class="dialog-foot">
     <button type="button" class="btn" data-fechar>Cancelar</button>

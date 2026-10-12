@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import fcntl
+import json
 import logging
 import multiprocessing
 import os
@@ -42,12 +43,17 @@ def execute(settings_data: dict, identifier: str, parent_pid: int) -> None:
     resource.setrlimit(resource.RLIMIT_FSIZE, (settings.max_job_bytes,) * 2)
     store = JobStore(settings)
     try:
+        import cv2
+        cv2.setNumThreads(1)
         row = store.get(identifier)
         artifacts = generate(GenerationOptions.model_validate_json(row["options"]), store.directory(identifier), settings,
-                             lambda completed: store.progress(identifier, completed), row.get("owner_id"))
+                             lambda completed: None, row.get("owner_id"),
+                             lambda completed, pdf, ground_truth: store.publish_document(identifier, completed, pdf, ground_truth),
+                             store.source(row))
         if sum(item["size"] for item in artifacts) > settings.max_job_bytes:
             raise ValueError("Limite de tamanho excedido")
-        store.finish(identifier, "succeeded", artifacts=artifacts)
+        published = {item["name"]: item for item in store.artifacts(store.get(identifier))}
+        store.finish(identifier, "succeeded", artifacts=[published.get(item["name"], item) for item in artifacts])
     except Exception as exc:
         logger.exception("Falha no job %s", identifier)
         store.finish(identifier, "failed", failure_message(exc))
@@ -88,8 +94,16 @@ def run_job(store: JobStore, row: dict) -> None:
         if stopped is None and process.exitcode is not None and process.exitcode < 0:
             stopped = "O processo de geração excedeu um limite de recursos do servidor"
         store.finish(row["id"], "failed", stopped or "Processo de geração interrompido inesperadamente")
-    if store.get(row["id"])["status"] != "succeeded":
-        shutil.rmtree(store.directory(row["id"]), ignore_errors=True)
+    current = store.get(row["id"])
+    if current["status"] != "succeeded":
+        directory = store.directory(row["id"])
+        published = {item["name"] for item in json.loads(current["artifacts"])}
+        if not published:
+            shutil.rmtree(directory, ignore_errors=True)
+        elif directory.exists():
+            for path in directory.iterdir():
+                if path.is_file() and path.name not in published:
+                    path.unlink()
 
 
 def main() -> None:

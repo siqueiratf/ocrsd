@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, status %}
+{% block title %}{{ result.job.name }} · Resultados{% endblock %}
+{% block body_class %}is-result-detail{% endblock %}
+{% block footer %}{% endblock %}
+{% block scripts %}<script src="/static/pdf_viewer.js?v={{ VERSION }}" defer></script><script src="/static/results.js?v={{ VERSION }}" defer></script>{% endblock %}
+{% block content %}
+{% set job = result.job %}
+<div class="result-page" data-job-id="{{ job.id }}" data-back-url="{{ back_url }}">
+  {% set oob_toolbar = False %}{% include "partials/result_toolbar.html" %}
+  {% include "partials/result_workspace.html" %}
+</div>
+{% endblock %}

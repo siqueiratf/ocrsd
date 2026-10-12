@@ -1,0 +1,9 @@
+<div class="wizard-pdf" data-pdf-page>
+  <img src="/modelos/{{ current_type.id }}/previa.png?largura=1800" alt="Documento {{ current_type.label }}" decoding="async">
+  {% if definition %}<div class="wizard-overlay">
+    {% for field in fields %}{% for box in (field.elements|map(attribute='bbox')|list if field.elements else [field.bbox]) %}
+    {% if box and box|length == 4 %}
+    {% if editable %}<button type="button" class="wizard-box {{ 'is-selected' if field.id in selected_fields }}" data-overlay-field="{{ field.id }}" aria-label="Alternar campo {{ field.label }}" title="{{ field.label }}" data-box-x="{{ box[0] / definition.page_size_px[0] * 100 }}" data-box-y="{{ box[1] / definition.page_size_px[1] * 100 }}" data-box-width="{{ (box[2] - box[0]) / definition.page_size_px[0] * 100 }}" data-box-height="{{ (box[3] - box[1]) / definition.page_size_px[1] * 100 }}"></button>{% else %}<span class="wizard-box" title="{{ field.label }}" data-box-x="{{ box[0] / definition.page_size_px[0] * 100 }}" data-box-y="{{ box[1] / definition.page_size_px[1] * 100 }}" data-box-width="{{ (box[2] - box[0]) / definition.page_size_px[0] * 100 }}" data-box-height="{{ (box[3] - box[1]) / definition.page_size_px[1] * 100 }}"></span>{% endif %}
+    {% endif %}{% endfor %}{% endfor %}
+  </div>{% endif %}
+</div>

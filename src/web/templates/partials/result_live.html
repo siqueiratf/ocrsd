@@ -1,0 +1,7 @@
+{% set job = result.job %}
+<div id="result-live-update" class="result-live-update" data-document-count="{{ result.documents|length }}" {% if job.status in ACTIVE %}hx-get="/resultados/{{ job.id }}/documentos/atualizacoes?documento={{ result.selected_document.number }}&amp;quantidade={{ result.documents|length }}" hx-trigger="every 3s" hx-target="this" hx-swap="outerHTML"{% endif %}>{% if job.status in ACTIVE %}<span class="spinner" aria-hidden="true"></span><span>Gerando · {{ job.completed }} de {{ job.total }} documentos prontos</span><progress max="{{ job.total }}" value="{{ job.completed }}" aria-label="Progresso da geração"></progress>{% else %}<span>{{ job.completed }} de {{ job.total }} documentos gerados</span>{% if job.status == 'failed' %}<details><summary>Geração interrompida · ver detalhes</summary><span>{{ result.safe_error }}</span></details>{% endif %}{% endif %}</div>
+{% if oob_update %}
+{% if new_documents %}<div hx-swap-oob="beforeend:#result-tree-list">{% set rows = new_documents %}{% include "partials/result_tree_rows.html" %}</div>{% endif %}
+<span data-document-total id="result-document-total" hx-swap-oob="outerHTML">{{ result.documents|length }}{% if job.status in ACTIVE %} de {{ job.total }}{% endif %}</span>
+{% if job.status not in ACTIVE %}{% set oob_toolbar = True %}{% include "partials/result_toolbar.html" %}{% endif %}
+{% endif %}

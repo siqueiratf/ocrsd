@@ -1,4 +1,0 @@
-<option value="">Configuração personalizada</option>
-{% for preset in presets %}
-<option value="{{ preset.id }}" {% if not preset.available %}disabled{% endif %}>{{ preset.label }}{{ " · catálogo" if preset.builtin else " · privado" }}{% if not preset.available %} · indisponível{% endif %}</option>
-{% endfor %}

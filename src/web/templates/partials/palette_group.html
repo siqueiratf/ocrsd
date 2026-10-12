@@ -1,0 +1,10 @@
+{% from "macros.html" import icon %}
+{% for item in group['items'] %}
+<button type="button" class="element-card cat-{{ item.category }}" draggable="true" data-elemento="{{ item.key }}"
+        data-busca="{{ item.title }} {{ item.subtitle }} {{ item.search }}" data-config='{{ item|tojson }}'>
+  <span class="element-icon">{{ icon(item.icon) }}</span>
+  <span class="element-text"><b>{{ item.title }}</b><small>{{ item.subtitle }}</small></span>
+</button>
+{% else %}
+<p class="palette-empty">Nenhum tipo personalizado. Use “Criar campo personalizado” para definir um.</p>
+{% endfor %}

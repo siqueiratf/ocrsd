@@ -1,0 +1,22 @@
+{% from "macros.html" import icon, toast %}
+<h2>Compartilhamento</h2>
+<p class="share-state-line">
+  {% if entry.shared %}<span class="tag tag-blue">{{ icon('link') }}Compartilhado por link</span> {{ grants }} {{ "espaço de trabalho tem" if grants == 1 else "espaços de trabalho têm" }} acesso
+  {% else %}<span class="tag">Privado</span> Somente este espaço de trabalho vê o preset{% endif %}
+</p>
+{% if link %}
+<label class="field">Link do convite
+  <span class="copy-field"><input id="link-preset" readonly value="{{ link }}" data-copiar-auto><button type="button" class="btn" data-copiar="#link-preset">{{ icon('copy') }}<span>Copiar</span></button></span>
+  <small class="hint">A chave aparece somente agora. Quem abrir o link pode ver, usar e duplicar o preset, mas não alterá-lo.</small>
+</label>
+{% endif %}
+<div class="share-actions">
+  {% if entry.shared %}
+  <button type="button" class="btn btn-sm" hx-post="/presets/escrita/{{ entry.id }}/compartilhamento" hx-vals='{"acao": "novo-link"}' hx-target="#compartilhamento" hx-confirm="Gerar um novo link? O link anterior deixa de funcionar; quem já recebeu o preset mantém o acesso.">Gerar novo link</button>
+  <button type="button" class="btn btn-sm btn-danger" hx-post="/presets/escrita/{{ entry.id }}/compartilhamento" hx-vals='{"acao": "privado"}' hx-target="#compartilhamento" hx-confirm="Tornar o preset privado? Todos os espaços de trabalho que o receberam perdem o acesso.">Tornar privado</button>
+  {% else %}
+  <button type="button" class="btn btn-sm" hx-post="/presets/escrita/{{ entry.id }}/compartilhamento" hx-vals='{"acao": "link"}' hx-target="#compartilhamento">{{ icon('link') }}Criar link de compartilhamento</button>
+  {% endif %}
+</div>
+<p class="hint">O compartilhamento dá acesso somente a este preset. Publicação aberta para todos não está disponível nesta instalação.</p>
+{% if message %}{{ toast(message, 'sucesso', True) }}{% endif %}

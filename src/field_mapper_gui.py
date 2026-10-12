@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
+from src.field_rules import FIELD_TYPES
 from src.pdf import pdf_to_image
 
 
@@ -19,10 +20,7 @@ UF_VALUES = (
     "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO",
     "RR", "SC", "SP", "SE", "TO",
 )
-DATA_TYPES = (
-    "text", "person_name", "enum", "uf", "integer", "decimal", "date",
-    "time", "cep", "cns", "checkbox", "digit_sequence", "text_sequence",
-)
+DATA_TYPES = FIELD_TYPES
 SEQUENCE_DATA_TYPES = {"digit_sequence", "text_sequence"}
 
 

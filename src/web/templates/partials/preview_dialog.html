@@ -1,0 +1,16 @@
+{% from "macros.html" import dialog_head, icon %}
+<div class="dialog-panel dialog-wide">
+  {{ dialog_head("Pré-visualização da geração") }}
+  <div class="dialog-body preview-body">
+    <p class="lead-small">Documento sintético gerado pelo motor OCRSD com o estado atual do editor: {{ fields }} campos, escrita por fonte local e seed {{ seed }}. Nada foi salvo.</p>
+    {% if issues %}<p class="notice notice-warning">{{ icon('alert') }}<span>Antes de publicar: {{ issues|join('; ') }}</span></p>{% endif %}
+    <div class="preview-sheet"><img src="{{ image }}" alt="Documento sintético gerado a partir do modelo {{ model.label }}"></div>
+  </div>
+  <footer class="dialog-foot">
+    <form hx-post="/modelos/{{ model.id }}/previa" hx-target="#modal" hx-disabled-elt="find button" class="inline-form" data-previa>
+      <input type="hidden" name="seed" value="{{ (seed + 1) % 4294967296 }}">
+      <button type="submit" class="btn">{{ icon('reload') }}Gerar outra amostra<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+    </form>
+    <button type="button" class="btn btn-primary" data-fechar>Fechar</button>
+  </footer>
+</div>

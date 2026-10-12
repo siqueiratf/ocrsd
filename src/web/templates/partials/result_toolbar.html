@@ -1,0 +1,11 @@
+{% from "macros.html" import icon, status %}
+{% set job = result.job %}
+<header id="result-toolbar" class="result-toolbar" {% if oob_toolbar %}hx-swap-oob="outerHTML"{% endif %}>
+  <div class="result-toolbar-title"><a class="icon-btn" href="{{ back_url if back_url is defined else '/resultados' }}" data-back-link aria-label="Voltar aos resultados" title="Voltar aos resultados">{{ icon('back') }}</a><h1>{{ job.name }}</h1>{{ status(job.status) }}</div>
+  <div class="result-toolbar-actions">
+    {% if result.archive %}<button type="button" class="btn btn-sm" hx-get="/resultados/{{ job.id }}/exportar" hx-target="#modal">{{ icon('download') }}Baixar</button>{% elif job.status in ACTIVE %}<span class="btn btn-sm is-disabled" aria-disabled="true" data-tooltip="O ZIP fica disponível quando a geração terminar; os documentos prontos podem ser baixados individualmente">{{ icon('download') }}Baixar</span>{% endif %}
+    {% if job.status == 'succeeded' and not result.problem %}<button type="button" class="btn btn-sm" hx-get="/resultados/{{ job.id }}/compartilhar" hx-target="#modal">{{ icon('share') }}Compartilhar</button>{% endif %}
+    {% if job.options %}<button type="button" class="btn btn-sm" hx-post="/resultados/{{ job.id }}/reutilizar" hx-swap="none">{{ icon('reload') }}Reutilizar configuração</button>{% endif %}
+    <button type="button" class="icon-btn" hx-get="/resultados/{{ job.id }}/detalhes" hx-target="#modal" aria-label="Detalhes do dataset" data-tooltip="Detalhes">{{ icon('settings') }}</button>
+  </div>
+</header>

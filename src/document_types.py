@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import json
 from pathlib import Path
 import re
 
@@ -21,6 +22,19 @@ class DocumentType:
     @property
     def label(self) -> str:
         return self.key.replace("_", " ").upper()
+
+    @property
+    def active_mapping(self) -> Path:
+        metadata = self.root / "modelo.json"
+        if metadata.is_file():
+            try:
+                name = json.loads(metadata.read_text(encoding="utf-8")).get("active_mapping")
+            except (ValueError, AttributeError):
+                name = None
+            chosen = next((path for path in self.mappings if path.stem == name), None)
+            if chosen:
+                return chosen
+        return self.mappings[0]
 
 
 def discover_document_types(root: Path = DOCUMENTS_ROOT) -> dict[str, DocumentType]:

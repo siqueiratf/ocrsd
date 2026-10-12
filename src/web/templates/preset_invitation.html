@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Convite para preset{% endblock %}
+{% block content %}
+<section class="card shared-pending" data-convite="/presets/escrita/convite/{{ preset_id }}" data-destino="/presets/escrita/{{ preset_id }}">
+  <div data-abrindo><span class="spinner spinner-lg" aria-hidden="true"></span><p>Adicionando o preset compartilhado à sua coleção…</p></div>
+  <div data-sem-token hidden>
+    <span class="error-icon">{{ icon('alert') }}</span>
+    <h1>Convite inválido</h1>
+    <p class="lead">O link não contém a chave de acesso ou foi revogado. Peça um novo link a quem compartilhou o preset.</p>
+    <a class="btn" href="/presets/escrita">{{ icon('back') }}Ir para Presets de Escrita</a>
+  </div>
+</section>
+{% endblock %}

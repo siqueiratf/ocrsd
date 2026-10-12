@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, page_header %}
+{% block title %}Tipos de campo{% endblock %}
+{% block content %}
+{% call page_header("Presets · Tipos de campo", "Tipos de campo personalizados", "Tipos reutilizáveis criados no editor de modelos. Eles aparecem no grupo “Personalizados” da paleta.") %}
+  <a class="btn btn-primary" href="/modelos">{{ icon('models') }}Abrir a Galeria de Modelos</a>
+{% endcall %}
+<section class="card table-card" id="lista-tipos">{% include "partials/field_type_list.html" %}</section>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% from "macros.html" import icon, toast %}
+<div id="publicacao" class="publication" {% if oob %}hx-swap-oob="true"{% endif %}>
+  {% if model.builtin %}
+  <span class="state-chip state-published">{{ icon('check') }}Modelo padrão</span>
+  <a class="btn" href="/geracao?modelo={{ model.id|urlencode }}">{{ icon('generate') }}Usar na geração</a>
+  {% elif model.status == 'published' %}
+  <span class="state-chip state-published">{{ icon('check') }}Publicado</span>
+  <button type="button" class="btn" hx-post="/modelos/{{ model.id }}/rascunho" hx-swap="none" hx-confirm="Retirar este modelo da geração de datasets?" data-tooltip="O modelo deixa de aparecer na Geração">Voltar para rascunho</button>
+  <a class="btn btn-primary" href="/geracao?modelo={{ model.id|urlencode }}">{{ icon('generate') }}Usar na geração</a>
+  {% else %}
+  <span class="state-chip state-draft">Rascunho</span>
+  <button type="button" class="btn btn-primary" data-publicar hx-post="/modelos/{{ model.id }}/publicar" hx-swap="none" hx-disabled-elt="this"
+          data-tooltip="{{ 'Pendências: ' ~ issues|join('; ') if issues else 'Disponibiliza o modelo salvo na Geração' }}">{{ icon('publish') }}Publicar</button>
+  {% endif %}
+</div>
+{% if message %}{{ toast(message, 'sucesso', True) }}{% endif %}

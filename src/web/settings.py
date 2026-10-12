@@ -21,5 +21,4 @@ class Settings(BaseSettings):
     min_free_bytes: int = Field(default=512 * 1024**2, ge=0)
     memory_mb: int = Field(default=4096, ge=256)
     neural_enabled: bool = False
-    catalog_writable: bool = False
     accepting_jobs: bool = True

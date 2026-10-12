@@ -1,49 +1,53 @@
 {% extends "base.html" %}
 {% from "macros.html" import icon, page_header %}
-{% block title %}Modelos{% endblock %}
+{% block title %}Galeria de Modelos{% endblock %}
 {% block content %}
-{% call page_header("Etapa 1 · Modelagem", "Modelos de documentos", "Cadastre templates PDF, delimite as áreas de preenchimento e mantenha mapas compatíveis com o motor OCRSD.") %}
-  <button type="button" class="btn btn-primary" hx-get="/modelos/novo" hx-target="#modal">{{ icon('add') }}Novo modelo</button>
+{% call page_header("Etapa 1 · Modelagem", "Galeria de Modelos", "Importe um PDF ou componha um documento em branco, mapeie os campos e publique o modelo para gerar datasets.") %}
+  <a class="btn btn-primary" href="/modelos/novo">{{ icon('add') }}Novo modelo</a>
 {% endcall %}
 <ol class="flow" aria-label="Fluxo de trabalho">
-  <li class="is-current"><b>1</b><span>Modele o documento</span></li>
+  <li class="is-current"><b>1</b><span>Modele e publique</span></li>
   <li><b>2</b><span>Gere o dataset</span></li>
   <li><b>3</b><span>Explore e compartilhe</span></li>
 </ol>
 <div class="model-grid">
-  {% for model in models %}
+  {% for entry in models %}
+  {% set model = entry.model %}
   <article class="card model-card">
     <div class="model-thumb">
       <img src="/modelos/{{ model.id }}/previa.png" alt="Prévia de {{ model.label }}" decoding="async">
     </div>
     <div class="model-body">
       <div class="tags">
-        {% if model.status == 'published' %}<span class="tag tag-green">Disponível</span>{% else %}<span class="tag tag-yellow">Rascunho</span>{% endif %}
+        {% if model.status == 'published' %}<span class="tag tag-green">Publicado</span>{% else %}<span class="tag tag-yellow">Rascunho</span>{% endif %}
         <span class="tag tag-blue">{{ model.field_count }} campos</span>
-        {% if model.builtin %}<span class="tag">Catálogo</span>{% endif %}
+        <span class="tag">{{ "Padrão" if model.builtin else ("Documento composto" if entry.composed else "PDF importado") }}</span>
       </div>
       <h2>{{ model.label }}</h2>
       <p>{{ model.description or "Sem descrição." }}</p>
       <dl class="model-meta">
-        <div><dt>Origem</dt><dd>{{ "Catálogo institucional" if model.builtin else "Modelo privado" }}</dd></div>
         <div><dt>Versão</dt><dd>v{{ model.version }}</dd></div>
-        {% if model.updated_at %}<div><dt>Atualizado</dt><dd>{{ model.updated_at|data }}</dd></div>{% endif %}
+        <div><dt>Modificado</dt><dd>{{ model.updated_at|data if model.updated_at else "Modelo padrão" }}</dd></div>
       </dl>
       <div class="model-actions">
         {% if model.builtin and not model.editable %}
-        <button type="button" class="btn" hx-post="/modelos/{{ model.id }}/copia" hx-disabled-elt="this">{{ icon('copy') }}Criar cópia editável<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+        <button type="button" class="btn" hx-post="/modelos/{{ model.id }}/copia" hx-disabled-elt="this" data-tooltip="O modelo padrão fica protegido; a cópia é editável no seu espaço de trabalho">{{ icon('copy') }}Duplicar e editar<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
         {% else %}
-        <a class="btn" href="/modelos/{{ model.id }}/editor">{{ icon('pen') }}Editar mapeamento</a>
+        <a class="btn" href="/modelos/{{ model.id }}/editor">{{ icon('pen') }}Abrir editor</a>
         {% endif %}
+        {% if model.status == 'published' %}
         <a class="btn btn-primary" href="/geracao?modelo={{ model.id|urlencode }}">{{ icon('generate') }}Gerar</a>
+        {% else %}
+        <a class="btn" href="/modelos/{{ model.id }}/editor" title="Publique o modelo no editor para usá-lo na geração">{{ icon('publish') }}Publicar</a>
+        {% endif %}
       </div>
     </div>
   </article>
   {% endfor %}
-  <button type="button" class="model-new" hx-get="/modelos/novo" hx-target="#modal">
+  <a class="model-new" href="/modelos/novo">
     <span class="model-new-icon">{{ icon('add') }}</span>
-    <b>Adicionar novo documento</b>
-    <small>Envie um PDF de página única e comece a mapear os campos.</small>
-  </button>
+    <b>Novo modelo</b>
+    <small>Importe um PDF existente ou crie um documento em branco.</small>
+  </a>
 </div>
 {% endblock %}

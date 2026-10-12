@@ -1,0 +1,26 @@
+{% from "macros.html" import icon %}
+{% if unavailable %}
+<div class="playground-off">{{ icon('alert') }}<p><b>Modelo indisponível neste servidor.</b> {{ unavailable }}</p></div>
+{% else %}
+<div class="sample-rows cols-{{ variations }}">
+  {% for row in rows %}
+  <div class="sample-row">
+    <div class="sample-ref"><b>{{ row.label }}</b><span class="mono">{{ row.text }}</span></div>
+    <div class="sample-cells">
+      {% for cell in row.cells %}
+      <figure class="sample-cell">
+        {% if cell.image %}
+        <img src="{{ cell.image }}" alt="{{ row.label }} escrito com a configuração atual{{ ', variação ' ~ loop.index if variations > 1 else '' }}">
+        {% else %}
+        <div class="sample-error">{{ icon('alert') }}<span>{{ cell.error }}</span></div>
+        {% endif %}
+        {% if variations > 1 or (cell.image and cell.rendered != row.text) %}
+        <figcaption>{% if variations > 1 %}Variação {{ loop.index }}{% if cell.writer is not none and writing.writer is none %} · escritor {{ cell.writer }}{% endif %}{% endif %}{% if cell.image and cell.rendered != row.text %}{{ " · " if variations > 1 }}escrito como “{{ cell.rendered }}”{% endif %}</figcaption>
+        {% endif %}
+      </figure>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

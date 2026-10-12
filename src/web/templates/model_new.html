@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Novo modelo{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Trilha"><a href="/modelos">Galeria de Modelos</a><span aria-hidden="true">/</span><span>Novo modelo</span></nav>
+<div class="new-model">
+  <header class="new-model-head">
+    <h1>Novo modelo</h1>
+    <p class="lead">Escolha como o documento começa. Os metadados avançados podem ser editados depois, no editor.</p>
+  </header>
+  <div class="choice-grid" role="list">
+    <a role="listitem" class="choice-card {{ 'is-active' if mode == 'importar' }}" href="/modelos/novo?modo=importar" {% if mode == 'importar' %}aria-current="true"{% endif %}>
+      <span class="choice-icon">{{ icon('upload') }}</span>
+      <b>Importar PDF</b>
+      <small>Envie um template existente de página única e mapeie as áreas de preenchimento sobre ele.</small>
+    </a>
+    <a role="listitem" class="choice-card {{ 'is-active' if mode == 'branco' }}" href="/modelos/novo?modo=branco" {% if mode == 'branco' %}aria-current="true"{% endif %}>
+      <span class="choice-icon">{{ icon('file-plus') }}</span>
+      <b>Criar documento em branco</b>
+      <small>Componha títulos, linhas e caixas e adicione campos. O OCRSD gera o PDF do template.</small>
+    </a>
+  </div>
+  <div id="novo-formulario" class="new-model-form">
+    {% if mode %}{% include "partials/model_form.html" %}{% else %}<p class="empty-hint">Selecione uma das opções acima para continuar.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

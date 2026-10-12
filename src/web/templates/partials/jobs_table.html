@@ -1,32 +1,33 @@
-{% from "macros.html" import icon, status as status_chip %}
-<section id="tabela-jobs" class="card table-card" {% if polling %}hx-get="/resultados/lista" hx-trigger="every 2s" hx-include="#filtros" hx-target="this" hx-swap="outerHTML" hx-disinherit="*"{% endif %} {% if oob %}hx-swap-oob="true"{% endif %}>
+{% from "macros.html" import icon %}
+{% macro sort_header(key, label, ascending, descending, title='') -%}
+<button type="button" class="table-sort" data-sort="{{ key }}" {% if title %}title="{{ title }}"{% endif %}>{{ label }}<span class="table-sort-mark" aria-hidden="true">{{ '↑' if ascending else ('↓' if descending else '↕') }}</span></button>
+{%- endmacro %}
+<section id="tabela-jobs" class="results-list" {% if polling %}hx-get="/resultados/lista" hx-trigger="every 3s" hx-include="#filtros" hx-target="this" hx-swap="outerHTML" hx-disinherit="*" data-results-polling{% endif %}>
   {% if jobs %}
-  <div class="table-scroll">
-    <table class="table">
-      <thead>
-        <tr><th scope="col">Geração</th><th scope="col">Modelo</th><th scope="col" class="num">Documentos</th><th scope="col" class="num">Seed</th><th scope="col">Status</th><th scope="col">Criado em</th><th scope="col"><span class="sr-only">Ações</span></th></tr>
-      </thead>
-      <tbody>
-        {% for job in jobs %}
-        <tr {% if job.id == selected %}class="is-selected" aria-current="true"{% endif %}>
-          <td><b>{{ job.name }}</b><small class="mono">{{ job.id[:10] }}</small></td>
-          <td>{{ job.options.document_type if job.options else "—" }}</td>
-          <td class="num">{{ job.completed if job.status in ACTIVE else job.total }}{% if job.status in ACTIVE %}/{{ job.total }}{% endif %}</td>
-          <td class="num">{{ job.options.seed if job.options else "—" }}</td>
-          <td>{{ status_chip(job.status) }}</td>
-          <td><time>{{ job.created_at|data }}</time></td>
-          <td class="row-action"><button type="button" class="btn btn-sm" hx-get="/resultados/{{ job.id }}" hx-target="#detalhe" hx-include="#filtros" hx-push-url="/resultados?job={{ job.id }}">Visualizar</button></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <div class="table-scroll"><table class="table results-table">
+    <colgroup><col class="results-count-col"><col class="results-dataset-col"><col class="results-model-col"><col class="results-date-col"><col class="results-time-col"><col class="results-open-col"><col class="results-download-col"><col class="results-share-col"><col class="results-details-col"></colgroup>
+    <thead><tr>
+      <th scope="col" aria-sort="{{ 'ascending' if order == 'quantidade_asc' else ('descending' if order == 'quantidade_desc' else 'none') }}">{{ sort_header('quantidade', '#', order == 'quantidade_asc', order == 'quantidade_desc', 'Quantidade de documentos') }}</th>
+      <th scope="col" aria-sort="{{ 'ascending' if order == 'nome_asc' else ('descending' if order == 'nome_desc' else 'none') }}"><div class="results-heading-combined">{{ sort_header('nome', 'Dataset', order == 'nome_asc', order == 'nome_desc') }}<details class="menu results-status-menu"><summary class="icon-btn {{ 'is-filtered' if selected_statuses }}" aria-label="Filtrar por status" title="Filtrar por status">{{ icon('filter') }}</summary><div class="menu-list"><b>Filtrar por status</b>{% for key, label in STATUS.items() %}<label><input type="checkbox" data-status-choice value="{{ key }}" {{ 'checked' if key in selected_statuses }}>{{ label }}</label>{% endfor %}<button type="button" data-status-apply>Aplicar</button><button type="button" data-status-clear>Limpar filtro</button></div></details></div></th>
+      <th scope="col" aria-sort="{{ 'ascending' if order == 'modelo_asc' else ('descending' if order == 'modelo_desc' else 'none') }}"><div class="results-heading-combined">{{ sort_header('modelo', 'Modelo', order == 'modelo_asc', order == 'modelo_desc') }}<details class="menu results-model-menu"><summary class="icon-btn {{ 'is-filtered' if document_type }}" aria-label="Filtrar por modelo" title="Filtrar por modelo">{{ icon('filter') }}</summary><div class="menu-list"><b>Filtrar por modelo</b><label><input type="radio" name="model_filter" data-model-choice value="" {{ 'checked' if not document_type }}>Todos os modelos</label>{% for item in document_types %}<label><input type="radio" name="model_filter" data-model-choice value="{{ item }}" {{ 'checked' if document_type == item }}>{{ item.replace('_', ' ')|title }}</label>{% endfor %}</div></details></div></th>
+      <th scope="col" aria-sort="{{ 'ascending' if order in ['antigos', 'data_asc'] else 'descending' }}">{{ sort_header('data', 'Gerado em', order in ['antigos', 'data_asc'], order not in ['antigos', 'data_asc']) }}</th>
+      <th scope="col" aria-sort="{{ 'ascending' if order == 'tempo_asc' else ('descending' if order == 'tempo_desc' else 'none') }}">{{ sort_header('tempo', 'Tempo', order == 'tempo_asc', order == 'tempo_desc', 'Tempo de geração: do início do processamento até a conclusão, sem a espera na fila') }}</th>
+      <th scope="col">Abrir</th><th scope="col">Baixar</th><th scope="col">Compartilhar</th><th scope="col">Detalhes</th>
+    </tr></thead><tbody>
+      {% for job in jobs %}<tr>
+        <td class="results-count">{{ job.completed ~ '/' ~ job.total if job.status in ACTIVE else job.total }}</td>
+        <td class="results-dataset">{% include "partials/result_name.html" %}</td>
+        <td class="results-model">{{ job.document_label }}</td>
+        <td><time datetime="{{ job.created_at }}">{{ job.created_at|data }}</time></td>
+        <td class="results-duration" {% if job.status == 'running' and job.elapsed is not none %}data-duration-elapsed="{{ job.elapsed }}"{% endif %}>{{ job.duration }}</td>
+        <td><a class="icon-btn results-action" href="/resultados/{{ job.id }}{{ '?' ~ detail_query if detail_query }}" data-open-dataset="{{ job.id }}" aria-label="Abrir {{ job.name }}" title="Abrir">{{ icon('eye') }}</a></td>
+        <td>{% if job.status == 'succeeded' %}<button type="button" class="icon-btn results-action" hx-get="/resultados/{{ job.id }}/exportar" hx-target="#modal" aria-label="Baixar {{ job.name }}" title="Baixar">{{ icon('download') }}</button>{% else %}<span class="results-action-placeholder" title="{{ 'O ZIP fica disponível quando a geração terminar' if job.status in ACTIVE else 'Sem dataset completo para baixar' }}">—</span>{% endif %}</td>
+        <td>{% if job.status == 'succeeded' %}<button type="button" class="icon-btn results-action" hx-get="/resultados/{{ job.id }}/compartilhar" hx-target="#modal" aria-label="Compartilhar {{ job.name }}" title="Compartilhar">{{ icon('share') }}</button>{% else %}<span class="results-action-placeholder" title="Disponível para datasets concluídos">—</span>{% endif %}</td>
+        <td><button type="button" class="icon-btn results-action" hx-get="/resultados/{{ job.id }}/detalhes" hx-target="#modal" aria-label="Detalhes de {{ job.name }}" title="Detalhes">{{ icon('settings') }}</button></td>
+      </tr>{% endfor %}
+    </tbody></table></div>
+    {% if page_count > 1 %}<nav class="results-pagination" aria-label="Páginas de resultados"><span>{{ total }} datasets · página {{ page_number }} de {{ page_count }}</span><div>{% if page_number > 1 %}<button class="btn btn-sm" type="button" hx-get="/resultados/lista" hx-include="#filtros" hx-vals='{"pagina": {{ page_number - 1 }}}' hx-target="#tabela-jobs">Anterior</button>{% endif %}{% if page_number < page_count %}<button class="btn btn-sm" type="button" hx-get="/resultados/lista" hx-include="#filtros" hx-vals='{"pagina": {{ page_number + 1 }}}' hx-target="#tabela-jobs">Próxima</button>{% endif %}</div></nav>{% endif %}
   {% else %}
-  <div class="empty">
-    <span class="empty-icon">{{ icon('results') }}</span>
-    <h3>Nenhuma geração encontrada</h3>
-    <p>{{ "Ajuste a busca ou o filtro de status." if search or status else "Os jobs enviados pelo seu espaço de trabalho aparecem aqui." }}</p>
-    <a class="btn btn-primary" href="/geracao">{{ icon('generate') }}Nova geração</a>
-  </div>
+    <div class="results-empty"><span aria-hidden="true">{{ icon('results') }}</span><h2>Nenhuma geração encontrada</h2><p>{{ 'Nenhum dataset corresponde aos filtros.' if search or status or document_type else 'Seus datasets aparecerão aqui depois da primeira geração.' }}</p><a class="btn btn-primary" href="{{ '/resultados' if search or status or document_type else '/geracao' }}">{{ 'Limpar filtros' if search or status or document_type else 'Gerar primeiro dataset' }}</a></div>
   {% endif %}
 </section>

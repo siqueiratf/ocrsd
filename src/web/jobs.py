@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import hashlib
+import itertools
 import json
+import os
 import secrets
 import shutil
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -15,12 +18,26 @@ from src.web.services import ServiceError
 from src.web.settings import Settings
 
 
+SEED_SEQUENCE = itertools.count()
+
+
+def fresh_seed(db: sqlite3.Connection) -> int:
+    for _ in range(64):
+        material = ":".join(str(value) for value in (time.time_ns(), time.perf_counter_ns(), os.getpid(), threading.get_ident(),
+                                                         next(SEED_SEQUENCE))).encode() + secrets.token_bytes(16)
+        seed = int.from_bytes(hashlib.blake2b(material, digest_size=8).digest(), "big") % 2**32
+        if not db.execute("SELECT 1 FROM jobs WHERE json_extract(options, '$.seed')=?", (seed,)).fetchone():
+            return seed
+    raise ServiceError(503, "seed_unavailable", "Não foi possível reservar uma semente única; tente novamente")
+
+
 class JobStore:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.root = settings.storage.resolve()
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         (self.root / "jobs").mkdir(mode=0o700, exist_ok=True)
+        (self.root / "templates").mkdir(mode=0o700, exist_ok=True)
         with self.connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript("""
@@ -60,10 +77,43 @@ class JobStore:
                     created_at REAL NOT NULL, expires_at REAL NOT NULL, revoked_at REAL
                 );
                 CREATE INDEX IF NOT EXISTS shares_owner ON shares(owner_id, created_at);
+                CREATE TABLE IF NOT EXISTS field_types (
+                    id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, slug TEXT NOT NULL, name TEXT NOT NULL,
+                    description TEXT NOT NULL, base_type TEXT NOT NULL, config TEXT NOT NULL,
+                    created_at REAL NOT NULL, updated_at REAL NOT NULL, UNIQUE(owner_id, slug)
+                );
+                CREATE TABLE IF NOT EXISTS preset_grants (
+                    preset_id TEXT NOT NULL, workspace_id TEXT NOT NULL, created_at REAL NOT NULL,
+                    PRIMARY KEY (preset_id, workspace_id)
+                );
+                CREATE TABLE IF NOT EXISTS generation_drafts (
+                    owner_id TEXT PRIMARY KEY, options TEXT NOT NULL, updated_at REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS wizard_drafts (
+                    id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, state TEXT NOT NULL, updated_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS wizard_drafts_owner ON wizard_drafts(owner_id, updated_at);
             """)
             columns = {row[1] for row in db.execute("PRAGMA table_info(jobs)")}
             if "owner_id" not in columns:
                 db.execute("ALTER TABLE jobs ADD COLUMN owner_id TEXT")
+            if "preset" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN preset TEXT")
+            if "display_name" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN display_name TEXT")
+            if "started_at" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN started_at REAL")
+            if "finished_at" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN finished_at REAL")
+            if "source_mapping" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN source_mapping TEXT")
+            if "source_template" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN source_template TEXT")
+            preset_columns = {row[1] for row in db.execute("PRAGMA table_info(presets)")}
+            for column, definition in (("description", "TEXT NOT NULL DEFAULT ''"), ("version", "INTEGER NOT NULL DEFAULT 1"),
+                                       ("share_token_hash", "TEXT")):
+                if column not in preset_columns:
+                    db.execute(f"ALTER TABLE presets ADD COLUMN {column} {definition}")
 
     @contextmanager
     def connection(self):
@@ -102,9 +152,30 @@ class JobStore:
             raise ServiceError(401, "workspace_unauthorized", "Espaço de trabalho não autorizado")
         return identifier
 
-    def submit(self, options: GenerationOptions, client: str, owner_id: str | None = None) -> tuple[dict, str]:
+    def keep_template(self, template: Path) -> str:
+        content = template.read_bytes()
+        digest = hashlib.sha256(content).hexdigest()
+        target = self.root / "templates" / f"{digest}.pdf"
+        if not target.is_file():
+            temporary = target.with_suffix(f".{secrets.token_hex(6)}.tmp")
+            temporary.write_bytes(content)
+            temporary.replace(target)
+        return digest
+
+    def source(self, row: dict) -> dict | None:
+        if not row.get("source_mapping") or not row.get("source_template"):
+            return None
+        template = self.root / "templates" / f'{row["source_template"]}.pdf'
+        if not template.is_file():
+            return None
+        return {"definition": json.loads(row["source_mapping"]), "template": template}
+
+    def submit(self, options: GenerationOptions, client: str, owner_id: str | None = None, preset: dict | None = None,
+               source: dict | None = None) -> tuple[dict, str]:
         if not self.settings.accepting_jobs:
             raise ServiceError(503, "maintenance", "Novos jobs temporariamente suspensos")
+        template_hash = self.keep_template(source["template"]) if source else None
+        mapping = json.dumps(source["definition"], ensure_ascii=False) if source else None
         now = time.time()
         token = secrets.token_urlsafe(32)
         identifier = uuid4().hex
@@ -120,9 +191,13 @@ class JobStore:
                 raise ServiceError(429, "storage_quota", "Armazenamento reservado esgotado; aguarde a expiração")
             if shutil.disk_usage(self.root).free < self.settings.min_free_bytes + self.settings.max_job_bytes:
                 raise ServiceError(503, "storage_full", "Espaço insuficiente para um novo job")
-            db.execute("INSERT INTO jobs (id,token_hash,client,options,status,total,created_at,updated_at,expires_at,owner_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            if options.seed is None:
+                options = options.model_copy(update={"seed": fresh_seed(db)})
+            db.execute("INSERT INTO jobs (id,token_hash,client,options,status,total,created_at,updated_at,expires_at,owner_id,preset,source_mapping,source_template) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                        (identifier, hashlib.sha256(token.encode()).hexdigest(), client_hash, options.model_dump_json(), "queued", options.count, now, now,
-                        now + self.settings.retention_hours * 3600, owner_id))
+                        now + self.settings.retention_hours * 3600, owner_id, json.dumps(preset, ensure_ascii=False) if preset else None,
+                        mapping, template_hash))
         return self.get(identifier), token
 
     def get(self, identifier: str) -> dict:
@@ -146,7 +221,17 @@ class JobStore:
             options = GenerationOptions.model_validate_json(row["options"])
         except ValueError:
             options = None
-        return JobDetail(**self.response(row).model_dump(), name=options.name if options else "Geração sem configuração válida", options=options)
+        return JobDetail(**self.response(row).model_dump(), name=row.get("display_name") or (options.name if options else "Geração sem configuração válida"), options=options)
+
+    def rename_job(self, identifier: str, owner_id: str, name: str) -> dict:
+        cleaned = name.strip()
+        if not cleaned or len(cleaned) > 100 or any(ord(character) < 32 for character in cleaned):
+            raise ServiceError(422, "validation_error", "Informe um nome de até 100 caracteres")
+        with self.connection() as db:
+            updated = db.execute("UPDATE jobs SET display_name=? WHERE id=? AND owner_id=?", (cleaned, identifier, owner_id))
+            if not updated.rowcount:
+                raise ServiceError(404, "not_found", "Job não encontrado")
+        return self.get(identifier)
 
     def list_jobs(self, owner_id: str, query: str = "", status: str | None = None) -> list[dict]:
         clauses = ["owner_id=?"]
@@ -162,6 +247,49 @@ class JobStore:
             details = [item for item in details if needle in item["name"].casefold() or item["options"] and needle in item["options"]["document_type"].casefold()]
         return details
 
+    def list_jobs_page(self, owner_id: str, query: str = "", status: str = "", document_type: str = "",
+                       order: str = "recentes", page: int = 1, page_size: int = 25) -> tuple[list[dict], int]:
+        clauses = ["owner_id=?"]
+        values: list[object] = [owner_id]
+        statuses = [item for item in status.split(",") if item]
+        if statuses:
+            clauses.append(f"status IN ({','.join('?' for _ in statuses)})")
+            values.extend(statuses)
+        if document_type:
+            clauses.append("json_extract(options, '$.document_type')=?")
+            values.append(document_type)
+        if query:
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clauses.append("(COALESCE(display_name, json_extract(options, '$.name')) LIKE ? ESCAPE '\\' OR json_extract(options, '$.document_type') LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')")
+            values.extend([f"%{escaped}%"] * 3)
+        where = " AND ".join(clauses)
+        sort = {"recentes": "created_at DESC", "antigos": "created_at ASC", "data_asc": "created_at ASC", "data_desc": "created_at DESC",
+                "nome_asc": "COALESCE(display_name, json_extract(options, '$.name')) COLLATE NOCASE ASC",
+                "nome_desc": "COALESCE(display_name, json_extract(options, '$.name')) COLLATE NOCASE DESC",
+                "modelo_asc": "json_extract(options, '$.document_type') COLLATE NOCASE ASC",
+                "modelo_desc": "json_extract(options, '$.document_type') COLLATE NOCASE DESC",
+                "quantidade_asc": "total ASC", "quantidade_desc": "total DESC",
+                "tempo_asc": "CASE WHEN started_at IS NULL THEN NULL WHEN finished_at IS NOT NULL THEN finished_at-started_at WHEN status='running' THEN ?-started_at ELSE NULL END ASC",
+                "tempo_desc": "CASE WHEN started_at IS NULL THEN NULL WHEN finished_at IS NOT NULL THEN finished_at-started_at WHEN status='running' THEN ?-started_at ELSE NULL END DESC"}.get(order, "created_at DESC")
+        with self.connection() as db:
+            total = db.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}", values).fetchone()[0]
+            rows = db.execute(f"SELECT * FROM jobs WHERE {where} ORDER BY {sort}, id DESC LIMIT ? OFFSET ?",
+                              [*values, *([time.time()] if order in {"tempo_asc", "tempo_desc"} else []), page_size, (max(1, page) - 1) * page_size]).fetchall()
+        return [{**self.detail(dict(row)).model_dump(), "started_at": row["started_at"], "finished_at": row["finished_at"]} for row in rows], total
+
+    def activity(self, owner_id: str, since: float) -> dict:
+        with self.connection() as db:
+            rows = db.execute("SELECT * FROM jobs WHERE owner_id=? AND (status IN ('queued','running') OR (status IN ('succeeded','failed') AND finished_at>=?)) "
+                              "ORDER BY created_at DESC LIMIT 20", (owner_id, since)).fetchall()
+        jobs = [{**self.detail(dict(row)).model_dump(), "finished_at": row["finished_at"]} for row in rows]
+        return {"active": [job for job in jobs if job["status"] in {"queued", "running"}][:3],
+                "finished": [job for job in jobs if job["status"] in {"succeeded", "failed"}][:3]}
+
+    def job_document_types(self, owner_id: str) -> list[str]:
+        with self.connection() as db:
+            rows = db.execute("SELECT DISTINCT json_extract(options, '$.document_type') AS document_type FROM jobs WHERE owner_id=? ORDER BY document_type", (owner_id,)).fetchall()
+        return [row["document_type"] for row in rows if row["document_type"]]
+
     def authorize_owner(self, row: dict, owner_id: str) -> dict:
         if row.get("owner_id") != owner_id:
             raise ServiceError(404, "not_found", "Job não encontrado")
@@ -173,22 +301,41 @@ class JobStore:
             row = db.execute("SELECT id FROM jobs WHERE status='queued' ORDER BY created_at LIMIT 1").fetchone()
             if row is None:
                 return None
-            db.execute("UPDATE jobs SET status='running',updated_at=? WHERE id=?", (time.time(), row[0]))
+            now = time.time()
+            db.execute("UPDATE jobs SET status='running',started_at=?,updated_at=? WHERE id=?", (now, now, row[0]))
         return self.get(row[0])
 
     def progress(self, identifier: str, completed: int) -> None:
         with self.connection() as db:
             db.execute("UPDATE jobs SET completed=?,updated_at=? WHERE id=? AND status='running'", (completed, time.time(), identifier))
 
+    def publish_document(self, identifier: str, completed: int, pdf: Path, ground_truth: Path) -> None:
+        directory = self.directory(identifier).resolve()
+        items = []
+        for path, media_type in ((pdf, "application/pdf"), (ground_truth, "application/json")):
+            if path.resolve().parent != directory or path.is_symlink() or not path.is_file():
+                raise ValueError("Artefato inválido")
+            items.append({"id": f"document-{completed}-{path.suffix[1:]}", "name": path.name,
+                          "media_type": media_type, "size": path.stat().st_size, "document_number": completed})
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT artifacts,status,completed FROM jobs WHERE id=?", (identifier,)).fetchone()
+            if not row or row["status"] != "running" or completed != row["completed"] + 1:
+                raise ValueError("Job indisponível para publicação")
+            artifacts = json.loads(row["artifacts"]) + items
+            db.execute("UPDATE jobs SET artifacts=?,completed=?,updated_at=? WHERE id=?",
+                       (json.dumps(artifacts), completed, time.time(), identifier))
+
     def finish(self, identifier: str, status: str, error: str | None = None, artifacts: list | None = None) -> None:
         now = time.time()
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT cancel_requested FROM jobs WHERE id=?", (identifier,)).fetchone()
+            row = db.execute("SELECT cancel_requested,artifacts FROM jobs WHERE id=?", (identifier,)).fetchone()
             if row[0]:
-                status, artifacts, error = "cancelled", [], None
-            db.execute("UPDATE jobs SET status=?,error=?,artifacts=?,updated_at=?,expires_at=? WHERE id=?",
-                       (status, error, json.dumps(artifacts or []), now, now + self.settings.retention_hours * 3600, identifier))
+                status, error = "cancelled", None
+            db.execute("UPDATE jobs SET status=?,error=?,artifacts=?,updated_at=?,finished_at=?,expires_at=? WHERE id=?",
+                       (status, error, json.dumps(artifacts if artifacts is not None else json.loads(row["artifacts"])), now, now,
+                        now + self.settings.retention_hours * 3600, identifier))
 
     def cancel(self, identifier: str) -> dict:
         with self.connection() as db:
@@ -201,7 +348,15 @@ class JobStore:
             rows = db.execute("SELECT id FROM jobs WHERE status='running'").fetchall()
         for row in rows:
             self.finish(row[0], "failed", "Worker interrompido; envie um novo job com a mesma semente")
-            shutil.rmtree(self.directory(row[0]), ignore_errors=True)
+            current = self.get(row[0])
+            directory = self.directory(row[0])
+            published = {item["name"] for item in json.loads(current["artifacts"])}
+            if not published:
+                shutil.rmtree(directory, ignore_errors=True)
+            elif directory.exists():
+                for path in directory.iterdir():
+                    if path.is_file() and path.name not in published:
+                        path.unlink()
 
     def directory(self, identifier: str) -> Path:
         if len(identifier) != 32 or any(c not in "0123456789abcdef" for c in identifier):
@@ -221,7 +376,7 @@ class JobStore:
     def artifacts(self, row: dict) -> list[dict]:
         if row["status"] == "expired" or row["expires_at"] < time.time():
             raise ServiceError(410, "expired", "Resultados expirados")
-        if row["status"] != "succeeded":
+        if row["status"] not in {"succeeded", "running", "failed", "cancelled"}:
             raise ServiceError(409, "not_ready", "Resultados ainda não disponíveis")
         return json.loads(row["artifacts"])
 
@@ -240,11 +395,13 @@ class JobStore:
         return self.root / "models" / identifier
 
     def create_model(self, owner_id: str, label: str, description: str, mapping_id: str,
-                     pdf: bytes, definition: dict) -> dict:
+                     pdf: bytes, definition: dict, layout: dict | None = None) -> dict:
         identifier = uuid4().hex
         directory = self.model_directory(identifier)
         directory.mkdir(mode=0o700, parents=True)
         (directory / "template.pdf").write_bytes(pdf)
+        if layout is not None:
+            (directory / "layout.json").write_text(json.dumps(layout, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         (directory / f"{mapping_id}.json").write_text(json.dumps(definition, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         now = time.time()
         with self.connection() as db:
@@ -282,6 +439,44 @@ class JobStore:
                        (len(definition["fields"]), time.time(), identifier))
         return self.model(identifier, owner_id)
 
+    def layout(self, identifier: str) -> dict | None:
+        path = self.model_directory(identifier) / "layout.json"
+        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+
+    def save_layout(self, identifier: str, owner_id: str, layout: dict, pdf: bytes) -> None:
+        self.model(identifier, owner_id)
+        directory = self.model_directory(identifier)
+        for name, content in (("template.pdf", pdf), ("layout.json", (json.dumps(layout, ensure_ascii=False, indent=2) + "\n").encode())):
+            temporary = directory / f".{name}.tmp"
+            temporary.write_bytes(content)
+            temporary.replace(directory / name)
+
+    def set_status(self, identifier: str, owner_id: str, status: str) -> dict:
+        self.model(identifier, owner_id)
+        with self.connection() as db:
+            db.execute("UPDATE models SET status=?,updated_at=? WHERE id=?", (status, time.time(), identifier))
+        return self.model(identifier, owner_id)
+
+    def list_field_types(self, owner_id: str) -> list[dict]:
+        with self.connection() as db:
+            rows = db.execute("SELECT * FROM field_types WHERE owner_id=? ORDER BY name COLLATE NOCASE", (owner_id,)).fetchall()
+        return [{**dict(row), "config": json.loads(row["config"])} for row in rows]
+
+    def save_field_type(self, owner_id: str, slug: str, name: str, description: str, base_type: str, config: dict) -> dict:
+        now = time.time()
+        with self.connection() as db:
+            if db.execute("SELECT 1 FROM field_types WHERE owner_id=? AND slug=?", (owner_id, slug)).fetchone():
+                raise ServiceError(409, "field_type_exists", "Já existe um tipo personalizado com este identificador")
+            identifier = uuid4().hex
+            db.execute("INSERT INTO field_types VALUES (?,?,?,?,?,?,?,?,?)",
+                       (identifier, owner_id, slug, name, description, base_type, json.dumps(config, ensure_ascii=False), now, now))
+        return next(item for item in self.list_field_types(owner_id) if item["id"] == identifier)
+
+    def delete_field_type(self, identifier: str, owner_id: str) -> None:
+        with self.connection() as db:
+            if not db.execute("DELETE FROM field_types WHERE id=? AND owner_id=?", (identifier, owner_id)).rowcount:
+                raise ServiceError(404, "not_found", "Tipo personalizado não encontrado")
+
     def delete_model(self, identifier: str, owner_id: str) -> None:
         self.model(identifier, owner_id)
         with self.connection() as db:
@@ -297,16 +492,24 @@ class JobStore:
         return [dict(row) for row in rows]
 
     def save_preset(self, owner_id: str, name: str, writing: dict, filter_preset: str,
-                    shareable: bool, identifier: str | None = None) -> dict:
+                    shareable: bool, identifier: str | None = None, description: str | None = None) -> dict:
         now = time.time()
         identifier = identifier or uuid4().hex
         with self.connection() as db:
-            existing = db.execute("SELECT owner_id,created_at FROM presets WHERE id=?", (identifier,)).fetchone()
+            existing = db.execute("SELECT * FROM presets WHERE id=?", (identifier,)).fetchone()
             if existing and existing["owner_id"] != owner_id:
                 raise ServiceError(404, "not_found", "Preset não encontrado")
-            created = existing["created_at"] if existing else now
-            db.execute("INSERT OR REPLACE INTO presets VALUES (?,?,?,?,?,?,?,?)",
-                       (identifier, owner_id, name, json.dumps(writing), filter_preset, int(shareable), created, now))
+            if existing:
+                db.execute("UPDATE presets SET name=?,writing=?,filter_preset=?,shareable=?,description=?,version=version+1,updated_at=?,"
+                           "share_token_hash=CASE WHEN ? THEN share_token_hash ELSE NULL END WHERE id=?",
+                           (name, json.dumps(writing), filter_preset, int(shareable), existing["description"] if description is None else description,
+                            now, int(shareable), identifier))
+                if not shareable:
+                    db.execute("DELETE FROM preset_grants WHERE preset_id=?", (identifier,))
+            else:
+                db.execute("INSERT INTO presets (id,owner_id,name,writing,filter_preset,shareable,created_at,updated_at,description,version) "
+                           "VALUES (?,?,?,?,?,?,?,?,?,1)",
+                           (identifier, owner_id, name, json.dumps(writing), filter_preset, int(shareable), now, now, description or ""))
         return self.preset(identifier, owner_id)
 
     def preset(self, identifier: str, owner_id: str) -> dict:
@@ -316,10 +519,103 @@ class JobStore:
             raise ServiceError(404, "not_found", "Preset não encontrado")
         return dict(row)
 
+    def accessible_preset(self, identifier: str, workspace_id: str) -> tuple[dict, str]:
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM presets WHERE id=?", (identifier,)).fetchone()
+            granted = row is not None and db.execute("SELECT 1 FROM preset_grants WHERE preset_id=? AND workspace_id=?",
+                                                     (identifier, workspace_id)).fetchone() is not None
+        if row and row["owner_id"] == workspace_id:
+            return dict(row), "meu"
+        if row and granted and row["share_token_hash"]:
+            return dict(row), "compartilhado"
+        raise ServiceError(404, "not_found", "Preset não encontrado")
+
+    def list_shared_presets(self, workspace_id: str) -> list[dict]:
+        with self.connection() as db:
+            rows = db.execute("SELECT presets.* FROM presets JOIN preset_grants ON preset_grants.preset_id = presets.id "
+                              "WHERE preset_grants.workspace_id=? AND presets.share_token_hash IS NOT NULL ORDER BY presets.updated_at DESC",
+                              (workspace_id,)).fetchall()
+        return [dict(row) for row in rows]
+
+    def share_preset(self, identifier: str, owner_id: str) -> str:
+        self.preset(identifier, owner_id)
+        token = secrets.token_urlsafe(32)
+        with self.connection() as db:
+            db.execute("UPDATE presets SET shareable=1,share_token_hash=? WHERE id=?", (hashlib.sha256(token.encode()).hexdigest(), identifier))
+        return token
+
+    def unshare_preset(self, identifier: str, owner_id: str) -> None:
+        self.preset(identifier, owner_id)
+        with self.connection() as db:
+            db.execute("UPDATE presets SET shareable=0,share_token_hash=NULL WHERE id=?", (identifier,))
+            db.execute("DELETE FROM preset_grants WHERE preset_id=?", (identifier,))
+
+    def accept_preset(self, identifier: str, token: str, workspace_id: str) -> dict:
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM presets WHERE id=?", (identifier,)).fetchone()
+            if not row or not row["share_token_hash"] or not secrets.compare_digest(row["share_token_hash"], hashlib.sha256(token.encode()).hexdigest()):
+                raise ServiceError(404, "not_found", "Convite inválido ou revogado")
+            if row["owner_id"] != workspace_id:
+                db.execute("INSERT OR IGNORE INTO preset_grants VALUES (?,?,?)", (identifier, workspace_id, time.time()))
+        return dict(row)
+
+    def preset_grants(self, identifier: str) -> int:
+        with self.connection() as db:
+            return db.execute("SELECT COUNT(*) FROM preset_grants WHERE preset_id=?", (identifier,)).fetchone()[0]
+
+    def leave_preset(self, identifier: str, workspace_id: str) -> None:
+        with self.connection() as db:
+            if not db.execute("DELETE FROM preset_grants WHERE preset_id=? AND workspace_id=?", (identifier, workspace_id)).rowcount:
+                raise ServiceError(404, "not_found", "Preset não encontrado")
+
     def delete_preset(self, identifier: str, owner_id: str) -> None:
         self.preset(identifier, owner_id)
         with self.connection() as db:
             db.execute("DELETE FROM presets WHERE id=?", (identifier,))
+            db.execute("DELETE FROM preset_grants WHERE preset_id=?", (identifier,))
+
+    def save_draft(self, owner_id: str, options: dict) -> None:
+        with self.connection() as db:
+            db.execute("INSERT OR REPLACE INTO generation_drafts VALUES (?,?,?)", (owner_id, json.dumps(options, ensure_ascii=False), time.time()))
+
+    def draft(self, owner_id: str) -> dict | None:
+        with self.connection() as db:
+            row = db.execute("SELECT options FROM generation_drafts WHERE owner_id=?", (owner_id,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def create_wizard_draft(self, owner_id: str, state: dict) -> str:
+        identifier = uuid4().hex
+        self.save_wizard_draft(identifier, owner_id, state)
+        return identifier
+
+    def save_wizard_draft(self, identifier: str, owner_id: str, state: dict) -> None:
+        with self.connection() as db:
+            existing = db.execute("SELECT owner_id FROM wizard_drafts WHERE id=?", (identifier,)).fetchone()
+            if existing and existing["owner_id"] != owner_id:
+                raise ServiceError(404, "not_found", "Rascunho não encontrado")
+            db.execute("INSERT OR REPLACE INTO wizard_drafts VALUES (?,?,?,?)",
+                       (identifier, owner_id, json.dumps(state, ensure_ascii=False), time.time()))
+
+    def wizard_draft(self, identifier: str, owner_id: str) -> dict:
+        with self.connection() as db:
+            row = db.execute("SELECT state FROM wizard_drafts WHERE id=? AND owner_id=?", (identifier, owner_id)).fetchone()
+        if not row:
+            raise ServiceError(404, "not_found", "Rascunho não encontrado; inicie uma nova geração")
+        return json.loads(row[0])
+
+    def claim_wizard_draft(self, identifier: str, owner_id: str) -> dict:
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT state FROM wizard_drafts WHERE id=? AND owner_id=?", (identifier, owner_id)).fetchone()
+            if not row:
+                raise ServiceError(404, "not_found", "Rascunho não encontrado")
+            state = json.loads(row[0])
+            if state.get("submitted_job") or state.get("submitting"):
+                raise ServiceError(409, "already_submitted", "Esta geração já foi enviada")
+            state["submitting"] = True
+            db.execute("UPDATE wizard_drafts SET state=?,updated_at=? WHERE id=?",
+                       (json.dumps(state, ensure_ascii=False), time.time(), identifier))
+        return state
 
     def save_config(self, owner_id: str, name: str, options: GenerationOptions, identifier: str | None = None) -> dict:
         now = time.time()

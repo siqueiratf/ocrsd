@@ -1,29 +1,58 @@
 {% extends "base.html" %}
-{% from "macros.html" import icon, page_header %}
+{% from "macros.html" import icon, pdf_tools %}
 {% block title %}Geração{% endblock %}
+{% block body_class %}is-wizard{% endblock %}
+{% block scripts %}<script src="/static/pdf_viewer.js?v={{ VERSION }}" defer></script><script src="/static/wizard.js?v={{ VERSION }}" defer></script>{% endblock %}
 {% block content %}
-{% call page_header("Etapa 2 · Produção", "Nova geração de dataset", "Configure documentos sintéticos, estilos de escrita e efeitos de digitalização.") %}
-  <div id="configuracoes" class="config-bar">{% include "partials/configurations.html" %}</div>
-{% endcall %}
-<form id="form-geracao" class="generation" hx-post="/geracao/jobs" hx-target="#job" hx-disabled-elt="#enviar" hx-disinherit="*">
-  <div id="secoes" class="generation-main" hx-include="[name='busca']" hx-sync="#form-geracao:queue last">
-    {% include "partials/generation_sections.html" %}
-  </div>
-  <aside class="generation-side">
-    <section class="card preview-card">
-      <header class="card-head">
-        <div><h2>Pré-visualização</h2><p>Template sintético · sem validade legal</p></div>
-        <span class="tag tag-blue">PDF</span>
-      </header>
-      <div id="previa" class="preview-stage">{% include "partials/preview.html" %}</div>
-    </section>
-    <section class="card cta-card">
-      <div id="resumo" hx-target="this" hx-post="/geracao/resumo" hx-trigger="change from:#form-geracao, realismo-aplicado from:body" hx-include="#form-geracao" hx-sync="#form-geracao:queue last">
-        {% include "partials/summary.html" %}
-      </div>
-      {% include "partials/submit_button.html" %}
-    </section>
-    <div id="job" aria-live="polite"></div>
-  </aside>
-</form>
+<div class="wizard {{ 'wizard-fields-page' if wizard_step == 2 }}" id="wizard">
+  <header class="wizard-heading"><span class="eyebrow">GERAÇÃO DE DATASET</span><h1>Nova geração de dataset</h1><p>Configure seus documentos sintéticos em cinco etapas.</p></header>
+  <nav class="wizard-steps" aria-label="Etapas da geração">
+    {% for title in ['Documento base', 'Campos', 'Quantidade', 'Escrita', 'Realismo'] %}
+    {% set number = loop.index %}{% set completed = number < wizard_step or wizard_step == 6 %}
+    <div class="wizard-step {{ 'is-done' if completed else ('is-current' if number == wizard_step else '') }}" {% if number == wizard_step %}aria-current="step"{% endif %}>
+      {% if completed %}<a href="/geracao?draft={{ draft_id }}&amp;etapa={{ number }}" aria-label="Voltar à etapa {{ number }}: {{ title }}"><span class="wizard-number">✓</span><span>{{ title }}</span></a>{% else %}<span class="wizard-step-inner"><span class="wizard-number">{{ number }}</span><span>{{ title }}</span></span>{% endif %}
+    </div>{% endfor %}
+  </nav>
+  {% if wizard_error %}<p class="notice notice-warning" role="alert">{{ wizard_error }}</p>{% endif %}
+  {% if wizard_notice %}<p class="notice notice-warning" role="alert">{{ wizard_notice }}</p>{% endif %}
+  {% if wizard_step == 6 %}
+  <section class="card wizard-review"><div class="wizard-section-heading"><span class="eyebrow">PRONTO PARA GERAR</span><h2>Revise sua geração</h2><p>Confira as escolhas antes de iniciar o processamento.</p></div>
+    <dl class="review-list">
+      <div><dt>Documento</dt><dd>{{ current_type.label if current_type else '—' }} <a href="/geracao?draft={{ draft_id }}&amp;etapa=1">Editar</a></dd></div>
+      <div><dt>Campos</dt><dd>{{ state.fields|length }} selecionados <a href="/geracao?draft={{ draft_id }}&amp;etapa=2">Editar</a></dd></div>
+      <div><dt>Quantidade</dt><dd>{{ state.count }} documentos <a href="/geracao?draft={{ draft_id }}&amp;etapa=3">Editar</a></dd></div>
+      <div><dt>Escrita</dt><dd>{{ 'Padrão' if state.preset == 'padrao_fonte_natural' else (selected_style.title if selected_style else '—') }} <a href="/geracao?draft={{ draft_id }}&amp;etapa=4">Editar</a></dd></div>
+      <div><dt>Realismo</dt><dd>{{ FILTERS[state.filter_preset] }} <a href="/geracao?draft={{ draft_id }}&amp;etapa=5">Editar</a></dd></div>
+    </dl>
+    {% if state.submitted_job %}<div class="wizard-actions"><a class="btn btn-primary" href="/resultados?job={{ state.submitted_job }}">Ver geração enviada</a></div>{% else %}<form hx-post="/geracao/gerar" hx-swap="none" hx-disabled-elt="find button" class="wizard-actions"><input type="hidden" name="draft_id" value="{{ draft_id }}"><a class="btn" href="/geracao?draft={{ draft_id }}&amp;etapa=5">Voltar</a><button class="btn btn-primary" type="submit" {{ 'disabled' if wizard_error }}>Gerar dataset<span class="spinner htmx-indicator" aria-hidden="true"></span></button></form>{% endif %}
+  </section>
+  {% else %}
+  <div class="wizard-layout {{ 'wizard-layout-wide' if wizard_step == 4 else ('wizard-layout-fields' if wizard_step == 2 else '') }}"><section class="card wizard-panel">
+    {% if wizard_step == 1 %}
+    <div class="wizard-section-heading"><h2>Documento base</h2><p>Escolha o documento. Os campos, as regras e as posições vêm do mapeamento do modelo.</p></div>
+    {% if unpublished %}<p class="notice notice-warning">“{{ unpublished.label }}” ainda é um rascunho. <a href="/modelos/{{ unpublished.id }}/editor?draft={{ draft_id }}">Publique-o no editor</a> para continuar.</p>{% elif state.document_type and not current_type %}<p class="notice notice-warning">O modelo escolhido não possui mapeamento disponível no catálogo. <a href="/modelos/novo">Cadastre o documento e seu mapeamento</a> para continuar.</p>{% endif %}
+    <div class="wizard-model-grid">{% for item in types %}<a class="wizard-model {{ 'is-selected' if current_type and current_type.id == item.id else '' }}" href="/geracao?draft={{ draft_id }}&amp;etapa=1&amp;modelo={{ item.id }}" {% if current_type and current_type.id == item.id %}aria-current="true"{% endif %}><span class="wizard-model-thumb"><img src="/modelos/{{ item.id }}/previa.png?largura=500" alt="Prévia de {{ item.label }}" loading="lazy"></span><span class="wizard-model-detail"><b>{{ item.label }}</b><small>{{ model_info[item.id].field_count }} campos mapeados</small></span></a>{% endfor %}</div>
+    {% if current_type %}
+    <form hx-post="/geracao/etapa/1" hx-swap="none"><input type="hidden" name="draft_id" value="{{ draft_id }}"><input type="hidden" name="document_type" value="{{ current_type.id }}">
+      <p class="wizard-model-summary"><b>{{ current_type.label }}</b> · {{ model_info[current_type.id].field_count }} campos · {{ 'Modelo padrão' if current_type.builtin else 'Modelo personalizado' }}</p>
+      <div class="wizard-actions"><button class="btn btn-primary" type="submit">Próximo</button></div>
+    </form>
+    <form hx-post="/geracao/editar-mapeamento" hx-swap="none" class="wizard-edit-mapping"><input type="hidden" name="draft_id" value="{{ draft_id }}"><button type="submit" class="btn btn-sm" {% if current_type.builtin %}data-tooltip="O modelo padrão fica protegido; a cópia editável aparece na Galeria de Modelos"{% endif %}>{{ 'Duplicar e editar' if current_type.builtin else 'Editar campos do modelo' }}</button></form>
+    {% else %}<p class="empty-hint">Selecione um modelo para continuar.</p>{% endif %}
+    {% elif wizard_step == 2 %}
+    <div class="wizard-section-heading"><h2>Campos</h2><p>Escolha os campos que receberão valores sintéticos.</p></div>
+    <form hx-post="/geracao/etapa/2" hx-swap="none" data-field-form><input type="hidden" name="draft_id" value="{{ draft_id }}"><div class="wizard-field-controls"><div class="wizard-field-toolbar"><label class="search-field"><input type="search" data-field-search placeholder="Buscar campo ou identificador" aria-label="Buscar campos"></label><span id="wizard-field-count" aria-live="polite">{{ state.fields|length }} de {{ fields|length }} campos selecionados</span></div><div class="wizard-bulk"><label class="check wizard-selected-filter"><input type="checkbox" data-selected-only>Somente selecionados</label><button type="button" class="btn btn-sm" data-field-action="all">Selecionar todos</button><button type="button" class="btn btn-sm" data-field-action="clear">Limpar seleção</button></div></div>
+    <div class="wizard-field-scroll">{% for group, items in groups.items() %}<details class="wizard-field-group" {{ 'open' if loop.first }} data-field-section><summary>{{ group }} <small data-group-count>{{ items|selectattr('id', 'in', state.fields)|list|length }} de {{ items|length }}</small></summary><div class="wizard-field-items"><label class="check wizard-group-select"><input type="checkbox" data-field-group-checkbox aria-label="Selecionar ou limpar {{ group }}"><span>Selecionar grupo</span></label>{% for field in items %}<label class="check wizard-field" data-field-id="{{ field.id }}" data-field-search-text="{{ (field.label ~ ' ' ~ field.id ~ ' ' ~ field.description ~ ' ' ~ field.official_variable ~ ' ' ~ field.data_type)|lower }}"><input type="checkbox" name="fields" value="{{ field.id }}" {{ 'checked' if field.id in state.fields }}><span>{{ field.label }}<small>{{ field.id }} · {{ field.data_type }}</small></span></label>{% endfor %}</div></details>{% endfor %}</div>
+    <div class="wizard-actions"><button class="btn" type="submit" name="direction" value="back" formnovalidate>Voltar</button><button class="btn btn-primary" type="submit">Próximo</button></div></form>
+    {% elif wizard_step == 3 %}
+    <div class="wizard-section-heading"><h2>Quantidade</h2><p>Quantos documentos sintéticos você deseja gerar?</p></div><form hx-post="/geracao/etapa/3" hx-swap="none"><input type="hidden" name="draft_id" value="{{ draft_id }}"><label class="field wizard-count">Quantidade de documentos<input type="number" name="count" min="1" max="{{ max_count }}" value="{{ state.count }}" required><small class="hint">De 1 a {{ max_count }} documentos por geração.</small></label><div class="wizard-shortcuts">{% for n in [10, 50, 100, 500] if n <= max_count %}<button type="button" class="btn btn-sm" data-quantity="{{ n }}">{{ n }}</button>{% endfor %}</div><div class="wizard-actions"><button class="btn" type="submit" name="direction" value="back" formnovalidate>Voltar</button><button class="btn btn-primary" type="submit">Próximo</button></div></form>
+    {% elif wizard_step == 4 %}
+    <div class="wizard-section-heading"><h2>Escrita</h2><p>Selecione a aparência da escrita nos documentos.</p></div><form hx-post="/geracao/etapa/4" hx-swap="none"><input type="hidden" name="draft_id" value="{{ draft_id }}"><div class="wizard-style-grid">{% for item in styles[:8] %}<label class="wizard-style {{ 'is-incompatible' if item.conflict }}" {% if item.conflict %}title="{{ item.conflict }}"{% endif %}><input type="radio" name="preset" value="{{ item.id }}" {{ 'checked' if item.id == state.preset and not item.conflict }} {% if item.conflict %}disabled aria-describedby="conflito-{{ loop.index }}"{% endif %}><span class="wizard-style-image"><img src="{{ item.thumbnail }}" alt="Amostra gerada do preset {{ item.title }}" loading="lazy"></span><span class="wizard-style-copy"><b>{{ 'Padrão' if item.id == 'padrao_fonte_natural' else item.title }}</b><small>{{ item.summary }}</small>{% if item.conflict %}<small class="wizard-style-conflict" id="conflito-{{ loop.index }}">{{ icon('alert') }}<span>{{ item.conflict }}</span></small>{% endif %}</span></label>{% endfor %}</div><div class="wizard-extra-links"><a href="/geracao/editar-escrita?draft={{ draft_id }}">Mais estilos</a><a href="/geracao/editar-escrita?draft={{ draft_id }}&novo=1">Criar meu próprio estilo</a></div><div class="wizard-actions"><button class="btn" type="submit" name="direction" value="back" formnovalidate>Voltar</button><button class="btn btn-primary" type="submit">Próximo</button></div></form>
+    {% else %}
+    <div class="wizard-section-heading"><h2>Realismo</h2><p>Compare os efeitos de digitalização antes de gerar.</p></div><form hx-post="/geracao/etapa/5" hx-swap="none"><input type="hidden" name="draft_id" value="{{ draft_id }}"><div class="wizard-choices">{% for key, title in [('none','Sem efeitos'),('light','Leve'),('medium','Médio'),('strong','Forte')] %}<label class="wizard-choice"><input type="radio" name="filter_preset" value="{{ key }}" {{ 'checked' if state.filter_preset == key }} hx-get="/geracao/realismo/previa?draft={{ draft_id }}&amp;preset_name={{ key }}" hx-trigger="change" hx-target="#wizard-realism-preview"><span><b>{{ title }}</b><small>{{ 'Documento limpo' if key == 'none' else 'Efeitos de digitalização ' ~ title|lower }}</small></span></label>{% endfor %}</div><a class="subtle-link" href="/ferramentas/realismo">Personalizar efeitos no comparador</a><div class="wizard-actions"><button class="btn" type="submit" name="direction" value="back" formnovalidate>Voltar</button><button class="btn btn-primary" type="submit">Próximo</button></div></form>
+    {% endif %}
+  </section>
+  {% if wizard_step in [1, 2, 5] and current_type %}<aside class="card wizard-preview" aria-label="Prévia do documento"><div class="card-head"><div><h2>{{ 'Campos no documento' if wizard_step == 2 else ('Antes e depois' if wizard_step == 5 else 'Prévia do documento') }}</h2><p>{{ current_type.label }}</p></div>{% if wizard_step in [1, 2] %}<div class="wizard-pdf-controls">{{ pdf_tools() }}</div>{% endif %}</div>{% if wizard_step == 5 %}<div id="wizard-realism-preview" hx-get="/geracao/realismo/previa?draft={{ draft_id }}&amp;preset_name={{ state.filter_preset }}" hx-trigger="load">Carregando prévia…</div>{% else %}<div class="wizard-pdf-stage" data-pdf-stage><div id="wizard-mapping-preview" {% if wizard_step == 1 %}hx-get="/geracao/mapeamento/previa?draft={{ draft_id }}" hx-trigger="load" hx-indicator="#wizard-preview-loading"{% endif %}>{% if wizard_step == 2 and definition %}{% set selected_fields = state.fields %}{% set editable = True %}{% include "partials/wizard_pdf.html" %}{% endif %}</div><span id="wizard-preview-loading" class="wizard-preview-loading htmx-indicator" role="status">Carregando mapeamento…</span></div>{% endif %}</aside>{% endif %}
+  </div>{% endif %}
+</div>
 {% endblock %}

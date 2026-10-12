@@ -1,0 +1,50 @@
+{% from "macros.html" import dialog_head, icon %}
+<form class="dialog-panel" hx-post="/modelos/tipos" hx-target="#modal" hx-disabled-elt="find button[type=submit]" hx-disinherit="*">
+  {{ dialog_head("Criar campo personalizado") }}
+  <div class="dialog-body form-stack">
+    <fieldset class="segmented">
+      <legend>Escopo</legend>
+      <label><input type="radio" name="escopo" value="tipo" checked><span>Tipo reutilizável</span></label>
+      <label><input type="radio" name="escopo" value="campo"><span>{{ "Somente o campo selecionado" if apply else "Somente um campo" }}</span></label>
+    </fieldset>
+    <p class="hint">Um tipo reutilizável aparece na paleta de todos os modelos deste espaço de trabalho. Um campo único usa a configuração uma vez, sem salvar o tipo.</p>
+    <input type="hidden" name="aplicar" value="{{ '1' if apply else '' }}">
+    <div class="grid-2">
+      <label class="field">Nome do tipo<input name="name" required maxlength="60" value="{{ type_name }}" placeholder="Ex.: Número da matrícula" autofocus></label>
+      <label class="field">Identificador<input name="slug" required maxlength="40" pattern="[a-z0-9_]{2,40}" placeholder="numero_matricula" spellcheck="false"><small class="hint">Letras minúsculas, números e “_”.</small></label>
+    </div>
+    <label class="field">Descrição <span class="optional">opcional</span><input name="description" maxlength="200" placeholder="Quando usar este campo"></label>
+    <div class="grid-2">
+      <label class="field">Tipo base
+        <select name="base_type">{% for item in bases %}<option value="{{ item }}" {% if item == base %}selected{% endif %}>{{ TYPE_LABELS[item] }}</option>{% endfor %}</select>
+      </label>
+      <label class="field">Regra de geração
+        <select name="rule">{% for key, label in rules.items() %}<option value="{{ key }}" {% if key == rule %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <div class="rule-panels">
+      <label class="field only-lista">Valores permitidos <span class="optional">um por linha</span>
+        <textarea name="allowed_values" rows="4">{{ (validation.allowed_values or [])|join('\n') }}</textarea>
+      </label>
+      <div class="grid-2 only-intervalo">
+        <label class="field">Valor mínimo<input name="min_value" type="number" step="any" value="{{ validation.min_value if validation.min_value is defined else '' }}"></label>
+        <label class="field">Valor máximo<input name="max_value" type="number" step="any" value="{{ validation.max_value if validation.max_value is defined else '' }}"></label>
+      </div>
+      <label class="field only-mascara">Máscara <span class="optional"># dígito · A maiúscula · a minúscula · * letra ou dígito</span>
+        <input name="mask" maxlength="60" value="{{ validation.mask or '' }}" placeholder="###.###.###-##" spellcheck="false">
+      </label>
+      <label class="field only-date">Formato de data<select name="format">{% for key, label in date_formats if key != 'SEPARADO' %}<option value="{{ key }}" {% if key == validation.format %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label class="field only-document">Tipo de documento<select name="document_kind">{% for key, label in document_kinds.items() %}<option value="{{ key }}" {% if key == validation.document_kind %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label class="field only-decimal">Casas decimais<input name="decimals" type="number" min="0" max="6" value="{{ validation.decimals if validation.decimals is defined else '' }}"></label>
+    </div>
+    <div class="grid-2">
+      <label class="field">Campo vazio em <span class="optional">% dos documentos</span><input name="blank_percent" type="number" min="0" max="95" step="1" value="{{ ((validation.blank_probability or 0) * 100)|round|int }}"></label>
+      <label class="check check-field"><input type="checkbox" name="printed">Exibir como texto digitado</label>
+    </div>
+    <p class="hint">Somente regras declarativas suportadas pelo motor OCRSD são aceitas. Código e expressões executáveis não são permitidos.</p>
+  </div>
+  <footer class="dialog-foot">
+    <button type="button" class="btn" data-fechar>Cancelar</button>
+    <button type="submit" class="btn btn-primary">{{ icon('sparkle') }}{{ "Aplicar" if apply else "Criar e posicionar" }}<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+  </footer>
+</form>

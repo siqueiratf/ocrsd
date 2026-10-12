@@ -1,20 +1,15 @@
 {% extends "base.html" %}
-{% from "macros.html" import icon, page_header %}
+{% from "macros.html" import icon %}
 {% block title %}Resultados{% endblock %}
+{% block scripts %}<script src="/static/results.js?v={{ VERSION }}" defer></script>{% endblock %}
 {% block content %}
-{% call page_header("Etapa 3 · Resultados", "Datasets gerados", "Acompanhe execuções, examine os arquivos e compartilhe resultados sintéticos com controle de acesso.") %}
-  <form id="filtros" class="filters" role="search" hx-get="/resultados/lista" hx-target="#tabela-jobs" hx-swap="outerHTML" hx-trigger="input delay:300ms, change, submit" hx-sync="this:replace" hx-disinherit="*">
-    <label class="search-field">{{ icon('search') }}<input type="search" name="busca" value="{{ search }}" maxlength="120" placeholder="Buscar geração…" aria-label="Buscar gerações"></label>
-    <select name="status" aria-label="Filtrar por status">
-      <option value="">Todos os status</option>
-      {% for key, label in STATUS.items() %}<option value="{{ key }}" {% if key == status %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-    {% include "partials/selected_input.html" %}
+<section class="results-library">
+  <header class="results-head"><h1>Resultados</h1></header>
+  <form id="filtros" class="results-filters" role="search" hx-get="/resultados/lista" hx-target="#tabela-jobs" hx-swap="outerHTML" hx-trigger="input delay:300ms, change, submit" hx-sync="this:replace" hx-disinherit="*">
+    <label class="search-field">{{ icon('search') }}<input type="search" name="busca" value="{{ search }}" maxlength="120" placeholder="Buscar datasets..." aria-label="Buscar datasets"></label>
+    <input type="hidden" name="status" value="{{ status }}"><input type="hidden" name="ordem" value="{{ order }}">
+    <input type="hidden" name="modelo" value="{{ document_type }}">
   </form>
-  <a class="btn btn-primary" href="/geracao">{{ icon('generate') }}Nova geração</a>
-{% endcall %}
-{% include "partials/jobs_table.html" %}
-<div id="detalhe" class="result-detail">
-  {% if result %}{% include "partials/result_body.html" %}{% endif %}
-</div>
+  {% include "partials/jobs_table.html" %}
+</section>
 {% endblock %}

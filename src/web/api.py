@@ -47,7 +47,7 @@ class GuardMiddleware:
                 return
             if path in {"/api/v1/models", "/modelos"}:
                 maximum = self.settings.max_upload_bytes * 2
-            elif path.endswith("/mapping") or path.endswith("/mapeamento"):
+            elif path.endswith("/mapping") or path.endswith("/mapeamento") or (path.startswith("/modelos/") and path.endswith("/previa")):
                 maximum = 131072 if api else 393216
             else:
                 maximum = 32768
@@ -269,8 +269,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/v1/configurations", response_model=GenerationConfigResponse, status_code=201, tags=["Configurações"])
     async def create_configuration(payload: GenerationConfigCreate, owner_id: Annotated[str, Depends(workspace_required)]):
-        catalog.validate(payload.options, owner_id)
-        return store.save_config(owner_id, payload.name, payload.options)
+        options = catalog.validate(payload.options, owner_id)
+        return store.save_config(owner_id, payload.name, options)
 
     @app.delete("/api/v1/configurations/{configuration_id}", tags=["Configurações"])
     async def delete_configuration(configuration_id: Identifier, owner_id: Annotated[str, Depends(workspace_required)]):
@@ -283,8 +283,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/v1/jobs", response_model=SubmittedJob, status_code=202, tags=["Geração"])
     async def submit(options: GenerationOptions, request: Request, owner_id: Annotated[str | None, Depends(workspace_optional)]):
-        catalog.validate(options, owner_id)
-        row, token = store.submit(options, request.client.host if request.client else "unknown", owner_id)
+        options = catalog.validate(options, owner_id)
+        row, token = store.submit(options, request.client.host if request.client else "unknown", owner_id, source=catalog.source(options, owner_id))
         return SubmittedJob(**store.response(row).model_dump(), token=token)
 
     @app.get("/api/v1/jobs", response_model=list[JobDetail], tags=["Resultados"])

@@ -1,0 +1,80 @@
+{% from "macros.html" import icon %}
+{% set neural = writing.model != 'font' %}
+{% set details = info[writing.model] %}
+<input type="hidden" name="modelo_atual" value="{{ writing.model }}">
+<section class="config-section">
+  <h2>Comportamento da escrita</h2>
+  {% if neural %}
+  <fieldset class="writer-choice">
+    <legend>Escritor</legend>
+    <label class="check"><input type="radio" name="writer_mode" value="aleatorio" {% if writing.writer is none %}checked{% endif %}>Aleatório por documento</label>
+    <label class="check"><input type="radio" name="writer_mode" value="fixo" {% if writing.writer is not none %}checked{% endif %}>Escritor fixo</label>
+    {% if details.writers == 13 %}
+    <select name="writer" aria-label="Estilo do escritor" data-escritor>
+      {% for index in range(13) %}<option value="{{ index }}" {% if writing.writer == index %}selected{% endif %}>Estilo {{ index }}</option>{% endfor %}
+    </select>
+    {% else %}
+    <input type="number" name="writer" min="0" max="{{ details.writers - 1 }}" value="{{ writing.writer if writing.writer is not none else 0 }}" aria-label="Número do escritor, de 0 a {{ details.writers - 1 }}" data-escritor>
+    {% endif %}
+    <small class="hint">Fixo repete a mesma identidade em todos os documentos. Aleatório sorteia um escritor por documento; a prévia mostra um escritor sorteado por variação.</small>
+  </fieldset>
+  <label class="field">Regularidade <output id="bias-saida">{{ writing.bias }}</output>
+    <input type="range" name="bias" min="0" max="3" step="0.05" value="{{ writing.bias }}" data-valor="bias-saida">
+    <small class="hint">Valores maiores produzem traços mais regulares e legíveis; valores menores, mais variação.</small>
+  </label>
+  <label class="field">Caracteres não suportados
+    <select name="text_policy">
+      <option value="normalize" {% if writing.text_policy == 'normalize' %}selected{% endif %}>Normalizar (remove acentos e troca / por -)</option>
+      <option value="strict" {% if writing.text_policy == 'strict' %}selected{% endif %}>Rejeitar o valor</option>
+    </select>
+    <small class="hint" title="{{ characters }}">{{ details.charset }}.</small>
+  </label>
+  <input type="hidden" name="intensity" value="{{ writing.intensity }}">
+  {% else %}
+  <label class="field">Variação controlada <output id="intensidade-saida">{{ (writing.intensity * 100)|round|int }}%</output>
+    <input type="range" name="intensity" min="0" max="1" step="0.05" value="{{ writing.intensity }}" data-saida="intensidade-saida">
+    <small class="hint">Controla inclinação, espaçamento e tamanho dos caracteres em cada documento.</small>
+  </label>
+  {% for name, value in (("bias", writing.bias), ("color", writing.color), ("width", writing.width), ("pressure", writing.pressure), ("dropout", writing.dropout), ("text_policy", writing.text_policy)) %}
+  <input type="hidden" name="{{ name }}" value="{{ value }}">
+  {% endfor %}
+  {% endif %}
+  <fieldset class="check-row">
+    <legend>Escrita manuscrita em</legend>
+    <label class="check"><input type="checkbox" name="handwriting" {% if writing.handwriting %}checked{% endif %}>Números</label>
+    <label class="check"><input type="checkbox" name="text_handwriting" {% if writing.text_handwriting %}checked{% endif %}>Textos</label>
+  </fieldset>
+</section>
+<section class="config-section">
+  <h2>Aparência da escrita</h2>
+  {% if neural %}
+  <div class="field">
+    <span>Cor</span>
+    <div class="color-field">
+      <input type="color" name="color" value="{{ writing.color }}" aria-label="Cor da caneta" data-cor>
+      <input type="text" value="{{ writing.color }}" maxlength="7" pattern="#[0-9a-fA-F]{6}" spellcheck="false" aria-label="Cor em hexadecimal" class="mono" data-cor-hex>
+      <div class="swatches" role="group" aria-label="Cores sugeridas">
+        {% for swatch, label in (("#193787", "Azul caneta"), ("#1f2329", "Preto"), ("#2f5fb3", "Azul claro"), ("#6b2a7d", "Roxo")) %}
+        <button type="button" class="swatch" data-amostra-cor="{{ swatch }}" aria-label="{{ label }}" title="{{ label }} · {{ swatch }}"><i data-cor-fundo="{{ swatch }}"></i></button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% for name, label, minimum, maximum, step, slider_max, hint in (
+      ("width", "Espessura", 0.1, 40, 0.1, 12, "Largura do traço em pixels; o campo numérico aceita até 40."),
+      ("pressure", "Pressão", 0, 1, 0.05, 1, "Varia a intensidade da tinta ao longo do traço."),
+      ("dropout", "Falhas", 0, 1, 0.05, 1, "Probabilidade de pequenas interrupções no traço.")) %}
+  <div class="field">
+    <span>{{ label }}</span>
+    <div class="slider-field">
+      <input type="range" id="{{ name }}-faixa" min="{{ minimum }}" max="{{ slider_max }}" step="{{ step }}" value="{{ writing[name] }}" data-espelho="{{ name }}-numero" aria-label="{{ label }}">
+      <input type="number" id="{{ name }}-numero" name="{{ name }}" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}" value="{{ writing[name] }}" data-espelho="{{ name }}-faixa" aria-label="{{ label }} (valor)">
+    </div>
+    <small class="hint">{{ hint }}</small>
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="hint">A fonte manuscrita define a tinta automaticamente, como na geração: caneta azul nos números e grafite nos textos. Cor, espessura, pressão e falhas se aplicam aos modelos neurais.</p>
+  {% endif %}
+  <button type="button" class="btn btn-sm" hx-post="/presets/escrita/controles" hx-vals='{"acao": "padroes"}' hx-target="#controles-modelo">{{ icon('reload') }}Restaurar padrões do modelo</button>
+</section>

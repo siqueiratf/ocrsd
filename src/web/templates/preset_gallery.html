@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Presets de Escrita{% endblock %}
+{% block content %}
+{% if retorno %}
+<div class="return-banner" role="status">
+  {{ icon('generate') }}<span>Escolha o preset da etapa 4 da geração. O rascunho da geração está preservado.</span>
+  <a class="btn btn-sm" href="{{ '/geracao?draft=' ~ retorno[8:] ~ '&etapa=4' if retorno.startswith('geracao_') else '/geracao?rascunho=1' }}">{{ icon('back') }}Voltar sem alterar</a>
+</div>
+{% endif %}
+<div class="page-head page-head-compact">
+  <h1>Presets de Escrita</h1>
+  <div class="page-actions">
+    <a class="btn" href="/presets/escrita/modelos">{{ icon('info') }}Modelos de escrita</a>
+    <a class="btn btn-primary" href="/presets/escrita/novo{{ '?retorno=' ~ retorno if retorno }}">{{ icon('add') }}Criar preset</a>
+  </div>
+</div>
+<form id="filtros-presets" class="gallery-toolbar" role="search" hx-get="/presets/escrita" hx-target="#grade-presets" hx-swap="outerHTML"
+      hx-push-url="true" hx-trigger="input delay:300ms, change, submit" hx-sync="this:queue last" hx-disinherit="*">
+  <fieldset class="segmented segmented-tabs">
+    <legend class="sr-only">Coleção</legend>
+    {% for key, label in tabs.items() %}
+    <label><input type="radio" name="aba" value="{{ key }}" {% if key == aba %}checked{% endif %}><span>{{ label }} <b class="count">{{ counts[key] }}</b></span></label>
+    {% endfor %}
+  </fieldset>
+  <label class="search-field">{{ icon('search') }}<input type="search" name="busca" value="{{ busca }}" maxlength="120" placeholder="Buscar presets..." aria-label="Buscar presets"></label>
+  <select name="modelo" aria-label="Filtrar por modelo de escrita">
+    <option value="">Todos os modelos</option>
+    {% for key, info in model_info.items() %}<option value="{{ key }}" {% if key == modelo %}selected{% endif %}>{{ info.label }}</option>{% endfor %}
+  </select>
+  <select name="ordem" aria-label="Ordenar presets">
+    {% for key, label in sorts.items() %}<option value="{{ key }}" {% if key == ordem %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  {% if retorno %}<input type="hidden" name="retorno" value="{{ retorno }}">{% endif %}
+</form>
+{% include "partials/preset_grid.html" %}
+{% endblock %}

@@ -1,0 +1,6 @@
+{% from "macros.html" import dialog_head, icon %}
+{% set document = result.selected_document %}
+<div class="dialog-panel document-info-dialog">{{ dialog_head(document.label ~ ' · informações') }}<div class="dialog-body"><div class="document-info-actions"><a class="btn btn-sm" href="/resultados/{{ result.job.id }}/arquivos/{{ document.json.id }}" download>{{ icon('download') }}Baixar JSON</a>{% if raw %}<button class="btn btn-sm" type="button" data-copiar="#document-json">{{ icon('copy') }}<span>Copiar JSON</span></button>{% endif %}</div>
+  {% if data and data.fields is iterable %}<div class="metadata-table-scroll"><table class="table metadata-table"><thead><tr><th scope="col">Campo</th><th scope="col">Valor</th></tr></thead><tbody>{% for field in data.fields %}<tr><th scope="row">{{ field.label or field.field_id or 'Campo' }}</th><td>{{ field.value|tojson if field.value is mapping or field.value is sequence and field.value is not string else field.value if field.value is not none else '—' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p>Os campos estruturados não estão disponíveis para pré-visualização.</p>{% endif %}
+  {% if raw %}<details class="metadata-raw"><summary>Ver JSON bruto</summary><textarea id="document-json" readonly aria-label="JSON bruto">{{ raw }}</textarea></details>{% endif %}
+</div></div>

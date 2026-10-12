@@ -1,5 +1,6 @@
 import json
 import random
+from datetime import date
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,10 +10,11 @@ import fitz
 import numpy as np
 
 from src.synthetic_dataset import (
-    _apply_ballpoint_texture, apply_shared_rules, generate_dataset, is_numeric_text,
+    _apply_ballpoint_texture, apply_shared_rules, element_values, generate_dataset, is_numeric_text,
     random_handwriting_style, random_value, render_checkbox_mark,
-    render_handwritten_numeric, render_handwritten_text, render_neural_text,
+    render_handwritten_numeric, render_handwritten_text, render_neural_text, typed_value,
 )
+from src.field_rules import DNV_PATTERN, cpf, dnv_structure_errors, format_date, rule_errors
 from src.neural_handwriting import NeuralPen
 
 
@@ -26,6 +28,37 @@ class SyntheticValueTests(unittest.TestCase):
         self.assertRegex(random_value({"data_type": "date"}, rng), r"^\d{2}/\d{2}/\d{4}$")
         self.assertRegex(random_value({"data_type": "cep"}, rng), r"^\d{5}-\d{3}$")
         self.assertEqual(len(random_value({"data_type": "cns"}, rng)), 15)
+
+    def test_generates_editor_field_types_and_rules(self):
+        rng = random.Random(11)
+        self.assertRegex(random_value({"data_type": "date", "validation": {"format": "AAAA-MM-DD"}}, rng), r"^\d{4}-\d{2}-\d{2}$")
+        self.assertRegex(random_value({"data_type": "date", "validation": {"format": "DD de mês de AAAA"}}, rng), r"^\d{2} de [a-zç]+ de \d{4}$")
+        self.assertRegex(random_value({"data_type": "text", "validation": {"mask": "AA-####"}}, rng), r"^[A-Z]{2}-\d{4}$")
+        self.assertRegex(random_value({"data_type": "document", "validation": {"document_kind": "rg"}}, rng), r"^\d{2}\.\d{3}\.\d{3}-\d$")
+        self.assertEqual(len(random_value({"data_type": "document", "validation": {"document_kind": "cns"}}, rng)), 15)
+        decimal = float(random_value({"data_type": "decimal", "validation": {"min_value": 10, "max_value": 12, "decimals": 1}}, rng).replace(",", "."))
+        self.assertTrue(10 <= decimal <= 12)
+        self.assertRegex(random_value({"data_type": "decimal"}, rng), r"^\d,\d{3}$")
+        for data_type in ("municipality", "address", "occupation", "signature"):
+            self.assertTrue(random_value({"data_type": data_type}, rng))
+        self.assertIn(random_value({"data_type": "municipality", "validation": {"allowed_values": ["Lages"]}}, rng), {"Lages"})
+
+    def test_generates_valid_cpf_check_digits(self):
+        for seed in range(20):
+            digits = [int(character) for character in cpf(random.Random(seed)) if character.isdigit()]
+            for length in (9, 10):
+                total = sum(value * weight for value, weight in zip(digits, range(length + 1, 1, -1)))
+                self.assertEqual(digits[length], 0 if total % 11 < 2 else 11 - total % 11)
+
+    def test_validates_declarative_rules(self):
+        self.assertEqual(rule_errors("text", {"mask": "###", "allowed_values": ["A"], "blank_probability": 0.5}), [])
+        self.assertTrue(rule_errors("integer", {"min_value": 5, "max_value": 1}))
+        self.assertTrue(rule_errors("text", {"mask": "sem tokens"}))
+        self.assertTrue(rule_errors("date", {"format": "%Y"}))
+        self.assertTrue(rule_errors("text", {"pattern": "("}))
+        self.assertTrue(rule_errors("text", {"blank_probability": 1}))
+        self.assertTrue(rule_errors("document", {"document_kind": "passaporte"}))
+        self.assertEqual(rule_errors("digit_sequence", {"format": "DDMMYYYY"}), [])
 
     def test_applies_shared_rules_to_digit_sequences(self):
         field_map = apply_shared_rules({
@@ -62,6 +95,15 @@ class SyntheticValueTests(unittest.TestCase):
         self.assertEqual(cep, profile["cep"])
         self.assertEqual(city, profile["city"])
         self.assertEqual(uf, profile["uf"])
+
+    def test_location_digit_sequences_keep_only_digits(self):
+        field = {"field_id": "12_codigo", "description": "Municipio de ocorrencia - Codigo (IBGE)", "data_type": "digit_sequence",
+                 "elements": [{"index": index} for index in range(7)]}
+        for seed in range(40):
+            context: dict = {}
+            value = random_value(field, random.Random(seed), context)
+            self.assertRegex(value, r"^[0-9]{7}$")
+            self.assertEqual(value, context["locations"]["occurrence"]["ibge"])
 
     def test_generates_plausible_gestational_history_counts(self):
         context: dict = {}
@@ -140,7 +182,99 @@ class SyntheticValueTests(unittest.TestCase):
         self.assertEqual(model.sample.call_count, 2)
 
 
+class TypedFieldTests(unittest.TestCase):
+    def test_date_formats_describe_one_valid_date(self):
+        patterns = {"DD/MM/AAAA": r"^\d{2}/\d{2}/\d{4}$", "DD-MM-AAAA": r"^\d{2}-\d{2}-\d{4}$",
+                    "DD de mês de AAAA": r"^\d{2} de (janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro) de \d{4}$"}
+        for fmt, pattern in patterns.items():
+            for seed in range(40):
+                value, semantic = typed_value({"field_id": "d", "data_type": "date", "validation": {"format": fmt}}, random.Random(seed), {})
+                self.assertRegex(value, pattern)
+                self.assertEqual(value, format_date(date.fromisoformat(semantic["date"]), fmt))
+
+    def test_leap_days_are_generated_and_formatted(self):
+        self.assertEqual(format_date(date(2024, 2, 29), "DD-MM-AAAA"), "29-02-2024")
+        self.assertEqual(format_date(date(2024, 2, 29), "DD de mês de AAAA"), "29 de fevereiro de 2024")
+        field = {"field_id": "d", "data_type": "date", "validation": {"format": "DD/MM/AAAA"}}
+        leap = next(semantic["date"] for seed in range(20000)
+                    for value, semantic in [typed_value(field, random.Random(seed), {})] if semantic["date"].endswith("-02-29"))
+        self.assertEqual(date.fromisoformat(leap).day, 29)
+
+    def test_separated_date_parts_come_from_one_date(self):
+        field = {"field_id": "nascimento", "data_type": "date", "validation": {"format": "SEPARADO"}, "elements": [
+            {"element_id": "ano", "part": "year", "bbox": [60, 0, 100, 10]},
+            {"element_id": "dia", "part": "day", "bbox": [0, 0, 20, 10]},
+            {"element_id": "mes", "part": "month", "bbox": [30, 0, 50, 10]}]}
+        for seed in range(30):
+            value, parts, semantic = element_values(field, random.Random(seed), {})
+            generated = date.fromisoformat(semantic["date"])
+            self.assertEqual(value, generated.strftime("%d/%m/%Y"))
+            self.assertEqual({element["part"]: text for element, text in parts},
+                             {"day": f"{generated.day:02d}", "month": f"{generated.month:02d}", "year": str(generated.year)})
+
+    def test_sex_representations_share_one_value(self):
+        for seed in range(20):
+            context: dict = {}
+            full, first = typed_value({"field_id": "sexo", "data_type": "sex", "validation": {"format": "completo"}}, random.Random(seed), context)
+            short, second = typed_value({"field_id": "sexo_rn", "data_type": "sex", "validation": {"format": "abreviado"}}, random.Random(seed + 1), context)
+            self.assertIn(full, {"Masculino", "Feminino"})
+            self.assertEqual(short, first["sex"])
+            self.assertEqual(first, second)
+            self.assertEqual(full[0], short)
+        self.assertTrue(rule_errors("sex", {"format": "outro"}))
+
+    def test_synthetic_dnv_identifier_uses_documented_structure(self):
+        grouped, semantic = typed_value({"field_id": "dnv", "data_type": "dnv_number", "validation": {"format": "agrupado"}}, random.Random(4), {})
+        self.assertRegex(grouped, DNV_PATTERN)
+        self.assertEqual(dnv_structure_errors(grouped), [])
+        self.assertEqual(grouped[:2], "00")
+        self.assertFalse(semantic["identifier"]["official"])
+        self.assertTrue(semantic["identifier"]["synthetic"])
+        self.assertEqual(grouped.replace("-", ""), semantic["identifier"]["prefix"] + semantic["identifier"]["sequence"] + semantic["identifier"]["check_digit"])
+        digits, _ = typed_value({"field_id": "dnv", "data_type": "dnv_number", "validation": {"format": "digitos"}}, random.Random(4), {})
+        self.assertRegex(digits, r"^00\d{9}$")
+        boxes = {"field_id": "dnv", "data_type": "dnv_number", "validation": {"format": "caixas"},
+                 "elements": [{"element_id": f"d{index}", "index": index, "bbox": [index * 10, 0, index * 10 + 8, 10]} for index in range(11)]}
+        value, parts, _ = element_values(boxes, random.Random(4), {})
+        self.assertEqual("".join(text for _, text in parts), value)
+        self.assertEqual(len(parts), 11)
+        self.assertTrue(dnv_structure_errors("00-1234-5"))
+        self.assertTrue(rule_errors("dnv_number", {"prefix": "7"}))
+
+
 class SyntheticDatasetTests(unittest.TestCase):
+    def test_ground_truth_keeps_typed_semantics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / "template.pdf"
+            with fitz.open() as document:
+                document.new_page(width=400, height=300)
+                document.save(template)
+            mapping = root / "mapping.json"
+            mapping.write_text(json.dumps({"template_id": "tipos", "dpi": 72, "page_size_px": [400, 300], "fields": [
+                {"field_id": "data", "label": "Data", "data_type": "date", "bbox": [10, 10, 200, 40],
+                 "validation": {"format": "SEPARADO", "semantic_key": "nascimento"}, "elements": [
+                     {"element_id": "dia", "part": "day", "bbox": [10, 10, 40, 40]},
+                     {"element_id": "mes", "part": "month", "bbox": [50, 10, 80, 40]},
+                     {"element_id": "ano", "part": "year", "bbox": [90, 10, 160, 40]}]},
+                {"field_id": "data_extenso", "label": "Data por extenso", "data_type": "date", "bbox": [10, 50, 390, 80],
+                 "validation": {"format": "DD de mês de AAAA", "semantic_key": "nascimento"}},
+                {"field_id": "sexo", "label": "Sexo", "data_type": "sex", "bbox": [10, 90, 200, 120], "validation": {"format": "completo"}},
+                {"field_id": "sexo_sigla", "label": "Sexo sigla", "data_type": "sex", "bbox": [210, 90, 250, 120], "validation": {"format": "abreviado"}},
+                {"field_id": "dnv", "label": "DNV", "data_type": "dnv_number", "bbox": [10, 130, 390, 170], "validation": {"format": "agrupado"}},
+            ]}), encoding="utf-8")
+            generated = generate_dataset(template, mapping, {"data", "data_extenso", "sexo", "sexo_sigla", "dnv"}, root / "out", 3, seed=11)
+            for document in generated:
+                truth = {field["field_id"]: field for field in json.loads(document.json_path.read_text())["fields"]}
+                self.assertEqual(truth["data"]["date"], truth["data_extenso"]["date"])
+                when = date.fromisoformat(truth["data"]["date"])
+                self.assertEqual([element["value"] for element in truth["data"]["elements"]], [f"{when.day:02d}", f"{when.month:02d}", str(when.year)])
+                self.assertEqual(truth["data_extenso"]["value"], format_date(when, "DD de mês de AAAA"))
+                self.assertEqual(truth["sexo"]["sex"], truth["sexo_sigla"]["sex"])
+                self.assertEqual(truth["sexo_sigla"]["value"], truth["sexo"]["sex"])
+                self.assertRegex(truth["dnv"]["value"], DNV_PATTERN)
+                self.assertFalse(truth["dnv"]["identifier"]["official"])
+
     def test_printed_text_fits_short_certificate_fields(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -203,6 +337,24 @@ class SyntheticDatasetTests(unittest.TestCase):
                 with fitz.open(item.pdf_path) as result:
                     self.assertEqual(len(result), 1)
 
+    def test_blank_probability_leaves_optional_fields_empty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / "template.pdf"
+            with fitz.open() as document:
+                document.new_page(width=300, height=300)
+                document.save(template)
+            mapping = root / "mapping.json"
+            fields = [{"field_id": "optional", "label": "Opcional", "data_type": "text", "validation": {"blank_probability": 0.95}, "bbox": [20, 20, 280, 60]},
+                      {"field_id": "always", "label": "Sempre", "data_type": "occupation", "bbox": [20, 80, 280, 120]}]
+            mapping.write_text(json.dumps({"template_id": "test", "dpi": 72, "page_size_px": [300, 300], "fields": fields}), encoding="utf-8")
+            generated = generate_dataset(template, mapping, {"optional", "always"}, root / "out", 6, seed=3)
+            blanks = [item.values["optional"] for item in generated].count("")
+            self.assertGreaterEqual(blanks, 4)
+            self.assertTrue(all(item.values["always"] for item in generated))
+            truth = json.loads(generated[0].json_path.read_text())
+            self.assertEqual({entry["field_id"] for entry in truth["fields"]}, {"optional", "always"})
+
     def test_field_marked_as_printed_overrides_handwriting(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -231,6 +383,30 @@ class SyntheticDatasetTests(unittest.TestCase):
 
             with fitz.open(generated[0].pdf_path) as result:
                 self.assertIn("DIGITADO", result[0].get_text())
+
+    def test_neural_pen_leaves_blank_values_empty(self):
+        model = unittest.mock.Mock()
+        model.sample.return_value = np.array([[0, 0, 0], [10, 1, 0], [20, 0, 1]], dtype=float)
+        with tempfile.TemporaryDirectory() as directory, patch("src.synthetic_dataset.load_model", return_value=model):
+            root = Path(directory)
+            template = root / "template.pdf"
+            with fitz.open() as document:
+                document.new_page(width=300, height=300)
+                document.save(template)
+            mapping = root / "mapping.json"
+            mapping.write_text(json.dumps({
+                "template_id": "blank", "dpi": 72, "page_size_px": [300, 300],
+                "fields": [{"field_id": "blank", "label": "Blank", "bbox": [10, 10, 200, 40], "validation": {"allowed_values": [" "]}},
+                           {"field_id": "number", "label": "Number", "bbox": [10, 60, 200, 90], "validation": {"allowed_values": ["123"]}}],
+            }), encoding="utf-8")
+
+            generated = generate_dataset(template, mapping, {"blank", "number"}, root / "out", 1, seed=3,
+                                         neural_pen=NeuralPen(model="aaron1259", text_policy="normalize"))
+            truth = json.loads(generated[0].json_path.read_text())
+
+        values = {field["field_id"]: field["value"] for field in truth["fields"]}
+        self.assertEqual(values, {"blank": " ", "number": "123"})
+        self.assertEqual(model.sample.call_count, 1)
 
     def test_rejects_empty_field_selection(self):
         with self.assertRaisesRegex(ValueError, "campo"):

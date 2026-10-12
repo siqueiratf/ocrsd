@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block title %}Modelos de escrita{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Trilha"><span>Presets</span><span aria-hidden="true">/</span><a href="/presets/escrita">Presets de Escrita</a><span aria-hidden="true">/</span><span>Modelos de escrita</span></nav>
+<div class="page-head page-head-compact"><h1>Modelos de escrita</h1></div>
+<p class="lead model-lead">Um <b>modelo de escrita</b> é o motor que desenha os traços. Um <b>preset</b> é uma configuração reutilizável de um modelo disponível.</p>
+<div class="writing-models">
+  {% for model in models %}
+  <article class="card writing-model">
+    <header><div><h2>{{ model.label }}</h2><p class="mono">{{ model.id }}</p></div>
+      <span class="tag {{ 'tag-green' if model.available else 'tag-red' }}">{{ "Disponível" if model.available else "Indisponível" }}</span></header>
+    <p>{{ model.description }}</p>
+    <dl class="facts">
+      <dt>Tipo</dt><dd>{{ model.kind }}</dd>
+      <dt>Escritores</dt><dd>{{ model.writers if model.writers else "Não se aplica" }}</dd>
+      <dt>Caracteres</dt><dd>{{ model.charset }}</dd>
+      <dt>Origem</dt><dd class="mono">{{ model.version }}</dd>
+      {% if model.reason %}<dt>Situação</dt><dd>{{ model.reason }}</dd>{% endif %}
+    </dl>
+    {% if model.available %}<a class="btn btn-sm" href="/presets/escrita/novo?modelo={{ model.id }}">{{ icon('add') }}Criar preset com este modelo</a>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+<section class="card future-note">
+  <h2>{{ icon('info') }}Registro de novos modelos · recurso futuro</h2>
+  <p>Por segurança, esta instalação não aceita envio de pesos neurais nem código pela interface. Administradores instalam somente modelos verificados no servidor, por exemplo com <code>make download-aaron1259</code>, e habilitam o uso com <code>OCRSD_NEURAL_ENABLED=true</code>.</p>
+</section>
+{% endblock %}

@@ -12,6 +12,7 @@ import threading
 import time
 import unittest
 from zipfile import ZipFile
+from unittest.mock import patch
 
 try:
     import httpx2
@@ -22,7 +23,8 @@ except ImportError as exc:
 from src.web.api import create_app
 from src.web.jobs import JobStore
 from src.web.models import GenerationOptions
-from src.web.services import Catalog, generate
+from src.web.services import Catalog, ServiceError, generate
+from src.web.models import Writing
 from src.web.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -244,7 +246,8 @@ class WebTests(unittest.TestCase):
                         self.client.post(f'/api/v1/jobs/{job["id"]}/cancel', headers=headers, json={})
                     process.wait(timeout=20)
                     self.assertEqual(self.store.get(job["id"])["status"], "cancelled" if cancel else "failed")
-                    self.assertFalse(self.store.directory(job["id"]).exists())
+                    finalized = self.store.artifacts(self.store.get(job["id"]))
+                    self.assertEqual(self.store.directory(job["id"]).exists(), bool(finalized))
                 finally:
                     if process.poll() is None:
                         process.kill()
@@ -266,32 +269,92 @@ class WebTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             generate(options, output, self.settings, progress.append)
 
-    def test_local_catalog_mapping_is_saved_for_desktop(self):
-        documents = Path(self.temporary.name) / "catalog"
-        document = documents / "certidao_nascimento"
-        mappings = document / "mappings"
-        mappings.mkdir(parents=True)
-        source_root = ROOT / "documents/certidao_nascimento"
-        shutil.copy2(source_root / "certidao_nascimento.pdf", document / "template.pdf")
-        source_mapping = source_root / "certidao_nascimento_fields.json"
-        target_mapping = mappings / "certidao_nascimento_fields.json"
-        shutil.copy2(source_mapping, target_mapping)
-        original_source = json.loads(target_mapping.read_text())["source_template"]
-        settings = Settings(storage=Path(self.temporary.name) / "catalog-storage", documents=documents,
-                            min_free_bytes=0, catalog_writable=True)
-        client = ASGITestClient(create_app(settings))
-        workspace = client.post("/api/v1/workspaces", json={}).json()["token"]
+    def test_neural_strict_charset_rejected_before_submission(self):
+        catalog = Catalog(self.settings)
+        available = [{"id": "sjvasquez", "available": True}]
+        with patch.object(catalog, "models", return_value=available):
+            options = GenerationOptions(document_type="dnv", mapping_id="default", fields=["2"],
+                                        writing=Writing(model="sjvasquez", text_policy="strict"))
+            with self.assertRaises(ServiceError) as caught:
+                catalog.validate(options)
+            self.assertEqual(caught.exception.code, "writing_incompatible")
+            options.writing.text_policy = "normalize"
+            self.assertIs(catalog.validate(options), options)
+
+    def test_neural_strict_check_covers_every_generated_value(self):
+        catalog = Catalog(self.settings)
+        with patch.object(catalog, "models", return_value=[{"id": "aaron1259", "available": True}]):
+            for seed in range(12):
+                options = GenerationOptions(document_type="dnv", mapping_id="mapeamento_seguindo_norma", fields=["1"], seed=seed,
+                                            writing=Writing(model="aaron1259", text_policy="strict"))
+                with self.assertRaises(ServiceError) as caught:
+                    catalog.validate(options)
+                self.assertEqual(caught.exception.code, "writing_incompatible")
+                self.assertIn("Normalizar", caught.exception.message)
+            dates = GenerationOptions(document_type="dnv", mapping_id="default", fields=["2"],
+                                      writing=Writing(model="aaron1259", text_policy="strict", text_handwriting=False))
+            with self.assertRaisesRegex(ServiceError, "/"):
+                catalog.validate(dates)
+            numbers = GenerationOptions(document_type="dnv", mapping_id="mapeamento_seguindo_norma", fields=["2", "4", "12_codigo"],
+                                        writing=Writing(model="aaron1259", text_policy="strict", text_handwriting=False))
+            self.assertIs(catalog.validate(numbers), numbers)
+
+    def test_validation_endpoint_explains_incompatible_writing(self):
+        options = {**self.options.model_dump(), "document_type": "dnv", "mapping_id": "mapeamento_seguindo_norma", "fields": ["1", "14"],
+                   "writing": Writing(model="aaron1259", text_policy="strict").model_dump()}
+        with patch.object(Catalog, "models", return_value=[{"id": "aaron1259", "available": True}]):
+            response = self.client.post("/api/v1/generation/validate", json=options)
+            submitted = self.client.post("/api/v1/jobs", json=options)
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["code"], "writing_incompatible")
+        self.assertEqual(submitted.status_code, 422)
+
+    def test_all_dnv_fields_generate_with_neural_numbers(self):
+        model = unittest.mock.Mock()
+        model.sample.return_value = __import__("numpy").array([[0, 0, 0], [10, 1, 0], [20, 0, 1]], dtype=float)
+        catalog = Catalog(self.settings)
+        definition = catalog.definition("dnv", "mapeamento_seguindo_norma")
+        options = GenerationOptions(document_type="dnv", mapping_id="mapeamento_seguindo_norma", count=2, seed=5,
+                                    fields=[str(field["field_id"]) for field in definition["fields"]],
+                                    writing=Writing(model="aaron1259", text_policy="normalize"))
+        with patch.object(Catalog, "models", return_value=[{"id": "aaron1259", "available": True}]), \
+                patch("src.synthetic_dataset.load_model", return_value=model):
+            artifacts = generate(options, self.settings.storage / "neural", self.settings, lambda completed: None)
+        truth = json.loads((self.settings.storage / "neural" / "synthetic_0001.json").read_text())
+        code = next(field for field in truth["fields"] if field["field_id"] == "12_codigo")
+        self.assertRegex(code["requested_value"], r"^[0-9]{7}$")
+        self.assertEqual(sum(item["media_type"] == "application/pdf" for item in artifacts), 2)
+
+    def test_sequence_without_boxes_is_rejected_before_submission(self):
+        catalog = Catalog(self.settings)
+        options = GenerationOptions(document_type="dnv", mapping_id="test_w_datetime", fields=["60"])
+        with self.assertRaises(ServiceError) as caught:
+            catalog.validate(options)
+        self.assertEqual(caught.exception.code, "invalid_mapping")
+        self.assertIn("CEP", caught.exception.message)
+
+    def test_builtin_models_are_protected_and_duplicable(self):
+        mapping_path = ROOT / "documents/dnv/mappings/mapeamento_seguindo_norma.json"
+        original = mapping_path.read_bytes()
+        workspace = self.client.post("/api/v1/workspaces", json={}).json()["token"]
         headers = {"X-Workspace-Token": workspace}
-        model = client.get("/api/v1/models", headers=headers).json()[0]
+        model = next(item for item in self.client.get("/api/v1/models", headers=headers).json() if item["id"] == "dnv")
         self.assertTrue(model["builtin"])
-        self.assertTrue(model["editable"])
-        mapping = client.get(f'/api/v1/document-types/{model["id"]}/mappings/{model["mapping_id"]}', headers=headers).json()
+        self.assertFalse(model["editable"])
+        self.assertEqual(model["mapping_id"], "mapeamento_seguindo_norma")
+        mapping = self.client.get(f'/api/v1/document-types/dnv/mappings/{model["mapping_id"]}', headers=headers).json()
         mapping["definition"]["fields"][0]["description"] = "Editado na Web"
-        response = client.put(f'/api/v1/models/{model["id"]}/mapping', json={"definition": mapping["definition"]}, headers=headers)
-        self.assertEqual(response.status_code, 200, response.text)
-        saved = json.loads(target_mapping.read_text())
-        self.assertEqual(saved["fields"][0]["description"], "Editado na Web")
-        self.assertEqual(saved["source_template"], original_source)
+        response = self.client.put("/api/v1/models/dnv/mapping", json={"definition": mapping["definition"]}, headers=headers)
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["error"]["code"], "builtin_protected")
+        self.assertEqual(mapping_path.read_bytes(), original)
+        copy = self.client.post("/api/v1/models/dnv/duplicate", json={}, headers=headers)
+        self.assertEqual(copy.status_code, 201, copy.text)
+        self.assertFalse(copy.json()["builtin"])
+        self.assertEqual(copy.json()["field_count"], model["field_count"])
+        edited = self.client.put(f'/api/v1/models/{copy.json()["id"]}/mapping', json={"definition": mapping["definition"]}, headers=headers)
+        self.assertEqual(edited.status_code, 200, edited.text)
+        self.assertEqual(mapping_path.read_bytes(), original)
 
     def test_private_workspace_models_presets_history_and_revocable_sharing(self):
         workspace = self.client.post("/api/v1/workspaces", json={})

@@ -1,21 +1,46 @@
-{% from "macros.html" import dialog_head, icon %}
-<form class="dialog-panel" hx-post="/modelos" hx-encoding="multipart/form-data" hx-disabled-elt="find button[type=submit]" hx-disinherit="*">
-  {{ dialog_head("Cadastrar modelo") }}
-  <div class="dialog-body form-stack">
+{% from "macros.html" import icon %}
+{% if mode == 'branco' %}
+<form class="card form-card" hx-post="/modelos/em-branco" hx-disabled-elt="find button[type=submit]" hx-disinherit="*">
+  <h2>{{ icon('file-plus') }}Documento em branco</h2>
+  <div class="form-stack">
     <label class="field">Nome do modelo<input name="label" required maxlength="120" placeholder="Ex.: Certidão de óbito" autofocus></label>
-    <label class="field">Descrição<textarea name="description" maxlength="500" rows="3" placeholder="Finalidade e versão do template"></textarea></label>
+    <div class="grid-2">
+      <label class="field">Tamanho da página
+        <select name="size">{% for key, item in PAGE_SIZES.items() %}<option value="{{ key }}">{{ item[0] }} · {{ item[1]|round(1) }} × {{ item[2]|round(1) }} mm</option>{% endfor %}</select>
+      </label>
+      <fieldset class="segmented segmented-field">
+        <legend>Orientação</legend>
+        {% for key, label in ORIENTATIONS.items() %}<label><input type="radio" name="orientation" value="{{ key }}" {% if loop.first %}checked{% endif %}><span>{{ label }}</span></label>{% endfor %}
+      </fieldset>
+    </div>
+    <label class="field">Descrição <span class="optional">opcional</span><textarea name="description" maxlength="500" rows="2" placeholder="Finalidade e versão do template"></textarea></label>
+  </div>
+  <footer class="form-foot">
+    <a class="btn" href="/modelos">Cancelar</a>
+    <button type="submit" class="btn btn-primary">Abrir compositor<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+  </footer>
+</form>
+{% else %}
+<form class="card form-card" hx-post="/modelos" hx-encoding="multipart/form-data" hx-disabled-elt="find button[type=submit]" hx-disinherit="*">
+  <h2>{{ icon('upload') }}Importar PDF</h2>
+  <div class="form-stack">
     <label class="field">Template PDF
       <input name="pdf" required type="file" accept="application/pdf,.pdf">
       <small class="hint">Página única, até {{ (max_upload / 1024 / 1024)|round(1) }} MB.</small>
     </label>
-    <label class="field">Mapeamento JSON existente
-      <input name="mapping" type="file" accept="application/json,.json">
-      <small class="hint">Opcional. O formato JSON do OCRSD é preservado.</small>
-    </label>
-    <label class="field">ID do mapeamento<input name="mapping_id" value="default" required maxlength="100" pattern="[A-Za-z0-9_\-]+" spellcheck="false"></label>
+    <label class="field">Nome do modelo<input name="label" required maxlength="120" placeholder="Ex.: Certidão de óbito"></label>
+    <label class="field">Descrição <span class="optional">opcional</span><textarea name="description" maxlength="500" rows="2" placeholder="Finalidade e versão do template"></textarea></label>
+    <details class="advanced">
+      <summary>Importar um mapeamento existente</summary>
+      <div class="grid-2">
+        <label class="field">Mapeamento JSON<input name="mapping" type="file" accept="application/json,.json"><small class="hint">O formato JSON do OCRSD é preservado.</small></label>
+        <label class="field">ID do mapeamento<input name="mapping_id" value="default" required maxlength="100" pattern="[A-Za-z0-9_\-]+" spellcheck="false"></label>
+      </div>
+    </details>
   </div>
-  <footer class="dialog-foot">
-    <button type="button" class="btn" data-fechar>Cancelar</button>
-    <button type="submit" class="btn btn-primary">Cadastrar e mapear<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+  <footer class="form-foot">
+    <a class="btn" href="/modelos">Cancelar</a>
+    <button type="submit" class="btn btn-primary">Importar e mapear<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
   </footer>
 </form>
+{% endif %}

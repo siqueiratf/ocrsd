@@ -51,7 +51,7 @@ def stop(processes: list[tuple[str, subprocess.Popen]]) -> None:
 def main() -> int:
     api_port = configured_port("OCRSD_API_PORT", 8000)
     ensure_port(api_port)
-    environment = {**os.environ, "PYTHONUNBUFFERED": "1", "OCRSD_CATALOG_WRITABLE": "true"}
+    environment = {**os.environ, "PYTHONUNBUFFERED": "1"}
     commands = [
         ("API", [sys.executable, "-m", "uvicorn", "src.web.api:create_app", "--factory", "--host", "127.0.0.1", "--port", str(api_port)]),
         ("Worker", [sys.executable, "-m", "src.web.worker"]),

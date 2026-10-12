@@ -86,13 +86,22 @@ def load_model(name: str):
     raise ValueError(f"Unknown handwriting model: {name}")
 
 
-def prepare_text(text: str, policy: str = "strict") -> str:
+def apply_text_policy(text: str, policy: str = "strict") -> str:
     if policy not in {"strict", "normalize"}:
         raise ValueError("Text policy must be strict or normalize")
     if policy == "normalize":
         text = "".join(c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c))
         text = text.translate(str.maketrans({"Q": "q", "X": "x", "Z": "z", "/": "-"}))
-    unsupported = sorted(set(text) - set(ALPHABET[1:]))
+    return text
+
+
+def unsupported_characters(text: str) -> list[str]:
+    return sorted(set(text) - set(ALPHABET[1:]))
+
+
+def prepare_text(text: str, policy: str = "strict") -> str:
+    text = apply_text_policy(text, policy)
+    unsupported = unsupported_characters(text)
     if unsupported:
         raise ValueError(f"Model cannot write {unsupported!r}; use --text-policy normalize or the font backend")
     if not text.strip() or len(text) > 160:
