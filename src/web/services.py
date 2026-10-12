@@ -14,7 +14,8 @@ from typing import Callable
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from src.document_types import discover_document_types
-from src.field_rules import COMPOSITE_TYPES, DATE_PARTS, SEPARATED_DATE, rule_errors
+from src.field_rules import COMPOSITE_TYPES, DATE_PARTS, SEPARATED_DATE, apply_shared_rules, rule_errors
+from src.semantic.plan import semantic_plan
 from src.web.models import DocumentModelResponse, GenerationOptions, PresetResponse, Writing
 from src.web.settings import Settings
 from src.writing_presets import list_presets
@@ -154,7 +155,7 @@ class Catalog:
         if not any(m["id"] == options.writing.model and m["available"] for m in self.models()):
             raise ServiceError(422, "model_unavailable", "Modelo não habilitado ou pesos ausentes")
         selected = [field for field in definition["fields"] if field["field_id"] in options.fields]
-        issues = mapping_issues({"fields": selected})
+        issues = mapping_issues({**definition, "fields": selected})
         if issues:
             raise ServiceError(422, "invalid_mapping", issues[0])
         if options.writing.model != "font" and (options.writing.handwriting or options.writing.text_handwriting):
@@ -178,20 +179,21 @@ def writing_issues(definition: dict, field_ids, writing: Writing) -> list[dict]:
     wanted = {str(item) for item in field_ids}
     fields = json.dumps([field for field in definition.get("fields", []) if str(field["field_id"]) in wanted], sort_keys=True)
     shared = json.dumps(definition.get("shared_rules") or {}, sort_keys=True)
-    return [dict(item) for item in sampled_writing_issues(fields, shared, writing.text_policy, writing.handwriting, writing.text_handwriting)]
+    return [dict(item) for item in sampled_writing_issues(fields, shared, writing.text_policy, writing.handwriting, writing.text_handwriting,
+                                                          str(definition.get("template_id") or ""))]
 
 
 @functools.lru_cache(maxsize=256)
-def sampled_writing_issues(fields: str, shared: str, policy: str, numbers: bool, texts: bool) -> tuple:
+def sampled_writing_issues(fields: str, shared: str, policy: str, numbers: bool, texts: bool, document: str = "") -> tuple:
     from src.neural_handwriting import apply_text_policy, unsupported_characters
-    from src.synthetic_dataset import apply_shared_rules, field_texts, is_numeric_text
+    from src.synthetic_dataset import field_texts, is_numeric_text
     issues = []
     for field in apply_shared_rules({"fields": json.loads(fields), "shared_rules": json.loads(shared)})["fields"]:
         if field.get("render_as_printed"):
             continue
         characters, too_long = set(), False
         for sample in range(WRITING_SAMPLES):
-            for value in field_texts(field, random.Random(sample), {}):
+            for value in field_texts(field, random.Random(sample), {"document": document or None}):
                 if not value.strip() or not (numbers if is_numeric_text(value) else texts):
                     continue
                 text = apply_text_policy(value, policy)
@@ -318,7 +320,7 @@ def validate_mapping(definition: dict, page_size: tuple[int, int] | None = None)
         if not identifier or len(identifier) > 100 or identifier in identifiers:
             raise ServiceError(422, "invalid_mapping", "IDs de campos devem ser únicos e não vazios")
         identifiers.add(identifier)
-        errors = rule_errors(str(raw.get("data_type") or "text"), raw.get("validation"))
+        errors = rule_errors(str(raw.get("data_type") or "text"), raw.get("validation")) or semantic_errors(raw, definition.get("template_id"))
         if errors:
             raise ServiceError(422, "invalid_mapping", f"Campo {identifier}: {errors[0]}")
         field = {**raw, "field_id": identifier, "label": str(raw.get("label") or identifier), "bbox": bbox(raw.get("bbox"))}
@@ -431,6 +433,21 @@ def revision(*paths: Path) -> str:
     return digest.hexdigest()[:16]
 
 
+def semantic_errors(field: dict, document: str | None = None) -> list[str]:
+    if field.get("semantic") in (None, ""):
+        return []
+    decision = semantic_plan([field], document).decisions[str(field.get("field_id", ""))]
+    return [decision.issue] if decision.invalid else []
+
+
+def semantic_inferred(definition: dict, document: str | None) -> dict[str, str | None]:
+    found = {}
+    for field in apply_shared_rules(definition)["fields"]:
+        decision = semantic_plan([{**field, "semantic": None}], document).decisions[str(field.get("field_id", ""))]
+        found[str(field.get("field_id", ""))] = decision.binding.key if decision.binding else None
+    return found
+
+
 def mapping_issues(definition: dict) -> list[str]:
     fields = definition.get("fields") or []
     issues = [] if fields else ["Adicione ao menos um campo ao documento"]
@@ -449,6 +466,8 @@ def mapping_issues(definition: dict) -> list[str]:
                 issues.append(f"{name}: a data separada precisa de uma área para o dia, uma para o mês e uma para o ano")
         if data_type == "dnv_number" and validation.get("format") == "caixas" and len(field.get("elements") or []) != 11:
             issues.append(f"{name}: o número da DNV em caixas precisa de 11 caixas, uma por algarismo")
+    if fields:
+        issues.extend(semantic_plan(apply_shared_rules(definition)["fields"], definition.get("template_id")).issues)
     return issues
 
 

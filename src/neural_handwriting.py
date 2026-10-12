@@ -91,7 +91,7 @@ def apply_text_policy(text: str, policy: str = "strict") -> str:
         raise ValueError("Text policy must be strict or normalize")
     if policy == "normalize":
         text = "".join(c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c))
-        text = text.translate(str.maketrans({"Q": "q", "X": "x", "Z": "z", "/": "-"}))
+        text = text.translate(str.maketrans({"Q": "q", "X": "x", "Z": "z", "/": "-", "º": "o", "ª": "a"}))
     return text
 
 

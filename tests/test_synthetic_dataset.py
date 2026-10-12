@@ -82,6 +82,11 @@ class SyntheticValueTests(unittest.TestCase):
         self.assertRegex(apgar, r"^\d{2}$")
         self.assertRegex(cep, r"^\d{8}$")
 
+    def test_field_rules_take_precedence_over_shared_rules(self):
+        resolved = apply_shared_rules({"shared_rules": {"RULE_UF": {"description": "UF", "allowed_values": ["SP", "RJ"], "max_edit_distance": 1}},
+                                       "fields": [{"field_id": "uf", "rule_refs": ["RULE_UF"], "validation": {"allowed_values": ["SC"]}}]})
+        self.assertEqual(resolved["fields"][0]["validation"], {"allowed_values": ["SC"], "max_edit_distance": 1})
+
     def test_generates_coherent_location_fields(self):
         context: dict = {}
         rng = random.Random(8)
@@ -191,6 +196,18 @@ class TypedFieldTests(unittest.TestCase):
                 value, semantic = typed_value({"field_id": "d", "data_type": "date", "validation": {"format": fmt}}, random.Random(seed), {})
                 self.assertRegex(value, pattern)
                 self.assertEqual(value, format_date(date.fromisoformat(semantic["date"]), fmt))
+
+    def test_dates_written_fully_in_words(self):
+        self.assertEqual(format_date(date(2021, 2, 3), "EXTENSO_PALAVRAS"), "três de fevereiro de dois mil e vinte e um")
+        self.assertEqual(format_date(date(1999, 12, 31), "EXTENSO_PALAVRAS"), "trinta e um de dezembro de mil novecentos e noventa e nove")
+        self.assertEqual(format_date(date(1900, 1, 1), "EXTENSO_PALAVRAS"), "primeiro de janeiro de mil e novecentos")
+        self.assertEqual(format_date(date(2024, 2, 29), "EXTENSO_PALAVRAS"), "vinte e nove de fevereiro de dois mil e vinte e quatro")
+        from src.semantic.present import present_text
+        from src.semantic.resolve import Binding
+        field = {"field_id": "data_extenso", "data_type": "text", "validation": {"pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$"}}
+        binding = Binding("birth.date", format="DD de mês de AAAA")
+        self.assertEqual(present_text(field, binding, date(2021, 2, 3)), "três de fevereiro de dois mil e vinte e um")
+        self.assertEqual(present_text({**field, "validation": {}}, binding, date(2021, 2, 3)), "03 de fevereiro de 2021")
 
     def test_leap_days_are_generated_and_formatted(self):
         self.assertEqual(format_date(date(2024, 2, 29), "DD-MM-AAAA"), "29-02-2024")

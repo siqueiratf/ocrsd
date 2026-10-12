@@ -47,6 +47,24 @@
 
 ### Motor de geração
 
+- Camada semântica (`src/semantic/`): registro de campos semânticos reutilizáveis
+  (pessoas, nascimento, óbito, endereços, registro civil), geradores por entidade com
+  fluxos aleatórios determinísticos, restrições estritas (cronologia, idades em anos
+  completos, município/UF/IBGE/CEP, histórico obstétrico, sobrenome do recém-nascido)
+  e associações estatísticas (nome e sexo, herança de sobrenomes). Cada documento gera
+  primeiro um registro coerente; os campos mapeados apenas apresentam seus valores no
+  formato do campo. Mapeamentos existentes são associados por inferência, sem alteração;
+  o atributo opcional `semantic` permite associação explícita, com o seletor
+  “Significado” no editor. O ground truth registra o valor semântico, o registro do
+  documento e `semantic_version`.
+- Regras de valor dos campos (mínimo, máximo, valores permitidos) restringem o registro;
+  combinações impossíveis são recusadas antes do envio com mensagem explicativa. Regras
+  de formato (máscara, tamanho, prefixo, listas de identificadores) mantêm o gerador
+  anterior quando o valor semântico não cabe.
+- Datas “por extenso em palavras” (“três de fevereiro de dois mil e vinte e um”) e
+  validação local de um campo prevalece sobre a regra compartilhada referenciada.
+- A mesma semente produz documentos diferentes das versões anteriores, pois os valores
+  passam a vir do registro semântico (versão semântica 1).
 - Data com formatos DD/MM/AAAA, DD-MM-AAAA, por extenso e em áreas separadas de dia,
   mês e ano, sempre a partir de uma única data válida; tipo Sexo (por extenso ou M/F);
   tipo Número da DNV sintético no formato XX-XXXXXXXX-X do manual do SINASC, com

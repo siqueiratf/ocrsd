@@ -26,7 +26,7 @@ from src.web.palette import (CUSTOM_BASES, EDITOR_OPTIONS, GENERATION_RULES, ICO
 from src.web.services import (BUILTIN_PROTECTED, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, Catalog, ServiceError, create_blank_model, create_model,
                               duplicate_model, mapping_issues, preview_generation, preview_key, preview_strip, render_writing_samples,
                               realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count, render_preview, revision, save_mapping, validate_layout,
-                              validate_mapping, writing_issues, writing_message)
+                              semantic_inferred, validate_mapping, writing_issues, writing_message)
 from src.web.settings import Settings
 from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model_defaults, preset_title, writing_summary
 
@@ -486,6 +486,10 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
         layout = None if model.builtin else store.layout(model.id)
         return {"definition": definition, "layout": layout, "revision": revision(*editor_paths(owner_id, model))}
 
+    def editor_view(owner_id: str, model) -> dict:
+        state = editor_state(owner_id, model)
+        return {**state, "semantic_inferred": semantic_inferred(state["definition"], state["definition"].get("template_id") or model.id)}
+
     def publication(request: Request, model, issues: list[str], message: str = "", oob: bool = False) -> HTMLResponse:
         return render(request, "partials/publication.html", model=model, issues=issues, message=message, oob=oob)
 
@@ -545,7 +549,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
         model = model_entry(owner_id, model_id)
         if model.builtin and (not model.editable or not model.mapping_id):
             return RedirectResponse("/modelos", 303)
-        state = editor_state(owner_id, model)
+        state = editor_view(owner_id, model)
         groups = [*PALETTE, custom_palette(store.list_field_types(owner_id)), *([LAYOUT_PALETTE] if state["layout"] else [])]
         composed = state["layout"] is not None
         if draft:
@@ -559,7 +563,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
 
     @router.get("/modelos/{model_id}/estado.json")
     async def editor_json(model_id: Identifier, owner_id: Owner):
-        return JSONResponse(editor_state(owner_id, model_entry(owner_id, model_id)))
+        return JSONResponse(editor_view(owner_id, model_entry(owner_id, model_id)))
 
     @router.get("/modelos/{model_id}/mapeamento.json")
     async def mapping_json(model_id: Identifier, owner_id: Owner):

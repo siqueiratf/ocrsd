@@ -9,7 +9,7 @@ import unicodedata
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import fitz
 import cv2
@@ -18,46 +18,27 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from src.document_types import build_dataset_run_dir, infer_document_type_key
 from src.document_filters import apply_realistic_filters_to_pdf
-from src.field_rules import (DATE_PARTS, DNV_TEST_PREFIX, SEPARATED_DATE, TEXT_TYPES, dnv_metadata, document_number, format_date,
-                              format_dnv, masked_value, sex_text)
+from src.field_rules import (DATE_PARTS, DNV_TEST_PREFIX, SEPARATED_DATE, SEX_VALUES, TEXT_TYPES, apply_shared_rules, dnv_metadata,
+                              document_number, format_date, format_dnv, masked_value, sex_text)
 from src.neural_handwriting import NeuralPen, load_model, prepare_text, render_strokes
+from src.semantic import REGISTRY, VERSION as SEMANTIC_VERSION, SemanticRecord
+from src.semantic.data import CITIES, COMPLEMENTS, FIRST_NAMES, LAST_NAMES, LOCATION_PROFILES, OCCUPATIONS, STREETS, UF_VALUES
+from src.semantic.plan import semantic_plan
+from src.semantic.present import checkbox_choice, present_elements, present_text, validation_rules, value_kind
+from src.semantic.registry import CONTEXTS
+from src.semantic.resolve import Binding, document_context
 from src.writing_presets import document_id_with_preset
 
 
 ASSETS_ROOT = Path(__file__).resolve().parent.parent / "assets"
 HANDWRITING_FONT = ASSETS_ROOT / "fonts" / "Caveat-Regular.ttf"
 NUMERIC_CHARACTERS = frozenset("0123456789.,:/- ")
-
-
-FIRST_NAMES = (
-    "Ana", "Beatriz", "Camila", "Clara", "Daniel", "Eduardo", "Felipe",
-    "Gabriel", "Helena", "Isabela", "João", "Júlia", "Lucas", "Mariana",
-    "Miguel", "Rafael", "Sofia", "Valentina",
-)
-LAST_NAMES = (
-    "Almeida", "Barbosa", "Cardoso", "Costa", "Ferreira", "Gomes",
-    "Lima", "Martins", "Oliveira", "Pereira", "Ribeiro", "Rodrigues",
-    "Santos", "Silva", "Souza",
-)
-STREETS = ("Rua das Flores", "Avenida Brasil", "Rua São José", "Rua das Acácias", "Avenida Central")
-CITIES = ("São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Recife", "Salvador")
-OCCUPATIONS = ("Professora", "Enfermeiro", "Agricultora", "Comerciante", "Motorista", "Engenheira",
-               "Pedreiro", "Advogada", "Estudante", "Técnico em informática", "Auxiliar administrativo", "Costureira")
-UF_VALUES = ("AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO")
-LOCATION_PROFILES = (
-    {"cep": "01001000", "uf": "SP", "city": "São Paulo", "neighborhood": "Sé", "street": "Praça da Sé", "ibge": "3550308"},
-    {"cep": "20040002", "uf": "RJ", "city": "Rio de Janeiro", "neighborhood": "Centro", "street": "Rua da Assembleia", "ibge": "3304557"},
-    {"cep": "30140071", "uf": "MG", "city": "Belo Horizonte", "neighborhood": "Funcionários", "street": "Avenida Afonso Pena", "ibge": "3106200"},
-    {"cep": "40020000", "uf": "BA", "city": "Salvador", "neighborhood": "Centro", "street": "Avenida Sete de Setembro", "ibge": "2927408"},
-    {"cep": "50030000", "uf": "PE", "city": "Recife", "neighborhood": "Santo Antônio", "street": "Rua do Imperador", "ibge": "2611606"},
-    {"cep": "60025061", "uf": "CE", "city": "Fortaleza", "neighborhood": "Centro", "street": "Rua Major Facundo", "ibge": "2304400"},
-    {"cep": "70040902", "uf": "DF", "city": "Brasília", "neighborhood": "Asa Sul", "street": "SBS Quadra 2", "ibge": "5300108"},
-    {"cep": "80010010", "uf": "PR", "city": "Curitiba", "neighborhood": "Centro", "street": "Rua XV de Novembro", "ibge": "4106902"},
-    {"cep": "90010000", "uf": "RS", "city": "Porto Alegre", "neighborhood": "Centro Histórico", "street": "Rua dos Andradas", "ibge": "4314902"},
-    {"cep": "88010001", "uf": "SC", "city": "Florianópolis", "neighborhood": "Centro", "street": "Rua Felipe Schmidt", "ibge": "4205407"},
-    {"cep": "74003010", "uf": "GO", "city": "Goiânia", "neighborhood": "Setor Central", "street": "Avenida Goiás", "ibge": "5208707"},
-    {"cep": "69005040", "uf": "AM", "city": "Manaus", "neighborhood": "Centro", "street": "Avenida Eduardo Ribeiro", "ibge": "1302603"},
-)
+LOCATION_PREFIXES = {"occurrence": ("birth.place", "death.place"), "residence": ("mother.residence", "deceased.residence"),
+                     "registry": ("registration.office", "death_registration.office")}
+OBSTETRIC_TERMS = (("mother.obstetric.previous_pregnancies", ("gestacoes anteriores",)),
+                   ("mother.obstetric.vaginal_births", ("partos vaginais",)), ("mother.obstetric.cesareans", ("cesareas",)),
+                   ("mother.obstetric.live_births", ("nascidos vivos",)), ("mother.obstetric.fetal_losses", ("perdas fetais", "abortos")))
+DEFAULT_LINKS = {"sexo": {"declaracao_obito": "deceased.sex", None: "newborn.sex"}, "dnv": {None: "registration.dnv_number"}}
 
 
 @dataclass(frozen=True)
@@ -106,31 +87,6 @@ def _normalized_text(value: str) -> str:
     return "".join(character for character in decomposed if not unicodedata.combining(character)).lower()
 
 
-def _merged_validation(field: dict) -> dict:
-    validation = dict(field.get("validation") or {})
-    for key, value in field.items():
-        if key in {"allowed_values", "digit_count", "pattern", "min", "max", "min_value", "max_value", "allow_digits", "format", "mask"}:
-            validation.setdefault(key, value)
-    return validation
-
-
-def apply_shared_rules(field_map: dict) -> dict:
-    shared_rules = field_map.get("shared_rules") or {}
-    resolved_fields = []
-    for field in field_map.get("fields", []):
-        resolved = dict(field)
-        validation = dict(field.get("validation") or {})
-        for reference in field.get("rule_refs") or []:
-            rule = shared_rules.get(reference) or {}
-            for key, value in rule.items():
-                if key != "description":
-                    validation[key] = value
-        if validation:
-            resolved["validation"] = validation
-        resolved_fields.append(resolved)
-    return {**field_map, "fields": resolved_fields}
-
-
 def _location_group(field: dict) -> str | None:
     text = _normalized_text(" ".join(str(field.get(key, "")) for key in ("field_id", "label", "description")))
     if "cartorio" in text:
@@ -142,58 +98,56 @@ def _location_group(field: dict) -> str | None:
     return None
 
 
-def _location_profile(field: dict, rng: random.Random, context: dict | None) -> dict | None:
-    if context is None:
-        return None
+def _allowed(key: str, document: str | None) -> bool:
+    return document not in CONTEXTS or document in REGISTRY[key].contexts
+
+
+def _semantic_context(document: str | None, seed: int) -> dict:
+    document = document_context(document)
+    return {"record": SemanticRecord(seed, document), "document": document}
+
+
+def _record(context: dict, rng: random.Random) -> SemanticRecord:
+    if context.get("record") is None:
+        context.update(_semantic_context(context.get("document"), rng.getrandbits(64)))
+    return context["record"]
+
+
+def _location_key(field: dict, context: dict) -> str | None:
     group = _location_group(field)
     if group is None:
         return None
-    locations = context.setdefault("locations", {})
+    key = f'{LOCATION_PREFIXES[group][context.get("document") == "declaracao_obito"]}.municipality'
+    return key if _allowed(key, context.get("document")) else None
+
+
+def _location_profile(field: dict, rng: random.Random, context: dict) -> dict | None:
+    key = _location_key(field, context)
+    if key is None:
+        return None
+    locations, group = context.setdefault("locations", {}), _location_group(field)
     if group not in locations:
-        locations[group] = dict(rng.choice(LOCATION_PROFILES))
+        city = _record(context, rng).value(key)
+        locations[group] = dict(next(profile for profile in LOCATION_PROFILES if profile["city"] == city))
     return locations[group]
 
 
-def _gestational_history(rng: random.Random, context: dict | None) -> dict[str, int]:
-    if context is None:
-        return {
-            "gestacoes": rng.randint(0, 8),
-            "partos_vaginais": rng.randint(0, 5),
-            "cesareas": rng.randint(0, 3),
-            "nascidos_vivos": rng.randint(0, 8),
-            "perdas": rng.randint(0, 4),
-        }
-    history = context.get("gestational_history")
-    if history is None:
-        gestacoes = rng.choices(range(0, 9), weights=(20, 22, 18, 14, 10, 7, 4, 3, 2), k=1)[0]
-        perdas = rng.randint(0, min(gestacoes, 3))
-        births = max(0, gestacoes - perdas)
-        cesareas = rng.randint(0, births)
-        history = {
-            "gestacoes": gestacoes,
-            "partos_vaginais": births - cesareas,
-            "cesareas": cesareas,
-            "nascidos_vivos": max(0, births - rng.choice((0, 0, 0, 1)) if births else 0),
-            "perdas": perdas,
-        }
-        context["gestational_history"] = history
-    return history
+def _obstetric_key(field: dict, context: dict) -> str | None:
+    label = _normalized_text(" ".join(str(field.get(name, "")) for name in ("field_id", "label", "description", "notes")))
+    key = next((key for key, terms in OBSTETRIC_TERMS if any(term in label for term in terms)), None)
+    return key if key and _allowed(key, context.get("document")) else None
 
 
-def _bounded_integer(field: dict, rng: random.Random, context: dict | None = None,
+def _legacy_keys(field: dict, context: dict) -> list[str]:
+    return [key for key in (_location_key(field, context), _obstetric_key(field, context)) if key]
+
+
+def _bounded_integer(field: dict, rng: random.Random, context: dict,
                      width: int | None = None) -> int:
-    validation = _merged_validation(field)
+    validation = validation_rules(field)
     label = _normalized_text(" ".join(str(field.get(key, "")) for key in ("field_id", "label", "description", "notes")))
-    if "gestacoes anteriores" in label:
-        return _gestational_history(rng, context)["gestacoes"]
-    if "partos vaginais" in label:
-        return _gestational_history(rng, context)["partos_vaginais"]
-    if "cesareas" in label:
-        return _gestational_history(rng, context)["cesareas"]
-    if "nascidos vivos" in label:
-        return _gestational_history(rng, context)["nascidos_vivos"]
-    if "perdas fetais" in label or "abortos" in label:
-        return _gestational_history(rng, context)["perdas"]
+    if key := _obstetric_key(field, context):
+        return _record(context, rng).value(key)
     if "apgar" in label:
         return rng.randint(int(validation.get("min", 0)), int(validation.get("max", 10)))
     if "semanas de gestacao" in label:
@@ -210,10 +164,10 @@ def _bounded_integer(field: dict, rng: random.Random, context: dict | None = Non
     return rng.randint(minimum, maximum)
 
 
-def _random_digit_sequence(field: dict, rng: random.Random, context: dict | None = None) -> str:
+def _random_digit_sequence(field: dict, rng: random.Random, context: dict) -> str:
     elements = field.get("elements") or []
-    width = len(elements) if elements else int(_merged_validation(field).get("digit_count", 1))
-    validation = _merged_validation(field)
+    width = len(elements) if elements else int(validation_rules(field).get("digit_count", 1))
+    validation = validation_rules(field)
     label = _normalized_text(" ".join(str(field.get(key, "")) for key in ("field_id", "label", "description", "notes")))
     profile = _location_profile(field, rng, context)
     if profile and ("cep" in label or validation.get("pattern") == "^[0-9]{8}$"):
@@ -236,7 +190,7 @@ def _random_digit_sequence(field: dict, rng: random.Random, context: dict | None
 
 def _ensure_matches_validation(value: str, field: dict, rng: random.Random,
                                context: dict | None = None) -> str:
-    validation = _merged_validation(field)
+    validation = validation_rules(field)
     pattern = validation.get("pattern")
     if not pattern or re.fullmatch(pattern, value):
         return value
@@ -484,33 +438,44 @@ def render_checkbox_mark(width: int, height: int, rng: random.Random,
     return _fit_mark_image(image, width, height, variant), {"rendering": metadata}
 
 
-def _shared(field: dict, context: dict | None, default_key: str | None, factory):
-    key = _merged_validation(field).get("semantic_key") or default_key
-    if context is None or not key:
-        return factory()
-    shared = context.setdefault("shared", {})
-    name = f'{field.get("data_type", "text")}:{key}'
-    if name not in shared:
-        shared[name] = factory()
-    return shared[name]
+def _shared(field: dict, rng: random.Random, context: dict, default_key: str | None,
+            factory: Callable[[random.Random], Any], accepts: Callable[[Any], bool]):
+    name = validation_rules(field).get("semantic_key") or default_key
+    if not name:
+        return factory(rng)
+    record, document = _record(context, rng), context.get("document")
+    target = context.get("links", {}).get(name)
+    if target is None:
+        defaults = DEFAULT_LINKS.get(name, {})
+        target = defaults.get(document, defaults.get(None))
+        target = target if target and _allowed(target, document) else None
+    if target and accepts(value := record.value(target)):
+        return value
+    return record.link(f'{field.get("data_type", "text")}:{name}', factory)
 
 
 def random_date(field: dict, rng: random.Random, context: dict | None = None) -> date:
-    return _shared(field, context, None, lambda: date(1980, 1, 1) + timedelta(days=rng.randrange(0, 46 * 365)))
+    return _shared(field, rng, {} if context is None else context, None,
+                   lambda source: date(1980, 1, 1) + timedelta(days=source.randrange(0, 46 * 365)),
+                   lambda value: isinstance(value, date))
 
 
 def random_sex(field: dict, rng: random.Random, context: dict | None = None) -> str:
-    return _shared(field, context, "sexo", lambda: rng.choice(("M", "F")))
+    return _shared(field, rng, {} if context is None else context, "sexo", lambda source: source.choice(("M", "F")),
+                   lambda value: value in SEX_VALUES)
 
 
 def random_dnv(field: dict, rng: random.Random, context: dict | None = None) -> str:
-    prefix = str(_merged_validation(field).get("prefix") or DNV_TEST_PREFIX)
-    return _shared(field, context, "dnv", lambda: prefix + f"{rng.randrange(10 ** 8):08d}" + str(rng.randrange(10)))
+    prefix = str(validation_rules(field).get("prefix") or DNV_TEST_PREFIX)
+    return _shared(field, rng, {} if context is None else context, "dnv",
+                   lambda source: prefix + f"{source.randrange(10 ** 8):08d}" + str(source.randrange(10)),
+                   lambda value: isinstance(value, str) and len(value) == 11 and value.startswith(prefix))
 
 
 def typed_value(field: dict, rng: random.Random, context: dict | None = None) -> tuple[str, dict]:
+    context = {} if context is None else context
     data_type = field.get("data_type", "text")
-    validation = _merged_validation(field)
+    validation = validation_rules(field)
     if data_type == "date":
         generated = random_date(field, rng, context)
         return format_date(generated, validation.get("format")), {"date": generated.isoformat()}
@@ -523,28 +488,43 @@ def typed_value(field: dict, rng: random.Random, context: dict | None = None) ->
     return random_value(field, rng, context), {}
 
 
+def _composite(field: dict) -> bool:
+    data_type, fmt = field.get("data_type", "text"), validation_rules(field).get("format")
+    return bool(field.get("elements")) and (data_type in {"digit_sequence", "text_sequence"} or (data_type == "date" and fmt == SEPARATED_DATE)
+                                            or (data_type == "dnv_number" and fmt == "caixas"))
+
+
+def _ordered(field: dict) -> list[dict]:
+    return sorted(field.get("elements") or [], key=lambda item: item.get("index", 10_000))
+
+
 def element_values(field: dict, rng: random.Random, context: dict | None = None) -> tuple[str, list[tuple[dict, str]], dict] | None:
+    context = {} if context is None else context
     elements = field.get("elements") or []
     data_type = field.get("data_type", "text")
-    if not elements or data_type == "checkbox":
+    if not _composite(field):
         return None
-    ordered = sorted(elements, key=lambda item: item.get("index", 10_000))
+    ordered = _ordered(field)
     if data_type in {"digit_sequence", "text_sequence"}:
         sequence = sequence_value(field, ordered, rng, context)
         return sequence, list(zip(ordered, sequence)), {}
-    if data_type == "date" and _merged_validation(field).get("format") == SEPARATED_DATE:
+    if data_type == "date":
         generated = random_date(field, rng, context)
         parts = [(element, generated.strftime(DATE_PARTS[element["part"]][1])) for element in elements if element.get("part") in DATE_PARTS]
         return format_date(generated, SEPARATED_DATE), parts, {"date": generated.isoformat()}
-    if data_type == "dnv_number" and _merged_validation(field).get("format") == "caixas":
-        digits = random_dnv(field, rng, context)
-        return digits, list(zip(ordered, digits)), {"identifier": dnv_metadata(digits)}
-    return None
+    digits = random_dnv(field, rng, context)
+    return digits, list(zip(ordered, digits)), {"identifier": dnv_metadata(digits)}
 
 
 def random_value(field: dict, rng: random.Random, context: dict | None = None) -> str:
+    value = _random_value(field, rng, {} if context is None else context)
+    limit = validation_rules(field).get("max_length")
+    return value[:limit] if isinstance(limit, int) and field.get("data_type", "text") != "digit_sequence" else value
+
+
+def _random_value(field: dict, rng: random.Random, context: dict) -> str:
     data_type = field.get("data_type", "text")
-    validation = _merged_validation(field)
+    validation = validation_rules(field)
     allowed = validation.get("allowed_values") or []
     label = _normalized_text(" ".join(str(field.get(key, "")) for key in ("field_id", "label", "description", "notes")))
     if data_type == "digit_sequence":
@@ -562,7 +542,7 @@ def random_value(field: dict, rng: random.Random, context: dict | None = None) -
         if "municipio" in label or "cidade" in label:
             return profile["city"]
         if "complemento" in label:
-            return rng.choice(("Apto 101", "Bloco B", "Casa 2", "Fundos"))
+            return rng.choice(COMPLEMENTS)
         if "endereco" in label or "logradouro" in label:
             return profile["street"]
     if allowed:
@@ -622,9 +602,36 @@ def sequence_value(field: dict, ordered: list[dict], rng: random.Random, context
     return sequence[:len(ordered)]
 
 
+def _bound_values(field: dict, binding: Binding, value) -> tuple[str, list[tuple[dict, str]] | None, dict]:
+    data_type = field.get("data_type", "text")
+    typed = {}
+    if data_type == "date" and isinstance(value, date) and not binding.part:
+        typed = {"date": value.isoformat()}
+    elif data_type == "sex" and value in SEX_VALUES:
+        typed = {"sex": value}
+    elif data_type == "dnv_number" and value_kind(binding, value) == "dnv":
+        typed = {"identifier": dnv_metadata(value)}
+    parts = present_elements(field, binding, value, _ordered(field)) if _composite(field) else None
+    return present_text(field, binding, value), parts, typed
+
+
+def _semantic_entry(binding: Binding, snapshot: dict) -> dict:
+    entry = {"key": binding.key, "value": snapshot[binding.key], "source": binding.source}
+    entry.update({name: getattr(binding, name) for name in ("part", "format") if getattr(binding, name)})
+    return {"semantic": entry}
+
+
 def field_texts(field: dict, rng: random.Random, context: dict | None = None) -> list[str]:
     if field.get("data_type") == "checkbox" and field.get("elements"):
         return []
+    context = {} if context is None else context
+    record = _record(context, rng)
+    binding = semantic_plan([field], context.get("document")).apply(record).get(str(field.get("field_id", "")))
+    if binding is not None:
+        if (value := record.value(binding.key)) is None:
+            return []
+        text, parts, _ = _bound_values(field, binding, value)
+        return [character for _, character in parts] if parts is not None else [text]
     composite = element_values(field, rng, context)
     if composite:
         return [text for _, text in composite[1]]
@@ -690,7 +697,16 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         text_neural_pen = neural_pen
     handwriting_style = random_handwriting_style(rng, handwriting_intensity, medium="pen")
     pencil_style = random_handwriting_style(rng, handwriting_intensity, medium="pencil")
-    generation_context: dict = {}
+    generation_context = _semantic_context(field_map.get("template_id") or infer_document_type_key(template_path), rng.getrandbits(64))
+    record = generation_context["record"]
+    selected = [field for field in field_map.get("fields", []) if str(field["field_id"]) in selected_ids]
+    plan = semantic_plan(selected, generation_context["document"])
+    linked = plan.bindings
+    generation_context["links"] = {key: linked[str(field["field_id"])].key for field in selected
+                                   if str(field["field_id"]) in linked and (key := validation_rules(field).get("semantic_key"))}
+    bindings = plan.apply(record, [key for field in selected if str(field["field_id"]) not in linked
+                                   for key in _legacy_keys(field, generation_context)])
+    snapshot = record.snapshot()
 
     def insert_value(rect_values: list[int], text: str, font_size: float | None = None,
                      pencil: bool = False, force_printed: bool = False) -> tuple[str, dict]:
@@ -751,9 +767,19 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             values[field_id] = ""
             entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"], "blank": True})
             continue
+        binding = bindings.get(field_id)
+        meaning = _semantic_entry(binding, snapshot) if binding else {}
+        if binding and snapshot[binding.key] is None:
+            values[field_id] = ""
+            entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"], "blank": True,
+                            **meaning})
+            continue
         if field.get("data_type") == "checkbox" and elements:
-            count = 1 if field.get("selection_mode", "single") == "single" else rng.randint(1, len(elements))
-            selected_elements = rng.sample(elements, count)
+            if binding:
+                selected_elements = checkbox_choice(field, binding, record.value(binding.key))
+            else:
+                count = 1 if field.get("selection_mode", "single") == "single" else rng.randint(1, len(elements))
+                selected_elements = rng.sample(elements, count)
             element_entries = []
             for element in elements:
                 checked = element in selected_elements
@@ -775,10 +801,14 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             values[field_id] = value
             entries.append({
                 "field_id": field_id, "label": field.get("label", ""), "value": value,
-                "bbox": field["bbox"], "elements": element_entries,
+                "bbox": field["bbox"], "elements": element_entries, **meaning,
             })
             continue
-        composite = element_values(field, rng, generation_context)
+        if binding:
+            value, parts, semantic = _bound_values(field, binding, record.value(binding.key))
+            composite = None if parts is None else (value, parts, semantic)
+        else:
+            composite = element_values(field, rng, generation_context)
         if composite:
             requested, parts, semantic = composite
             element_entries = []
@@ -793,18 +823,20 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             values[field_id] = sequence
             entries.append({
                 "field_id": field_id, "label": field.get("label", ""), "value": sequence,
-                "bbox": field["bbox"], "elements": element_entries, **semantic,
+                "bbox": field["bbox"], "elements": element_entries, **semantic, **meaning,
                 **({"requested_value": requested} if (numeric_neural_pen or text_neural_pen) is not None else {}),
             })
             continue
-        value, semantic = typed_value(field, rng, generation_context)
+        if not binding:
+            value, semantic = typed_value(field, rng, generation_context)
         value, metadata = insert_value(
             field["bbox"], value,
             pencil=field.get("data_type", "text") in TEXT_TYPES and not is_numeric_text(value),
             force_printed=bool(field.get("render_as_printed", False)),
         )
         values[field_id] = value
-        entries.append({"field_id": field_id, "label": field.get("label", ""), "value": value, "bbox": field["bbox"], **semantic, **metadata})
+        entries.append({"field_id": field_id, "label": field.get("label", ""), "value": value, "bbox": field["bbox"], **semantic, **meaning,
+                        **metadata})
 
     file_document_id = document_id_with_preset(document_id, style_preset_uid)
     safe_id = _safe_name(file_document_id)
@@ -833,6 +865,8 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         "handwriting": handwriting_metadata,
         "style_preset_uid": style_preset_uid,
         "visual_filters": visual_filters,
+        "semantic_version": SEMANTIC_VERSION,
+        "semantic_record": record.snapshot(),
     }
     json_path.write_text(json.dumps(ground_truth, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return SyntheticDocument(pdf_path=pdf_path, json_path=json_path, values=values)
@@ -904,6 +938,7 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
         },
         "visual_filters": {"enabled": realistic_filters, "preset": filter_preset},
         "style_preset_uid": style_preset_uid,
+        "semantic_version": SEMANTIC_VERSION,
         "documents": [{"pdf": item.pdf_path.name, "ground_truth": item.json_path.name} for item in generated],
     }
     (output_dir / "dataset.json").write_text(

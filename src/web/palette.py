@@ -2,6 +2,7 @@ import re
 
 from src.field_rules import (COMPOSITE_TYPES, DATE_FORMAT_LABELS, DATE_PARTS, DNV_FORMATS, DNV_TEST_PREFIX, DOCUMENT_KINDS, FIELD_TYPES,
                               SEX_FORMATS, rule_errors)
+from src.semantic import semantic_options
 from src.web.services import ServiceError
 
 UF_VALUES = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE",
@@ -158,4 +159,4 @@ ICON_NAMES = sorted({*TYPE_ICONS.values(), "heading", "line", "frame", "sparkle"
 EDITOR_OPTIONS = {"type_labels": TYPE_LABELS, "type_category": TYPE_CATEGORY, "type_icons": TYPE_ICONS, "uf_values": UF_VALUES,
                   "date_formats": list(DATE_FORMAT_LABELS.items()), "date_parts": [[key, label] for key, (label, _) in DATE_PARTS.items()],
                   "sex_formats": list(SEX_FORMATS.items()), "dnv_formats": list(DNV_FORMATS.items()), "dnv_prefix": DNV_TEST_PREFIX,
-                  "document_kinds": DOCUMENT_KINDS}
+                  "document_kinds": DOCUMENT_KINDS, "semantic_options": semantic_options()}

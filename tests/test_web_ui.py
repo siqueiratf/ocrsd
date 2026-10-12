@@ -199,6 +199,24 @@ class InterfaceTests(unittest.TestCase):
                 "layout": json.dumps(layout) if layout is not None else "", **extra}
         return self.hx("POST", f"/modelos/{model_id}/mapeamento", data=form)
 
+    def test_editor_exposes_and_keeps_semantic_bindings(self):
+        response = self.hx("POST", "/modelos", data={"label": "Semântico", "mapping_id": "default"},
+                           files={"pdf": ("template.pdf", TEMPLATE.read_bytes(), "application/pdf")})
+        model_id = re.fullmatch(r"/modelos/([0-9a-f]{32})/editor", response.headers["hx-redirect"]).group(1)
+        data = self.editor_data(model_id)
+        self.assertEqual(data["semantic_options"][0]["key"], "newborn.name")
+        self.assertEqual(set(data["semantic_options"][0]), {"key", "label", "group", "kind", "description"})
+        fields = [{"field_id": "mae", "label": "Nome da mãe", "data_type": "person_name", "bbox": [100, 100, 600, 160]},
+                  {"field_id": "livre", "label": "Livre", "bbox": [100, 200, 600, 260], "semantic": {"key": "birth.date", "part": "year"}}]
+        self.assertEqual(self.save(model_id, data, fields).status_code, 200)
+        stored = self.hx("GET", f"/modelos/{model_id}/estado.json").json()
+        self.assertEqual(stored["definition"]["fields"][1]["semantic"], {"key": "birth.date", "part": "year"})
+        self.assertEqual(stored["semantic_inferred"], {"mae": "mother.name", "livre": None})
+        rejected = self.save(model_id, {**data, "revision": stored["revision"]}, [{**fields[1], "semantic": "birth.nada"}])
+        self.assertEqual(rejected.status_code, 422)
+        self.assertIn("Chave semântica desconhecida", rejected.text)
+        self.assertEqual(self.hx("GET", "/modelos/dnv/estado.json").json()["semantic_inferred"]["19"], "mother.age")
+
     def test_model_upload_editor_publication_and_catalog_copy(self):
         response = self.hx("POST", "/modelos", data={"label": "Modelo enviado", "description": "Pela interface", "mapping_id": "default"},
                            files={"pdf": ("template.pdf", TEMPLATE.read_bytes(), "application/pdf")})

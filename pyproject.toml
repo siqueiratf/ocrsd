@@ -30,7 +30,7 @@ handwriting = ["tensorflow-cpu>=2.20,<2.21"]
 ocrsd = "src.cli:main"
 
 [tool.setuptools]
-packages = ["src", "src.web"]
+packages = ["src", "src.web", "src.semantic", "src.mapping_assist"]
 
 [tool.setuptools.package-data]
 "src.web" = ["templates/*.html", "templates/partials/*.html", "static/*"]

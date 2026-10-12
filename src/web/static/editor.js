@@ -15,6 +15,7 @@
   const narrow = window.matchMedia('(max-width: 1180px)')
   const labels = data.type_labels
   const categories = data.type_category
+  const meanings = new Map((data.semantic_options || []).map(option => [option.key, option]))
 
   let definition = data.definition
   let fields = structuredClone(definition.fields)
@@ -152,6 +153,8 @@
     if (splitDate(item) && (item.elements || []).map(child => child.part).sort().join() !== data.date_parts.map(([part]) => part).sort().join()) issues.push({ path: 'elements', message: 'A data separada precisa de uma área para o dia, uma para o mês e uma para o ano' })
     if (dnvBoxes(item) && (item.elements || []).length !== 11) issues.push({ path: 'elements', message: 'O número da DNV em caixas precisa de 11 caixas' })
     if (rules.semantic_key != null && !/^[A-Za-z0-9_-]{1,60}$/.test(rules.semantic_key)) issues.push({ path: 'validation.semantic_key', message: 'Use até 60 letras, números, “_” ou “-”', blocking: true })
+    const meaning = semanticSpec(item).key
+    if (meaning && meanings.size && !meanings.has(meaning)) issues.push({ path: 'semantic', message: 'Significado desconhecido; escolha uma opção da lista', blocking: true })
     return issues
   }
 
@@ -408,9 +411,52 @@
     ], open)
   }
 
+  function semanticSpec(item) {
+    const value = item?.semantic
+    return typeof value === 'string' ? { key: value } : value && typeof value === 'object' ? { ...value } : {}
+  }
+
+  function wholeDate(item) {
+    const rules = { ...(item.validation || {}), ...Object.assign({}, ...(item.rule_refs || []).map(reference => definition.shared_rules?.[reference] || {})) }
+    return item.data_type === 'date' || (item.data_type === 'digit_sequence' && rules.format === 'DDMMYYYY')
+  }
+
+  function writeSemantic(item, key, part) {
+    if (!key) return setPath(item, 'semantic', undefined)
+    const spec = { ...semanticSpec(item), key, part }
+    const option = meanings.get(key)
+    if (option && option.kind !== 'date') delete spec.format
+    if (!part || (option && option.kind !== 'date') || wholeDate(item)) delete spec.part
+    setPath(item, 'semantic', Object.keys(spec).length > 1 ? spec : key)
+  }
+
+  function semanticControls(item) {
+    const spec = semanticSpec(item)
+    const inferred = meanings.get(data.semantic_inferred?.[item.field_id])
+    const chosen = meanings.get(spec.key)
+    const input = h('select', { 'data-path': 'semantic', 'data-kind': 'semantic' })
+    input.add(new Option(inferred ? `Automático (detectado: ${inferred.label})` : 'Automático (sem correspondência)', ''))
+    const groups = new Map()
+    for (const option of meanings.values()) {
+      if (!groups.has(option.group)) groups.set(option.group, h('optgroup', { label: option.group }))
+      groups.get(option.group).append(new Option(option.label, option.key))
+    }
+    input.append(...groups.values())
+    if (spec.key && !chosen) input.add(new Option(spec.key, spec.key))
+    input.value = spec.key || ''
+    const hint = chosen ? chosen.description : inferred ? `Automático · ${inferred.label}` : 'Sem significado, o gerador cria um valor independente para o campo.'
+    return [
+      h('label', { class: 'field', 'data-field-path': 'semantic', title: 'Valor do registro sintético coerente que preenche este campo' },
+        h('span', { text: 'Significado' }), input, h('small', { class: 'hint', text: hint }), h('small', { class: 'field-message', 'data-message': 'semantic', hidden: true })),
+      chosen?.kind === 'date' && !wholeDate(item)
+        ? control('Parte da data', 'semantic.part', 'semantic', { source: { semantic: spec }, choices: [['', 'Completa'], ...data.date_parts], tooltip: 'Parte da data escrita neste campo' })
+        : null,
+    ]
+  }
+
   function dataSection(item) {
     const type = item.data_type || 'text'
-    const controls = []
+    const controls = [...semanticControls(item)]
     const allowed = (label = 'Valores permitidos', hint = 'Um por linha. O gerador escolhe um destes valores.') => control(label, 'validation.allowed_values', 'lines', { hint, rows: 4 })
     if (type === 'text') controls.push(control('Máscara', 'validation.mask', 'text', { placeholder: '###.###-##', hint: '# dígito · A maiúscula · a minúscula · * letra ou dígito', tooltip: 'Gera valores no formato da máscara' }), allowed(), control('Tamanho máximo', 'validation.max_length', 'int', { min: 1 }))
     if (type === 'person_name') controls.push(control('Permitir números no nome', 'validation.allow_digits', 'bool'), control('Aplicar regras linguísticas pt-BR', 'validation.portuguese_rules', 'bool'))
@@ -504,13 +550,13 @@
       parts.push(dataSection(item))
       if (['checkbox', 'digit_sequence', 'text_sequence'].includes(type) || splitDate(item) || dnvBoxes(item)) parts.push(elementsSection(item))
       parts.push(geometrySection(item))
-      const known = new Set(['field_id', 'label', 'description', 'data_type', 'bbox', 'validation', 'elements', 'selection_mode', 'render_as_printed', 'always_redact', 'notes', 'bloco', 'custom_type'])
+      const known = new Set(['field_id', 'label', 'description', 'data_type', 'bbox', 'validation', 'elements', 'selection_mode', 'render_as_printed', 'always_redact', 'notes', 'bloco', 'custom_type', 'semantic'])
       const preserved = Object.keys(item).filter(key => !known.has(key))
       parts.push(section('Avançado', [
         control('Exibir como texto digitado', 'render_as_printed', 'bool', { tooltip: 'Ignora a escrita manuscrita na geração' }),
         control('Sempre ocultar no processamento', 'always_redact', 'bool', { tooltip: 'Usado pela etapa de ocultação do pipeline' }),
         control('Distância máxima de correção', 'validation.max_edit_distance', 'int', { min: 0, tooltip: 'Tolerância usada na validação de OCR' }),
-        ['date', 'sex', 'dnv_number'].includes(type) ? control('Vínculo semântico', 'validation.semantic_key', 'text', { mono: true, placeholder: { date: 'nascimento', sex: 'sexo', dnv_number: 'dnv' }[type], hint: 'Campos do mesmo tipo com o mesmo vínculo recebem o mesmo valor no documento.' }) : null,
+        ['date', 'sex', 'dnv_number'].includes(type) && !semanticSpec(item).key ? control('Vínculo personalizado', 'validation.semantic_key', 'text', { mono: true, placeholder: { date: 'nascimento', sex: 'sexo', dnv_number: 'dnv' }[type], hint: 'Campos do mesmo tipo com o mesmo vínculo recebem o mesmo valor no documento.' }) : null,
         control('Notas', 'notes', 'text', { multiline: true, rows: 2 }),
         preserved.length ? h('p', { class: 'hint', text: `Metadados preservados: ${preserved.join(', ')}.` }) : null,
       ], false))
@@ -899,6 +945,17 @@
       changed()
       return
     }
+    if (input.dataset.kind === 'semantic') {
+      remember()
+      editing = ''
+      const spec = semanticSpec(item)
+      const value = readValue(input)
+      writeSemantic(item, input.dataset.path === 'semantic' ? value : spec.key, input.dataset.path === 'semantic' ? spec.part : value)
+      renderInspector()
+      inspector.querySelector(`[data-path="${input.dataset.path}"]`)?.focus()
+      changed()
+      return
+    }
     const path = input.dataset.path
     if (!path) return
     const value = readValue(input)
@@ -919,6 +976,7 @@
     } else setPath(item, path, value)
     const structural = path === 'data_type' || (path === 'validation.format' && ['date', 'dnv_number'].includes(item.data_type))
     if (structural) applyTypeDefaults(item)
+    if (structural && semanticSpec(item).part) writeSemantic(item, semanticSpec(item).key, semanticSpec(item).part)
     const title = inspector.querySelector('[data-titulo-inspetor]')
     if (title && ['label', 'field_id', 'id', 'element_id'].includes(path)) title.textContent = item.label || item.field_id || item.id || item.element_id || ''
     if (structural) {
@@ -1022,6 +1080,7 @@
     if (!response.ok) return toast('Não foi possível recarregar o mapeamento')
     const state = await response.json()
     definition = state.definition
+    data.semantic_inferred = state.semantic_inferred
     fields = clone(definition.fields)
     layout = state.layout ? clone(state.layout) : null
     revision = state.revision

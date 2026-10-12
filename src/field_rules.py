@@ -21,10 +21,13 @@ DATE_FORMATS = {
     "DDMMAAAA": "%d%m%Y",
     "DDMMYYYY": "%d%m%Y",
     "DD de mês de AAAA": None,
+    "EXTENSO_PALAVRAS": None,
     SEPARATED_DATE: "%d/%m/%Y",
 }
 DATE_FORMAT_LABELS = {"DD/MM/AAAA": "DD/MM/AAAA · 15/09/2026", "DD-MM-AAAA": "DD-MM-AAAA · 15-09-2026",
-                      "DD de mês de AAAA": "Por extenso · 15 de setembro de 2026", "DD/MM/AA": "DD/MM/AA · 15/09/26",
+                      "DD de mês de AAAA": "Por extenso · 15 de setembro de 2026",
+                      "EXTENSO_PALAVRAS": "Por extenso em palavras · quinze de setembro de dois mil e vinte e seis",
+                      "DD/MM/AA": "DD/MM/AA · 15/09/26",
                       "AAAA-MM-DD": "AAAA-MM-DD · 2026-09-15", "DDMMAAAA": "DDMMAAAA · 15092026",
                       SEPARATED_DATE: "Dia, mês e ano em áreas separadas"}
 DATE_PARTS = {"day": ("Dia", "%d"), "month": ("Mês", "%m"), "year": ("Ano", "%Y")}
@@ -42,9 +45,39 @@ MASK_TOKENS = {"#": string.digits, "A": string.ascii_uppercase, "a": string.asci
 MAX_MASK_LENGTH = 60
 
 
+UNIT_WORDS = ("zero", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze", "doze", "treze",
+              "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove")
+TEN_WORDS = ("", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa")
+HUNDRED_WORDS = ("", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos",
+                 "novecentos")
+
+
+def number_words(value: int) -> str:
+    if value < 20:
+        return UNIT_WORDS[value]
+    if value < 100:
+        return TEN_WORDS[value // 10] + (f" e {UNIT_WORDS[value % 10]}" if value % 10 else "")
+    if value < 1000:
+        if value == 100:
+            return "cem"
+        return HUNDRED_WORDS[value // 100] + (f" e {number_words(value % 100)}" if value % 100 else "")
+    thousands, rest = divmod(value, 1000)
+    head = "mil" if thousands == 1 else f"{number_words(thousands)} mil"
+    if not rest:
+        return head
+    return f"{head} e {number_words(rest)}" if rest < 100 or rest % 100 == 0 else f"{head} {number_words(rest)}"
+
+
+def date_in_words(value: date) -> str:
+    day = "primeiro" if value.day == 1 else number_words(value.day)
+    return f"{day} de {MONTHS[value.month - 1]} de {number_words(value.year)}"
+
+
 def format_date(value: date, fmt: str | None) -> str:
     if fmt == "DD de mês de AAAA":
         return f"{value.day:02d} de {MONTHS[value.month - 1]} de {value.year}"
+    if fmt == "EXTENSO_PALAVRAS":
+        return date_in_words(value)
     return value.strftime(DATE_FORMATS.get(fmt or "DD/MM/AAAA") or "%d/%m/%Y")
 
 
@@ -142,3 +175,20 @@ def rule_errors(data_type: str, rules: object) -> list[str]:
         if value is not None and (isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 10000):
             errors.append("Os limites de tamanho precisam ser inteiros não negativos")
     return errors
+
+
+def apply_shared_rules(field_map: dict) -> dict:
+    shared_rules = field_map.get("shared_rules") or {}
+    resolved_fields = []
+    for field in field_map.get("fields", []):
+        resolved = dict(field)
+        validation = dict(field.get("validation") or {})
+        for reference in field.get("rule_refs") or []:
+            rule = shared_rules.get(reference) or {}
+            for key, value in rule.items():
+                if key != "description":
+                    validation.setdefault(key, value)
+        if validation:
+            resolved["validation"] = validation
+        resolved_fields.append(resolved)
+    return {**field_map, "fields": resolved_fields}
