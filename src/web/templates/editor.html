@@ -3,7 +3,7 @@
 {% block title %}{{ model.label }} · Mapeamento{% endblock %}
 {% block body_class %}is-editor{% endblock %}
 {% block footer %}{% endblock %}
-{% block scripts %}<script src="/static/pdf_viewer.js?v={{ VERSION }}" defer></script><script src="/static/editor.js?v={{ VERSION }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ asset('pdf_viewer.js') }}" defer></script><script src="{{ asset('editor.js') }}" defer></script>{% endblock %}
 {% block content %}
 <div class="editor-app" id="editor" data-tool="select">
   <header class="editor-header">
@@ -19,6 +19,7 @@
     </div>
     <div class="editor-actions">
       {% if return_draft %}<a class="btn" href="/geracao?draft={{ return_draft }}&amp;etapa=1">Voltar à geração</a>{% endif %}
+      {% if not model.builtin and not composed %}<button type="button" class="btn btn-ai-map" data-acao="mapear-ia" {% if model.status != 'draft' %}hidden{% endif %} data-tooltip="Sugere áreas e significados a partir do PDF; nada é publicado sem a sua revisão">{{ icon('sparkle') }}Mapear com IA</button>{% endif %}
       <span class="save-state" data-estado="salvo" role="status" aria-live="polite"><i aria-hidden="true"></i><span data-estado-texto>Salvo</span></span>
       <details class="menu menu-end">
         <summary class="btn btn-icon" aria-label="Mais ações" data-tooltip="Mais ações">{{ icon('more') }}</summary>
@@ -66,6 +67,20 @@
     <div class="resizer" data-redimensionar="esquerdo" role="separator" aria-orientation="vertical" aria-label="Redimensionar painel de elementos" tabindex="0"></div>
 
     <section class="workspace" aria-label="Documento">
+      {% if not model.builtin and not composed %}
+      <div class="mapping-progress" data-ai-progress hidden>
+        <span class="mapping-progress-icon" aria-hidden="true">{{ icon('sparkle') }}</span>
+        <div class="mapping-progress-text" role="status" aria-live="polite"><strong data-ai-progress-title>Analisando o documento</strong><span data-ai-progress-detail>Aguardando início</span><small data-ai-progress-note hidden></small></div>
+        <progress data-ai-progress-bar max="100" value="0" aria-label="Andamento da análise"></progress>
+        <div class="mapping-progress-actions">
+          <button type="button" class="btn btn-sm" data-acao="importar-proposta" hidden>Importar sugestões</button>
+          <button type="button" class="btn btn-sm" data-acao="proxima-sugestao" hidden>Próxima sugestão</button>
+          <button type="button" class="btn btn-sm" data-acao="aceitar-seguras" hidden data-tooltip="Aceita as sugestões já associadas a um significado conhecido e sem pendências">Aceitar associações seguras</button>
+          <button type="button" class="btn btn-sm btn-danger" data-acao="descartar-sugestoes" hidden>Descartar restantes</button>
+        </div>
+        <button type="button" class="icon-btn" data-acao="fechar-ai-progresso" aria-label="Ocultar aviso da análise">{{ icon('close') }}</button>
+      </div>
+      {% endif %}
       <div class="guide" data-guia>
         <ol>
           <li><b>1</b><span><strong>Adicione um elemento</strong>Escolha um tipo de campo.</span></li>

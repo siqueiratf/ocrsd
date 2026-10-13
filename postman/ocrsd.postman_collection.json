@@ -61,6 +61,11 @@
       "type": "string"
     },
     {
+      "key": "analysis_id",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "job_id",
       "value": "",
       "type": "string"
@@ -360,7 +365,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "[\n  {\n    \"id\": \"certidao_nascimento\",\n    \"label\": \"CERTIDAO NASCIMENTO\",\n    \"mappings\": [\n      {\n        \"id\": \"certidao_nascimento_fields\",\n        \"label\": \"certidao nascimento fields\"\n      }\n    ]\n  },\n  {\n    \"id\": \"dnv\",\n    \"label\": \"DNV\",\n    \"mappings\": [\n      {\n        \"id\": \"20260831\",\n        \"label\": \"20260831\"\n      },\n      {\n        \"id\": \"default\",\n        \"label\": \"default\"\n      },\n      {\n        \"id\": \"document_002\",\n        \"label\": \"document 002\"\n      },\n      {\n        \"id\": \"mapeamento_seguindo_norma\",\n        \"label\": \"mapeamento seguindo norma\"\n      },\n      {\n        \"id\": \"test_w_checkbox\",\n        \"label\": \"test w checkbox\"\n      },\n      {\n        \"id\": \"test_w_datetime\",\n        \"label\": \"test w datetime\"\n      }\n    ]\n  }\n]"
+              "body": "[\n  {\n    \"id\": \"certidao_nascimento\",\n    \"label\": \"CERTIDAO NASCIMENTO\",\n    \"mappings\": [\n      {\n        \"id\": \"certidao_nascimento_fields\",\n        \"label\": \"certidao nascimento fields\"\n      }\n    ]\n  },\n  {\n    \"id\": \"dnv\",\n    \"label\": \"Declaração de Nascido Vivo (DNV)\",\n    \"mappings\": [\n      {\n        \"id\": \"20260831\",\n        \"label\": \"20260831\"\n      },\n      {\n        \"id\": \"default\",\n        \"label\": \"default\"\n      },\n      {\n        \"id\": \"document_002\",\n        \"label\": \"document 002\"\n      },\n      {\n        \"id\": \"mapeamento_seguindo_norma\",\n        \"label\": \"mapeamento seguindo norma\"\n      },\n      {\n        \"id\": \"test_w_checkbox\",\n        \"label\": \"test w checkbox\"\n      },\n      {\n        \"id\": \"test_w_datetime\",\n        \"label\": \"test w datetime\"\n      }\n    ]\n  },\n  {\n    \"id\": \"do\",\n    \"label\": \"Declaração de Óbito (DO)\",\n    \"mappings\": [\n      {\n        \"id\": \"mapeamento_do_v1\",\n        \"label\": \"mapeamento do v1\"\n      }\n    ]\n  }\n]"
             }
           ],
           "event": [
@@ -1654,6 +1659,427 @@
       ]
     },
     {
+      "name": "Mapeamento assistido",
+      "item": [
+        {
+          "name": "Analisar template do modelo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/analyses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models",
+                "{{model_id}}",
+                "analyses"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/models/{model_id}/analyses.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/analyses",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models",
+                    "{{model_id}}",
+                    "analyses"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/models/{model_id}/analyses.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"page\": 1\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 202,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"55555555555555555555555555555555\",\n  \"model_id\": \"44444444444444444444444444444444\",\n  \"page\": 1,\n  \"status\": \"queued\",\n  \"progress\": 0,\n  \"stage\": \"Aguardando análise\",\n  \"error\": null,\n  \"provenance\": null,\n  \"proposal\": null,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"started_at\": null,\n  \"finished_at\": null\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "pm.collectionVariables.set('analysis_id', pm.response.json().id);",
+                  "pm.collectionVariables.set('poll_count', 0);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aplicar sugestões aceitas",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/analyses/{{analysis_id}}/apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "models",
+                "{{model_id}}",
+                "analyses",
+                "{{analysis_id}}",
+                "apply"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/models/{model_id}/analyses/{analysis_id}/apply.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accepted\": [\n    \"newborn_name\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/models/{{model_id}}/analyses/{{analysis_id}}/apply",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "models",
+                    "{{model_id}}",
+                    "analyses",
+                    "{{analysis_id}}",
+                    "apply"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/models/{model_id}/analyses/{analysis_id}/apply.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"accepted\": [\n    \"newborn_name\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"certidao_nascimento_fields\",\n  \"definition\": {\n    \"template_id\": \"certidao_nascimento\",\n    \"dpi\": 300,\n    \"page_size_px\": [\n      2481,\n      3508\n    ],\n    \"source_template\": \"certidao_nascimento\",\n    \"fields\": [\n      {\n        \"field_id\": \"cpf\",\n        \"label\": \"CPF\",\n        \"description\": \"CPF no formato 000.000.000-00.\",\n        \"bbox\": [\n          206,\n          766,\n          2245,\n          829\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"123.456.789-09\",\n            \"987.654.321-00\",\n            \"456.789.123-10\"\n          ],\n          \"pattern\": \"^[0-9]{3}\\\\.[0-9]{3}\\\\.[0-9]{3}-[0-9]{2}$\"\n        }\n      },\n      {\n        \"field_id\": \"matricula\",\n        \"label\": \"Matrícula\",\n        \"description\": \"Matrícula do registro civil no formato 000000.00.00.0000.0.00000.000.0000000-00.\",\n        \"bbox\": [\n          733,\n          982,\n          1703,\n          1039\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"999999.99.99.9999.9.99999.999.9999999-99\",\n            \"123456.01.55.2026.1.00001.001.0000001-10\",\n            \"654321.02.55.2025.1.00002.002.0000002-20\"\n          ],\n          \"pattern\": \"^[0-9]{6}\\\\.[0-9]{2}\\\\.[0-9]{2}\\\\.[0-9]{4}\\\\.[0-9]\\\\.[0-9]{5}\\\\.[0-9]{3}\\\\.[0-9]{7}-[0-9]{2}$\"\n        }\n      },\n      {\n        \"field_id\": \"data_nascimento_por_extenso\",\n        \"label\": \"Data de nascimento por extenso\",\n        \"description\": \"Data de nascimento escrita por extenso.\",\n        \"bbox\": [\n          206,\n          1085,\n          1676,\n          1139\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\",\n          \"allow_digits\": false,\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"dia_nascimento\",\n        \"label\": \"Dia\",\n        \"description\": \"Dia numérico do nascimento.\",\n        \"bbox\": [\n          1744,\n          1092,\n          1857,\n          1135\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"integer\",\n        \"validation\": {\n          \"min_value\": 1,\n          \"max_value\": 31,\n          \"pattern\": \"^[0-9]{1,2}$\"\n        }\n      },\n      {\n        \"field_id\": \"mes_nascimento\",\n        \"label\": \"Mês\",\n        \"description\": \"Mês numérico do nascimento.\",\n        \"bbox\": [\n          1918,\n          1087,\n          2036,\n          1137\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"integer\",\n        \"validation\": {\n          \"min_value\": 1,\n          \"max_value\": 12,\n          \"pattern\": \"^[0-9]{1,2}$\"\n        }\n      },\n      {\n        \"field_id\": \"ano_nascimento\",\n        \"label\": \"Ano\",\n        \"description\": \"Ano numérico do nascimento.\",\n        \"bbox\": [\n          2101,\n          1087,\n          2240,\n          1139\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"integer\",\n        \"validation\": {\n          \"min_value\": 1900,\n          \"max_value\": 2100,\n          \"pattern\": \"^[0-9]{4}$\"\n        }\n      },\n      {\n        \"field_id\": \"hora_nascimento\",\n        \"label\": \"Hora de nascimento\",\n        \"description\": \"Horário de nascimento no formato HH:MM.\",\n        \"bbox\": [\n          206,\n          1176,\n          797,\n          1230\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"time\",\n        \"validation\": {\n          \"pattern\": \"^([01][0-9]|2[0-3]):[0-5][0-9]$\"\n        }\n      },\n      {\n        \"field_id\": \"naturalidade\",\n        \"label\": \"Naturalidade\",\n        \"description\": \"Naturalidade da pessoa registrada.\",\n        \"bbox\": [\n          858,\n          1176,\n          2242,\n          1230\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' /.,-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"municipio_registro_uf\",\n        \"label\": \"Município de registro e unidade da federação\",\n        \"description\": \"Município de registro seguido da UF.\",\n        \"bbox\": [\n          206,\n          1266,\n          940,\n          1318\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' /.,-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"local_municipio_nascimento_uf\",\n        \"label\": \"Local, município de nascimento e UF\",\n        \"description\": \"Local de nascimento, município e unidade da federação.\",\n        \"bbox\": [\n          999,\n          1268,\n          1889,\n          1325\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"sexo\",\n        \"label\": \"Sexo\",\n        \"description\": \"Sexo informado na certidão.\",\n        \"bbox\": [\n          1948,\n          1268,\n          2245,\n          1320\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"enum\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"MASCULINO\",\n            \"FEMININO\"\n          ]\n        }\n      },\n      {\n        \"field_id\": \"filiacao\",\n        \"label\": \"Filiação\",\n        \"description\": \"Nome dos genitores.\",\n        \"bbox\": [\n          206,\n          1393,\n          2242,\n          1653\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"person_name\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\",\n          \"allow_digits\": false,\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"avos\",\n        \"label\": \"Avós\",\n        \"description\": \"Nomes dos avós respectivos.\",\n        \"bbox\": [\n          204,\n          1708,\n          2242,\n          1771\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"person_name\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\",\n          \"allow_digits\": false,\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"gemeos\",\n        \"label\": \"Gêmeos\",\n        \"description\": \"Indicação se há gêmeos.\",\n        \"bbox\": [\n          206,\n          1847,\n          413,\n          1901\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"enum\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"SIM\",\n            \"NÃO\"\n          ]\n        }\n      },\n      {\n        \"field_id\": \"nome_matricula_gemeos\",\n        \"label\": \"Nome e matrícula dos gêmeos\",\n        \"description\": \"Nome e matrícula dos gêmeos, quando houver.\",\n        \"bbox\": [\n          430,\n          1847,\n          2242,\n          1901\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' .,-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"data_registro_por_extenso\",\n        \"label\": \"Data do registro por extenso\",\n        \"description\": \"Data do registro escrita por extenso.\",\n        \"bbox\": [\n          208,\n          1984,\n          1300,\n          2029\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$\",\n          \"allow_digits\": false,\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"numero_dnv\",\n        \"label\": \"Número da DNV/Declaração de Nascido Vivo\",\n        \"description\": \"Número da DNV ou Declaração de Nascido Vivo.\",\n        \"bbox\": [\n          1350,\n          1977,\n          2242,\n          2032\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"allowed_values\": [\n            \"12345678\",\n            \"87654321\",\n            \"20260000123\"\n          ],\n          \"pattern\": \"^[0-9]{8,15}$\"\n        }\n      },\n      {\n        \"field_id\": \"averbacoes_anotacoes_acrescer\",\n        \"label\": \"Averbações/anotações a acrescer\",\n        \"description\": \"Averbações ou anotações a acrescer.\",\n        \"bbox\": [\n          206,\n          2070,\n          2247,\n          2122\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"max_length\": 120,\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      },\n      {\n        \"field_id\": \"anotacoes_cadastro\",\n        \"label\": \"Anotações de cadastro\",\n        \"description\": \"Anotações de cadastro.\",\n        \"bbox\": [\n          206,\n          2249,\n          2247,\n          2373\n        ],\n        \"render_as_printed\": true,\n        \"data_type\": \"text\",\n        \"validation\": {\n          \"max_length\": 180,\n          \"pattern\": \"^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$\",\n          \"portuguese_rules\": true,\n          \"language\": \"pt-BR\"\n        }\n      }\n    ]\n  },\n  \"fields\": [\n    {\n      \"field_id\": \"cpf\",\n      \"label\": \"CPF\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        766,\n        2245,\n        829\n      ]\n    },\n    {\n      \"field_id\": \"matricula\",\n      \"label\": \"Matrícula\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        733,\n        982,\n        1703,\n        1039\n      ]\n    },\n    {\n      \"field_id\": \"data_nascimento_por_extenso\",\n      \"label\": \"Data de nascimento por extenso\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        1085,\n        1676,\n        1139\n      ]\n    },\n    {\n      \"field_id\": \"dia_nascimento\",\n      \"label\": \"Dia\",\n      \"data_type\": \"integer\",\n      \"bbox\": [\n        1744,\n        1092,\n        1857,\n        1135\n      ]\n    },\n    {\n      \"field_id\": \"mes_nascimento\",\n      \"label\": \"Mês\",\n      \"data_type\": \"integer\",\n      \"bbox\": [\n        1918,\n        1087,\n        2036,\n        1137\n      ]\n    },\n    {\n      \"field_id\": \"ano_nascimento\",\n      \"label\": \"Ano\",\n      \"data_type\": \"integer\",\n      \"bbox\": [\n        2101,\n        1087,\n        2240,\n        1139\n      ]\n    },\n    {\n      \"field_id\": \"hora_nascimento\",\n      \"label\": \"Hora de nascimento\",\n      \"data_type\": \"time\",\n      \"bbox\": [\n        206,\n        1176,\n        797,\n        1230\n      ]\n    },\n    {\n      \"field_id\": \"naturalidade\",\n      \"label\": \"Naturalidade\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        858,\n        1176,\n        2242,\n        1230\n      ]\n    },\n    {\n      \"field_id\": \"municipio_registro_uf\",\n      \"label\": \"Município de registro e unidade da federação\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        1266,\n        940,\n        1318\n      ]\n    },\n    {\n      \"field_id\": \"local_municipio_nascimento_uf\",\n      \"label\": \"Local, município de nascimento e UF\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        999,\n        1268,\n        1889,\n        1325\n      ]\n    },\n    {\n      \"field_id\": \"sexo\",\n      \"label\": \"Sexo\",\n      \"data_type\": \"enum\",\n      \"bbox\": [\n        1948,\n        1268,\n        2245,\n        1320\n      ]\n    },\n    {\n      \"field_id\": \"filiacao\",\n      \"label\": \"Filiação\",\n      \"data_type\": \"person_name\",\n      \"bbox\": [\n        206,\n        1393,\n        2242,\n        1653\n      ]\n    },\n    {\n      \"field_id\": \"avos\",\n      \"label\": \"Avós\",\n      \"data_type\": \"person_name\",\n      \"bbox\": [\n        204,\n        1708,\n        2242,\n        1771\n      ]\n    },\n    {\n      \"field_id\": \"gemeos\",\n      \"label\": \"Gêmeos\",\n      \"data_type\": \"enum\",\n      \"bbox\": [\n        206,\n        1847,\n        413,\n        1901\n      ]\n    },\n    {\n      \"field_id\": \"nome_matricula_gemeos\",\n      \"label\": \"Nome e matrícula dos gêmeos\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        430,\n        1847,\n        2242,\n        1901\n      ]\n    },\n    {\n      \"field_id\": \"data_registro_por_extenso\",\n      \"label\": \"Data do registro por extenso\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        208,\n        1984,\n        1300,\n        2029\n      ]\n    },\n    {\n      \"field_id\": \"numero_dnv\",\n      \"label\": \"Número da DNV/Declaração de Nascido Vivo\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        1350,\n        1977,\n        2242,\n        2032\n      ]\n    },\n    {\n      \"field_id\": \"averbacoes_anotacoes_acrescer\",\n      \"label\": \"Averbações/anotações a acrescer\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        2070,\n        2247,\n        2122\n      ]\n    },\n    {\n      \"field_id\": \"anotacoes_cadastro\",\n      \"label\": \"Anotações de cadastro\",\n      \"data_type\": \"text\",\n      \"bbox\": [\n        206,\n        2249,\n        2247,\n        2373\n      ]\n    }\n  ]\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Acompanhar análise",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/analyses/{{analysis_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "analyses",
+                "{{analysis_id}}"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/analyses/{analysis_id}."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/analyses/{{analysis_id}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "analyses",
+                    "{{analysis_id}}"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/analyses/{analysis_id}."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"55555555555555555555555555555555\",\n  \"model_id\": \"44444444444444444444444444444444\",\n  \"page\": 1,\n  \"status\": \"succeeded\",\n  \"progress\": 100,\n  \"stage\": \"Proposta pronta para revisão\",\n  \"error\": null,\n  \"provenance\": {\n    \"method\": \"ocrsd-hybrid\",\n    \"provider\": \"none\",\n    \"model\": null,\n    \"registry_version\": \"2\",\n    \"analysis_id\": \"55555555555555555555555555555555\",\n    \"analysis_source\": \"text_layer\",\n    \"context\": null,\n    \"page\": 0,\n    \"reviewed\": false,\n    \"assistant\": {\n      \"configured\": \"none\",\n      \"status\": \"unavailable\",\n      \"detail\": \"Assistente de IA desativado\",\n      \"warnings\": []\n    }\n  },\n  \"proposal\": {\n    \"template_id\": \"modelo_web\",\n    \"dpi\": 300,\n    \"page_size_px\": [\n      2481,\n      3508\n    ],\n    \"provenance\": {\n      \"method\": \"ocrsd-hybrid\",\n      \"provider\": \"none\",\n      \"model\": null,\n      \"registry_version\": \"2\",\n      \"analysis_id\": \"55555555555555555555555555555555\",\n      \"analysis_source\": \"text_layer\",\n      \"context\": null,\n      \"page\": 0,\n      \"reviewed\": false,\n      \"assistant\": {\n        \"configured\": \"none\",\n        \"status\": \"unavailable\",\n        \"detail\": \"Assistente de IA desativado\",\n        \"warnings\": []\n      }\n    },\n    \"fields\": [\n      {\n        \"field_id\": \"newborn_name\",\n        \"label\": \"Nome\",\n        \"description\": \"Nome\",\n        \"data_type\": \"person_name\",\n        \"bbox\": [\n          180,\n          420,\n          1500,\n          500\n        ],\n        \"semantic\": \"newborn.name\",\n        \"suggestion\": {\n          \"status\": \"suggested\",\n          \"candidate_id\": \"c001\",\n          \"match\": \"matched\",\n          \"method\": \"rules\",\n          \"score\": 0.92,\n          \"alternatives\": [],\n          \"reason\": \"Rótulo corresponde ao registro semântico.\",\n          \"proposal\": null\n        }\n      }\n    ]\n  },\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648009.0,\n  \"started_at\": 1791648001.0,\n  \"finished_at\": 1791648009.0\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));",
+                  "const value = pm.response.json();",
+                  "const count = Number(pm.collectionVariables.get('poll_count') || 0) + 1;",
+                  "pm.collectionVariables.set('poll_count', count);",
+                  "if (['queued','running'].includes(value.status) && count < 600) { setTimeout(() => {}, 1500); pm.execution.setNextRequest(pm.info.requestName); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estado do assistente de IA",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/assistant",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assistant"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: GET /api/v1/assistant."
+          },
+          "response": [
+            {
+              "name": "Resposta de exemplo",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/assistant",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "assistant"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: GET /api/v1/assistant."
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"available\": false,\n  \"provider\": \"none\",\n  \"model\": null,\n  \"detail\": \"Assistente de IA desativado\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Presets",
       "item": [
         {
@@ -2361,7 +2787,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "[\n  {\n    \"name\": \"Configuração DNV\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": null,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\"\n    },\n    \"id\": \"11111111111111111111111111111111\",\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0\n  }\n]"
+              "body": "[\n  {\n    \"name\": \"Configuração DNV\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": null,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\",\n      \"generation_mode\": \"traditional\"\n    },\n    \"id\": \"11111111111111111111111111111111\",\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0\n  }\n]"
             }
           ],
           "event": [
@@ -2412,7 +2838,7 @@
             "description": "Contrato implementado: POST /api/v1/configurations.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": null,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\"\n  }\n}",
+              "raw": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": null,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\",\n    \"generation_mode\": \"traditional\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2457,7 +2883,7 @@
                 "description": "Contrato implementado: POST /api/v1/configurations.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": null,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\"\n  }\n}",
+                  "raw": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": null,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\",\n    \"generation_mode\": \"traditional\"\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2473,7 +2899,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": null,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\"\n  },\n  \"id\": \"11111111111111111111111111111111\",\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0\n}"
+              "body": "{\n  \"name\": \"Configuração DNV\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": null,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\",\n    \"generation_mode\": \"traditional\"\n  },\n  \"id\": \"11111111111111111111111111111111\",\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0\n}"
             }
           ],
           "event": [
@@ -2619,7 +3045,7 @@
             "description": "Contrato implementado: POST /api/v1/generation/validate.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
+              "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"generation_mode\": \"traditional\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2665,7 +3091,7 @@
                 "description": "Contrato implementado: POST /api/v1/generation/validate.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
+                  "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"generation_mode\": \"traditional\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2681,7 +3107,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}"
+              "body": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"generation_mode\": \"traditional\"\n}"
             }
           ],
           "event": [
@@ -2732,7 +3158,7 @@
             "description": "Contrato implementado: POST /api/v1/jobs.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
+              "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"generation_mode\": \"traditional\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2777,7 +3203,7 @@
                 "description": "Contrato implementado: POST /api/v1/jobs.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\"\n}",
+                  "raw": "{\n  \"name\": \"DNV — fluxo Postman\",\n  \"document_type\": \"certidao_nascimento\",\n  \"mapping_id\": \"certidao_nascimento_fields\",\n  \"fields\": [\n    \"cpf\",\n    \"matricula\",\n    \"data_nascimento_por_extenso\"\n  ],\n  \"count\": 1,\n  \"seed\": null,\n  \"writing\": {\n    \"model\": \"font\",\n    \"handwriting\": true,\n    \"text_handwriting\": true,\n    \"intensity\": 0.65,\n    \"writer\": null,\n    \"bias\": 0.75,\n    \"color\": \"#193787\",\n    \"width\": 1.5,\n    \"pressure\": 0.25,\n    \"dropout\": 0,\n    \"text_policy\": \"normalize\"\n  },\n  \"filter_preset\": \"none\",\n  \"generation_mode\": \"traditional\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2890,7 +3316,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"queued\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": false,\n  \"error\": null,\n  \"name\": \"DNV — fluxo Postman\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": null,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\"\n  }\n}"
+              "body": "{\n  \"id\": \"00000000000000000000000000000000\",\n  \"status\": \"queued\",\n  \"completed\": 0,\n  \"total\": 1,\n  \"created_at\": 1791648000.0,\n  \"updated_at\": 1791648000.0,\n  \"expires_at\": 1791734400.0,\n  \"cancel_requested\": false,\n  \"error\": null,\n  \"name\": \"DNV — fluxo Postman\",\n  \"options\": {\n    \"name\": \"DNV — fluxo Postman\",\n    \"document_type\": \"certidao_nascimento\",\n    \"mapping_id\": \"certidao_nascimento_fields\",\n    \"fields\": [\n      \"cpf\",\n      \"matricula\",\n      \"data_nascimento_por_extenso\"\n    ],\n    \"count\": 1,\n    \"seed\": null,\n    \"writing\": {\n      \"model\": \"font\",\n      \"handwriting\": true,\n      \"text_handwriting\": true,\n      \"intensity\": 0.65,\n      \"writer\": null,\n      \"bias\": 0.75,\n      \"color\": \"#193787\",\n      \"width\": 1.5,\n      \"pressure\": 0.25,\n      \"dropout\": 0,\n      \"text_policy\": \"normalize\"\n    },\n    \"filter_preset\": \"none\",\n    \"generation_mode\": \"traditional\"\n  }\n}"
             }
           ],
           "event": [
@@ -3119,7 +3545,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "[\n  {\n    \"id\": \"00000000000000000000000000000000\",\n    \"status\": \"queued\",\n    \"completed\": 0,\n    \"total\": 1,\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0,\n    \"expires_at\": 1791734400.0,\n    \"cancel_requested\": false,\n    \"error\": null,\n    \"name\": \"DNV — fluxo Postman\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": null,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\"\n    }\n  }\n]"
+              "body": "[\n  {\n    \"id\": \"00000000000000000000000000000000\",\n    \"status\": \"queued\",\n    \"completed\": 0,\n    \"total\": 1,\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0,\n    \"expires_at\": 1791734400.0,\n    \"cancel_requested\": false,\n    \"error\": null,\n    \"name\": \"DNV — fluxo Postman\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": null,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\",\n      \"generation_mode\": \"traditional\"\n    }\n  }\n]"
             }
           ],
           "event": [
@@ -3709,7 +4135,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"share\": {\n    \"id\": \"22222222222222222222222222222222\",\n    \"job_id\": \"00000000000000000000000000000000\",\n    \"allow_download\": true,\n    \"created_at\": 1791648000.0,\n    \"expires_at\": 1791651600.0,\n    \"revoked_at\": null\n  },\n  \"job\": {\n    \"id\": \"00000000000000000000000000000000\",\n    \"status\": \"queued\",\n    \"completed\": 0,\n    \"total\": 1,\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0,\n    \"expires_at\": 1791734400.0,\n    \"cancel_requested\": false,\n    \"error\": null,\n    \"name\": \"DNV — fluxo Postman\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": null,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\"\n    }\n  },\n  \"artifacts\": []\n}"
+              "body": "{\n  \"share\": {\n    \"id\": \"22222222222222222222222222222222\",\n    \"job_id\": \"00000000000000000000000000000000\",\n    \"allow_download\": true,\n    \"created_at\": 1791648000.0,\n    \"expires_at\": 1791651600.0,\n    \"revoked_at\": null\n  },\n  \"job\": {\n    \"id\": \"00000000000000000000000000000000\",\n    \"status\": \"queued\",\n    \"completed\": 0,\n    \"total\": 1,\n    \"created_at\": 1791648000.0,\n    \"updated_at\": 1791648000.0,\n    \"expires_at\": 1791734400.0,\n    \"cancel_requested\": false,\n    \"error\": null,\n    \"name\": \"DNV — fluxo Postman\",\n    \"options\": {\n      \"name\": \"DNV — fluxo Postman\",\n      \"document_type\": \"certidao_nascimento\",\n      \"mapping_id\": \"certidao_nascimento_fields\",\n      \"fields\": [\n        \"cpf\",\n        \"matricula\",\n        \"data_nascimento_por_extenso\"\n      ],\n      \"count\": 1,\n      \"seed\": null,\n      \"writing\": {\n        \"model\": \"font\",\n        \"handwriting\": true,\n        \"text_handwriting\": true,\n        \"intensity\": 0.65,\n        \"writer\": null,\n        \"bias\": 0.75,\n        \"color\": \"#193787\",\n        \"width\": 1.5,\n        \"pressure\": 0.25,\n        \"dropout\": 0,\n        \"text_policy\": \"normalize\"\n      },\n      \"filter_preset\": \"none\",\n      \"generation_mode\": \"traditional\"\n    }\n  },\n  \"artifacts\": []\n}"
             }
           ],
           "event": [

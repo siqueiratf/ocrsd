@@ -7,11 +7,14 @@ from dataclasses import dataclass, field as dataclass_field, replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from src.mapping_assist.matching import MEDICAL_GENERATOR, match_candidates
-from src.mapping_assist.proposal import accept_suggestion, build_proposal, strip_suggestions
+from src.mapping_assist.matching import MEDICAL_GENERATOR, allowed_keys, match_candidates, registry_index
+from src.mapping_assist.proposal import accept_suggestion, build_proposal
 from src.mapping_assist.providers import (AssistantError, NullAssistant, OpenAICompatibleAssistant, ProviderStatus,
                                           assistant_from_settings)
 from src.semantic import VERSION
+from src.field_rules import FIELD_TYPES
+from src.semantic.custom import validate_custom_definition
+from src.semantic.registry import KINDS
 from src.semantic.resolve import Binding, normalize, resolve_field
 from src.web.services import mapping_issues, validate_mapping
 from src.web.settings import Settings
@@ -231,12 +234,12 @@ class MatchingTests(unittest.TestCase):
                     self.assertTrue(match.proposal["generator"].startswith(MEDICAL_GENERATOR), match.proposal)
         by_label = {(label, section): match for match, (label, section, *_) in zip(matches, DO_LABELS)}
         cause = by_label[("Causas da morte - Parte I", "V")].proposal
-        self.assertEqual(cause["key"], "death.cause.parte_i")
+        self.assertEqual(cause["key"], "custom.death.cause.parte_i")
         self.assertEqual(cause["kind"], "text")
         self.assertIn("filhos", by_label[("Número de filhos tidos", "IV")].reason)
         self.assertIn("seção IX não tem chaves", by_label[("Declarante", "IX")].reason)
         self.assertIn("raca", normalize(by_label[("Raça/Cor", "I")].reason))
-        self.assertEqual(by_label[("Complemento", "II")].proposal["key"], "deceased.residence.complemento")
+        self.assertEqual(by_label[("Complemento", "II")].proposal["key"], "custom.deceased.residence.complemento")
         self.assertEqual(by_label[("Tipo de óbito", "I")].status, "new")
 
     def test_thresholds_and_ambiguity(self):
@@ -261,6 +264,7 @@ class MatchingTests(unittest.TestCase):
 class FakeModel(BaseHTTPRequestHandler):
     mode = "valid"
     delay = 0.0
+    get_delay = 0.0
     posts = 0
 
     def log_message(self, *args):
@@ -278,6 +282,7 @@ class FakeModel(BaseHTTPRequestHandler):
             pass
 
     def do_GET(self):
+        time.sleep(type(self).get_delay)
         self._send(200, {"data": [{"id": "fake"}]})
 
     def do_POST(self):
@@ -286,11 +291,24 @@ class FakeModel(BaseHTTPRequestHandler):
         time.sleep(type(self).delay)
         if type(self).mode == "error":
             return self._send(500, {"error": "boom"})
+        if type(self).mode == "drip":
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", "4096")
+                self.end_headers()
+                for _ in range(100):
+                    self.wfile.write(b" ")
+                    self.wfile.flush()
+                    time.sleep(0.05)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         payload = json.loads(request["messages"][1]["content"])
         if type(self).mode == "invalid":
             content = "isto não é JSON"
         elif "proposals" in request["messages"][0]["content"]:
-            content = json.dumps({"proposals": [{"id": item["id"], "key": "death.cause.part_i", "label": "Causa — parte I",
+            content = json.dumps({"proposals": [{"id": item["id"], "key": "custom.death.cause.part_i", "label": "Causa — parte I",
                                                  "generator": "inventar doença", "kind": "nonsense", "data_type": "text"}
                                                 for item in payload["items"]]})
         elif type(self).mode == "outside":
@@ -304,7 +322,7 @@ class FakeModel(BaseHTTPRequestHandler):
 
 class ProviderTests(unittest.TestCase):
     def setUp(self):
-        FakeModel.mode, FakeModel.delay, FakeModel.posts = "valid", 0.0, 0
+        FakeModel.mode, FakeModel.delay, FakeModel.get_delay, FakeModel.posts = "valid", 0.0, 0.0, 0
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), FakeModel)
         self.server.daemon_threads = True
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -412,8 +430,89 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual((matches["uf"].status, matches["uf"].method), ("matched", "assistant"))
         self.assertIn(matches["uf"].key, {key for key, _ in matches["uf"].alternatives})
         proposal = matches["causa"].proposal
-        self.assertEqual((proposal["key"], proposal["label"], proposal["kind"]), ("death.cause.part_i", "Causa — parte I", "text"))
+        self.assertEqual((proposal["key"], proposal["label"], proposal["kind"]), ("custom.death.cause.part_i", "Causa — parte I", "text"))
         self.assertTrue(proposal["generator"].startswith(MEDICAL_GENERATOR))
+
+    def test_budget_skips_slow_provider_and_keeps_deterministic_results(self):
+        FakeModel.delay = 1.5
+        assistant = self.assistant(timeout=5)
+        status = assistant.status()
+        report = {}
+        started = time.monotonic()
+        matches = match_candidates([candidate("uf", "UF"), candidate("x", "Quantidade de parafusos")], DO, assistant,
+                                   status=status, budget=0.4, report=report)
+        self.assertLess(time.monotonic() - started, 1.4)
+        self.assertEqual([match.status for match in matches], ["ambiguous", "new"])
+        self.assertNotIn("assistant", matches[1].proposal)
+        self.assertEqual(report["status"], "degraded")
+        self.assertTrue(any("tempo" in warning for warning in report["warnings"]), report)
+
+    def test_total_response_deadline(self):
+        FakeModel.mode = "drip"
+        assistant = self.assistant(timeout=0.5)
+        started = time.monotonic()
+        with self.assertRaisesRegex(AssistantError, "tempo esgotado"):
+            assistant._http("POST", "/chat/completions", {})
+        self.assertLess(time.monotonic() - started, 1.5)
+
+    def test_status_is_reused_and_failure_cause_recorded(self):
+        class Counting(OpenAICompatibleAssistant):
+            calls = 0
+
+            def status(self):
+                type(self).calls += 1
+                return super().status()
+
+        assistant = Counting(self.url, "fake", timeout=2)
+        status = assistant.status()
+        match_candidates([candidate("uf", "UF")], DO, assistant, status=status)
+        self.assertEqual(Counting.calls, 1)
+        closed = OpenAICompatibleAssistant("http://127.0.0.1:9/v1", "fake", timeout=1)
+        with self.assertRaisesRegex(AssistantError, "recusada"):
+            closed._http("GET", "/models")
+        report = {}
+        match_candidates([candidate("uf", "UF")], DO, closed, report=report)
+        self.assertEqual(report["status"], "unavailable")
+        self.assertIn("recusada", report["detail"])
+        FakeModel.mode = "error"
+        report = {}
+        match_candidates([candidate("uf", "UF")], DO, self.assistant(), report=report)
+        self.assertTrue(any("HTTP 500" in warning for warning in report["warnings"]), report)
+
+    def test_cache_key_includes_base_url_and_remote_requires_https(self):
+        first = self.assistant(cache_dir=self.cache.name)
+        other = OpenAICompatibleAssistant("http://localhost:1/v1", "fake", cache_dir=self.cache.name)
+        messages = first._messages("x", {"a": 1})
+        self.assertNotEqual(first._cache_path(messages), other._cache_path(messages))
+        with self.assertRaisesRegex(ValueError, "https"):
+            OpenAICompatibleAssistant("http://api.example.com/v1", "fake", allow_remote=True)
+
+    def test_assistant_rejects_out_of_section_and_invented_keys(self):
+        class Chooser:
+            offered = {}
+
+            def status(self):
+                return ProviderStatus(True, "fake", "fake", "ok")
+
+            def disambiguate(self, document, items, candidates):
+                type(self).offered = dict(candidates)
+                return {item.id: ("death.date", "fora da seção") for item in items}
+
+            def propose_categories(self, document, items):
+                return {item.id: {"key": "death.cause.parte_i", "kind": "nonsense", "data_type": "integer"} for item in items}
+
+        item = candidate("d", "Data do óbito", "II")
+        valid = set(allowed_keys(DO, "II", "text"))
+        match = match_candidates([item], DO, Chooser())[0]
+        self.assertNotEqual(match.key, "death.date")
+        self.assertNotEqual(match.status, "matched")
+        self.assertTrue(Chooser.offered)
+        self.assertTrue(all(key in valid for options in Chooser.offered.values() for key, _ in options))
+        scores = dict(registry_index().scores(item.label, valid))
+        self.assertTrue(all(score == round(scores[key], 3) for key, score in match.alternatives))
+        new = match_candidates([candidate("p", "Quantidade de parafusos", "II")], DO, Chooser())[0]
+        self.assertTrue(new.proposal["key"].startswith("custom.deceased.residence."))
+        self.assertEqual(new.proposal["kind"], "text")
 
 
 class ProposalTests(unittest.TestCase):
@@ -472,10 +571,8 @@ class ProposalTests(unittest.TestCase):
         self.assertTrue(any("c11" in warning for warning in provenance["warnings"]))
         self.assertEqual(provenance["timings"], {"total": 0.5})
         json.dumps(definition)
-        with self.assertRaisesRegex(ValueError, "pendente"):
-            strip_suggestions(definition)
-        reviewed = strip_suggestions({**definition, "fields": [accept_suggestion(field) for field in definition["fields"]]})
-        self.assertTrue(reviewed["provenance"]["reviewed"])
+        reviewed = [accept_suggestion(field) for field in definition["fields"]]
+        self.assertFalse(any("suggestion" in field for field in reviewed))
         chosen = accept_suggestion(fields["c7"], "death.place.uf")
         self.assertEqual(chosen["semantic"], "death.place.uf")
         self.assertNotIn("suggestion", chosen)
@@ -502,7 +599,7 @@ class ProposalTests(unittest.TestCase):
         self.assertEqual((fields["46"]["semantic"], len(fields["46"]["elements"])), ("filling.date", 6))
         self.assertEqual(fields["5"]["semantic"], "newborn.sex")
         accepted = {**definition, "fields": [accept_suggestion(field) for field in definition["fields"]]}
-        self.assertEqual(mapping_issues(validate_mapping(strip_suggestions(accepted))), [])
+        self.assertEqual(mapping_issues(validate_mapping({**accepted, "provenance": {**accepted["provenance"], "reviewed": True}})), [])
 
     def test_certidao_date_parts(self):
         definition = json.loads(CERTIDAO.read_text(encoding="utf-8"))
@@ -514,6 +611,121 @@ class ProposalTests(unittest.TestCase):
         self.assertEqual(fields["dia_nascimento"]["semantic"], {"key": "birth.date", "part": "day"})
         self.assertEqual(fields["dia_nascimento"]["data_type"], "integer")
         self.assertTrue(any("Revise todas as sugestões" in issue for issue in mapping_issues(validate_mapping(proposal))))
+
+
+PREGNANCY = (("Única", "1"), ("Dupla", "2"), ("Tripla ou mais", "3"), ("Ignorado", "9"))
+DELIVERY = (("Vaginal", "1"), ("Cesáreo", "2"), ("Ignorado", "9"))
+CESAREAN = (("Sim", "1"), ("Não", "2"), ("Não se aplica", "3"), ("Ignorado", "9"))
+
+
+class GateRegressionTests(unittest.TestCase):
+    def test_dnv_categorical_checkboxes_bind_and_generate(self):
+        from src.synthetic_dataset import generate_dataset
+
+        items = [candidate("g", "Tipo de gravidez", "V", "checkbox", PREGNANCY, region=(100, 100, 700, 140)),
+                 candidate("p", "Tipo de parto", "V", "checkbox", DELIVERY, region=(100, 200, 700, 240)),
+                 candidate("c", "Cesárea ocorreu antes do trabalho de parto iniciar?", "V", "checkbox", CESAREAN,
+                           region=(100, 300, 700, 340)),
+                 candidate("a", "Detectada alguma anomalia congênita?", "VI", "checkbox", YES_NO, region=(100, 400, 700, 440)),
+                 candidate("d", "Descrever todas as anomalias congênitas observadas", "VI", region=(100, 500, 1500, 560)),
+                 candidate("x", "Tipo de parto", "V", "checkbox", (("Opção 1", None), ("Opção 2", None)), region=(100, 600, 700, 640))]
+        matches = {match.candidate_id: match for match in match_candidates(items, "dnv")}
+        expected = {"g": "birth.pregnancy_type", "p": "birth.delivery_type", "c": "birth.cesarean_before_labor",
+                    "a": "newborn.anomaly_status", "d": "newborn.anomaly_description"}
+        for identifier, key in expected.items():
+            self.assertEqual((matches[identifier].status, matches[identifier].key, matches[identifier].method),
+                             ("matched", key, "rules"), matches[identifier].reason)
+        self.assertEqual(matches["x"].status, "ambiguous")
+        self.assertIn("não representam", matches["x"].reason)
+        analysis = PageAnalysis(1, 300, (4330, 5717), 12.0, "text_layer", tuple(items[:5]))
+        proposal = build_proposal(analysis, list(matches.values()), "dnv", {})
+        self.assertEqual({field["semantic"] for field in proposal["fields"]}, set(expected.values()))
+        definition = {**proposal, "fields": [accept_suggestion(field) for field in proposal["fields"]],
+                      "provenance": {**proposal["provenance"], "reviewed": True}}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mapping.json"
+            path.write_text(json.dumps(definition), encoding="utf-8")
+            documents = generate_dataset(ROOT / "documents" / "dnv" / "template.pdf", path, {field["field_id"] for field in definition["fields"]},
+                                         Path(directory) / "saida", 2, seed=5, handwriting=False, text_handwriting=False)
+            for document in documents:
+                truth = json.loads(document.json_path.read_text(encoding="utf-8"))
+                by_id = {field["field_id"]: field for field in truth["fields"]}
+                record = truth["semantic_record"]
+                for field_id, key in (("birth_delivery_type", "birth.delivery_type"), ("birth_pregnancy_type", "birth.pregnancy_type"),
+                                      ("newborn_anomaly_status", "newborn.anomaly_status")):
+                    checked = [element["label"] for element in by_id[field_id]["elements"] if element.get("checked")]
+                    self.assertEqual(checked, [record[key]])
+
+    def test_uf_and_death_certificate_bindings(self):
+        items = [candidate("r", "UF", "II", "digit_sequence", 2), candidate("o", "UF", "III", "digit_sequence", 2),
+                 candidate("v", "UF", "VIII", "digit_sequence", 2), candidate("m", "UF", "VI", "digit_sequence", 2),
+                 candidate("d", "Data", "VIII", "digit_sequence", 8), candidate("i", "Idade", "I"),
+                 candidate("b", "Data de nascimento", "I", "digit_sequence", 8), candidate("b11", "Data de nascimento", "I", "digit_sequence", 11),
+                 candidate("iso", "Idade Anos completos", "I", "checkbox", (("Ignorado", "9"),))]
+        matches = {match.candidate_id: match for match in match_candidates(items[:-1], DO) + match_candidates(items[-1:], DO)}
+        for identifier, key in (("r", "deceased.residence.uf"), ("o", "death.place.uf"), ("v", "death_registration.office.uf"),
+                                ("d", "death_registration.date"), ("i", "deceased.age"), ("b", "deceased.birth_date"),
+                                ("iso", "deceased.age")):
+            self.assertEqual((matches[identifier].status, matches[identifier].key), ("matched", key), identifier)
+        self.assertEqual(matches["b11"].status, "ambiguous")
+        self.assertEqual(matches["b11"].alternatives[0][0], "deceased.birth_date")
+        uf = matches["m"].proposal
+        self.assertEqual((uf["data_type"], uf["kind"]), ("uf", "uf"))
+        self.assertNotIn("inteiro", uf["generator"])
+        analysis = PageAnalysis(1, 300, (2550, 3300), 12.0, "text_layer",
+                                tuple(replace(item, region=(100, 100 + 100 * index, 900, 160 + 100 * index)) for index, item in enumerate(items)))
+        fields = {field["suggestion"]["candidate_id"]: field for field in build_proposal(analysis, list(matches.values()), DO, {})["fields"]}
+        for identifier in ("r", "o", "v", "m"):
+            self.assertEqual(fields[identifier]["data_type"], "uf")
+            self.assertNotIn("elements", fields[identifier])
+        self.assertEqual(fields["r"]["semantic"], "deceased.residence.uf")
+        self.assertNotIn("semantic", fields["iso"])
+        self.assertEqual(fields["iso"]["suggestion"]["match"], "ambiguous")
+        self.assertEqual(fields["iso"]["suggestion"]["alternatives"][0]["key"], "deceased.age")
+
+    def test_single_valued_keys_are_not_duplicated(self):
+        items = [candidate("cbo", "Código CBO 2002", "III", "digit_sequence", 6), candidate("cod", "Código", "III", "digit_sequence", 3),
+                 candidate("s1", "Sexo", "I", "checkbox", SEX), candidate("s2", "Sexo", "I", "checkbox", SEX),
+                 candidate("n1", "Nome", "III"), candidate("n2", "Nome da mãe", "III")]
+        matches = {match.candidate_id: match for match in match_candidates(items, "dnv")}
+        self.assertEqual((matches["cbo"].status, matches["cbo"].key), ("matched", "mother.occupation_cbo"))
+        self.assertEqual((matches["cod"].status, matches["cod"].key), ("ambiguous", None))
+        self.assertEqual(matches["cod"].alternatives[0][0], "mother.occupation_cbo")
+        self.assertIn("já está no campo", matches["cod"].reason)
+        self.assertEqual([matches[name].key for name in ("s1", "s2")], ["newborn.sex", "newborn.sex"])
+        self.assertEqual(sum(match.key == "mother.name" for match in matches.values()), 1)
+
+    def test_invalid_stored_custom_definitions_are_skipped(self):
+        valid = {"key": "custom.death.circumstance", "label": "Circunstância do óbito", "description": "Campo aprovado",
+                 "data_type": "text", "generator": {"type": "unavailable"}}
+        broken = [{"key": "custom.quebrada", "label": "", "description": "x", "data_type": "text", "generator": {"type": "x"}},
+                  {"label": "sem chave"}, "lixo"]
+        analysis = PageAnalysis(1, 300, (2480, 3508), 12.0, "text_layer", (candidate("c", "Circunstância do óbito", region=(100, 100, 900, 160)),))
+        matches = match_candidates(analysis, DO, custom_definitions=[*broken, valid])
+        proposal = build_proposal(analysis, matches, DO, {}, custom_definitions=[*broken, valid])
+        self.assertEqual(proposal["fields"][0]["semantic"], valid["key"])
+        self.assertEqual(set(proposal["semantic_definitions"]), {valid["key"]})
+
+    def test_shared_medical_terms_and_custom_key_format(self):
+        for key, label in (("custom.apgar_1", "Apgar 1º minuto"), ("custom.peso_nascer", "Peso ao nascer"),
+                           ("custom.newborn.perimetro", "Perímetro cefálico"), ("custom.death.cause", "Causa básica")):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                validate_custom_definition(key, label, "Valor numérico", "integer", {"type": "integer_range", "min": 0, "max": 10})
+            validate_custom_definition(key, label, "Valor numérico", "integer", {"type": "unavailable"})
+        validate_custom_definition("custom.cidade_natal", "Cidade natal", "Município", "text", {"type": "choices", "values": ["Recife"]})
+        for label, section, kind, elements in (("Apgar 1º minuto", "I", "digit_sequence", 2), ("Peso ao nascer", "I", "digit_sequence", 4),
+                                               ("Raça/Cor", "I", "checkbox", (("Branca", "1"), ("Preta", "2"))),
+                                               ("Quantidade de parafusos", "II", "text", 0), ("1º campo", None, "text", 0)):
+            match = match_candidates([candidate("n", label, section, kind, elements)], "dnv")[0]
+            proposal = match.proposal
+            with self.subTest(label=label):
+                generator = {"type": "unavailable"}
+                definition = validate_custom_definition(proposal["key"], proposal["label"], proposal["description"], "text", generator)
+                self.assertEqual(definition["key"], proposal["key"])
+                self.assertIn(proposal["data_type"], FIELD_TYPES)
+                self.assertIn(proposal["kind"], KINDS)
+                if label.startswith(("Apgar", "Peso")):
+                    self.assertTrue(proposal["generator"].startswith(MEDICAL_GENERATOR))
 
 
 if __name__ == "__main__":

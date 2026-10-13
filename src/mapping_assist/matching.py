@@ -3,13 +3,17 @@ from __future__ import annotations
 import functools
 import math
 import re
+import time
 from collections import Counter
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Iterable
 
-from src.semantic.custom import validate_custom_definition
-from src.semantic.registry import CONTEXTS, REGISTRY
-from src.semantic.resolve import document_context, excluded_terms, normalize, resolve_field
+from src.field_rules import FIELD_TYPES
+from src.semantic.custom import CUSTOM_KEY, approved_definitions
+from src.semantic.plan import semantic_plan
+from src.semantic.present import DNV_CHOICES
+from src.semantic.registry import CONTEXTS, KINDS, REGISTRY
+from src.semantic.resolve import document_context, excluded_terms, medical_term, normalize, resolve_field
 
 if TYPE_CHECKING:
     from src.mapping_assist.analysis import FieldCandidate
@@ -18,8 +22,9 @@ MIN_SCORE, MIN_MARGIN, AMBIGUOUS_FLOOR = 0.5, 0.2, 0.35
 ROMANS = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X")
 SECTIONS = {
     "dnv": {"I": ("newborn", "birth.date", "birth.time"), "II": ("birth.establishment", "birth.place"), "III": ("mother",),
-            "IV": ("guardian", "father"), "V": ("mother.obstetric", "pregnancy"), "VI": (), "VII": ("filling",),
-            "VIII": ("registration",)},
+            "IV": ("guardian", "father"),
+            "V": ("mother.obstetric", "pregnancy", "birth.pregnancy_type", "birth.delivery_type", "birth.cesarean_before_labor"),
+            "VI": ("newborn.anomaly_status", "newborn.anomaly_description"), "VII": ("filling",), "VIII": ("registration",)},
     "declaracao_obito": {"I": ("deceased", "death.date", "death.time"), "II": ("deceased.residence",), "III": ("death.place",),
                          "IV": (), "V": (), "VI": ("certifier",), "VII": (), "VIII": ("death_registration",), "IX": ()},
 }
@@ -32,27 +37,28 @@ SECTION_TITLES = {
                          ("cartorio", "VIII"), ("localid", "IX"), ("declarante", "IX")),
 }
 NEW_PREFIXES = {
-    "dnv": {"I": "newborn", "II": "birth.place", "III": "mother", "IV": "guardian", "V": "pregnancy", "VI": "newborn.anomaly",
-            "VII": "filling", "VIII": "registration"},
-    "declaracao_obito": {"I": "deceased", "II": "deceased.residence", "III": "death.place", "IV": "death.infant",
-                         "V": "death.cause", "VI": "certifier", "VII": "death.external", "VIII": "death_registration",
-                         "IX": "death.declarant"},
+    "dnv": {"I": "custom.newborn", "II": "custom.birth.place", "III": "custom.mother", "IV": "custom.guardian",
+            "V": "custom.pregnancy", "VI": "custom.newborn.anomaly", "VII": "custom.filling", "VIII": "custom.registration"},
+    "declaracao_obito": {"I": "custom.deceased", "II": "custom.deceased.residence", "III": "custom.death.place",
+                         "IV": "custom.death.infant", "V": "custom.death.cause", "VI": "custom.certifier",
+                         "VII": "custom.death.external", "VIII": "custom.death_registration", "IX": "custom.death.declarant"},
 }
-DEFAULT_PREFIX = {"dnv": "newborn", "declaracao_obito": "death", "certidao_nascimento": "registration"}
+DEFAULT_PREFIX = {"dnv": "custom.newborn", "declaracao_obito": "custom.death", "certidao_nascimento": "custom.registration"}
 ANCHORS = {"dnv": "birth.date", "certidao_nascimento": "birth.date", "declaracao_obito": "death.date"}
 IMPLIED = {"death": {"obito", "morte"}, "deceased": {"falecido", "falecida"}, "cause": {"causa", "causas"},
            "newborn": {"recem", "nascido", "rn"}, "mother": {"mae", "parturiente"}, "certifier": {"medico"},
            "residence": {"residencia"}, "place": {"ocorrencia", "local"}, "registration": {"cartorio"}}
 STOPWORDS = frozenset("a o as os e de da do das dos em no na nos nas por para se ou com sem que ao aos um uma etc".split())
-MEDICAL = ("causa", "causas", "cid", "doenca", "diagnostico", "morbido", "morbidos", "necropsia", "morte", "anomalia",
-           "anomalias", "apgar", "peso", "perimetro", "comprimento", "gravidez", "parto", "partos", "gestacao", "gestacoes",
-           "fetal", "fetais", "aborto", "abortos", "cesarea", "cesareas", "apresentacao", "induzido", "menstruacao",
-           "assistencia medica", "lesao", "lesoes", "acidente", "suicidio", "homicidio", "violencia", "cirurgia", "tratamento")
 MEDICAL_SECTIONS = {"declaracao_obito": {"IV", "V", "VII"}, "dnv": {"VI"}}
 MEDICAL_GENERATOR = "requer regra validada (ex.: CID-10)"
 DIGIT_LENGTHS = {"cpf": 11, "cns": 15, "cep": 8, "ibge": 7, "cnes": 7, "dnv_number": 11, "matricula": 32}
 FREE_DIGIT_KINDS = frozenset({"integer", "house_number", "document_number"})
 KIND_NAMES = {"checkbox": "caixas de seleção", "digit_sequence": "caixas de algarismos", "text": "texto"}
+CHOICE_KEYS = frozenset(DNV_CHOICES)
+LETTER_LABELS = frozenset({"uf", "unidade da federacao"})
+REPEATABLE_KINDS = frozenset({"sex"})
+METHOD_RANK = {"rules": 3, "custom": 2, "ngram": 1}
+BUDGET_EXCEEDED = "orçamento de tempo do assistente esgotado"
 
 
 @dataclass(frozen=True)
@@ -130,15 +136,17 @@ def key_section(document: str | None, key: str) -> str | None:
     return max(found)[1] if found else None
 
 
-def kind_fits(semantic_kind: str, kind: str, count: int) -> bool:
+def kind_fits(semantic_kind: str, kind: str, count: int, key: str | None = None) -> bool:
     if kind == "checkbox":
-        return semantic_kind == "sex"
+        return semantic_kind == "sex" or key in CHOICE_KEYS
     if kind != "digit_sequence":
         return True
     if semantic_kind == "date":
         return count in {0, 6, 8}
     if semantic_kind == "time":
         return count in {0, 4}
+    if semantic_kind == "uf":
+        return count in {0, 2}
     if semantic_kind in DIGIT_LENGTHS:
         return count in {0, DIGIT_LENGTHS[semantic_kind]}
     return semantic_kind in FREE_DIGIT_KINDS
@@ -148,7 +156,28 @@ def allowed_keys(document: str | None, section: str | None, kind: str = "text", 
     keys = [key for key, field in REGISTRY.items() if document not in CONTEXTS or document in field.contexts]
     if section and section in SECTIONS.get(document or "", {}):
         keys = [key for key in keys if key_section(document, key) == section]
-    return [key for key in keys if kind_fits(REGISTRY[key].kind, kind, count)]
+    return [key for key in keys if kind_fits(REGISTRY[key].kind, kind, count, key)]
+
+
+def effective(candidate: FieldCandidate) -> FieldCandidate:
+    return replace(candidate, kind="text", elements=()) if candidate.kind == "checkbox" and len(candidate.elements) < 2 else candidate
+
+
+def candidate_keys(candidate: FieldCandidate, document: str | None) -> list[str]:
+    candidate = effective(candidate)
+    section = section_of(document, candidate.section, candidate.section_title)
+    return allowed_keys(document, section, candidate.kind, len(candidate.elements))
+
+
+def presentable(candidate: FieldCandidate, key: str, document: str | None) -> bool:
+    if candidate.kind != "checkbox" or REGISTRY[key].kind == "sex":
+        return True
+    elements = [{"element_id": f"opcao_{index}", "label": str(element.get("label") or element.get("code") or ""),
+                 "value": str(element.get("code") or element.get("label") or ""), "bbox": [0, 0, 1, 1]}
+                for index, element in enumerate(candidate.elements)]
+    field = {"field_id": "candidato", "label": candidate.label, "data_type": "checkbox", "elements": elements,
+             "bbox": [0, 0, 1, 1], "semantic": key}
+    return semantic_plan([field], document).decisions["candidato"].issue is None
 
 
 def _options(candidate: FieldCandidate) -> list[str]:
@@ -156,7 +185,13 @@ def _options(candidate: FieldCandidate) -> list[str]:
             if str(element.get("label") or element.get("code") or "").strip()]
 
 
+def _letters(candidate: FieldCandidate) -> bool:
+    return normalize(re.sub(r"\([^)]*\)", " ", candidate.label)) in LETTER_LABELS
+
+
 def guess_data_type(candidate: FieldCandidate) -> str:
+    if candidate.kind != "checkbox" and _letters(candidate):
+        return "uf"
     if candidate.kind in {"checkbox", "digit_sequence"}:
         return candidate.kind
     text = normalize(candidate.label)
@@ -165,7 +200,7 @@ def guess_data_type(candidate: FieldCandidate) -> str:
             return data_type
     if _has(text, ("municipio", "cidade")) and not _has(text, ("uf",)):
         return "municipality"
-    return "uf" if text in {"uf", "unidade da federacao"} else "text"
+    return "text"
 
 
 def _rules_field(candidate: FieldCandidate, section: str | None) -> dict:
@@ -181,7 +216,7 @@ def _rules_field(candidate: FieldCandidate, section: str | None) -> dict:
 
 
 def _medical(candidate: FieldCandidate, document: str | None, section: str | None) -> bool:
-    return bool(_has(normalize(candidate.label), MEDICAL)) or section in MEDICAL_SECTIONS.get(document or "", set())
+    return bool(medical_term(candidate.label)) or section in MEDICAL_SECTIONS.get(document or "", set())
 
 
 def _slug(text: str, drop: set[str] = frozenset(), limit: int = 4) -> str:
@@ -194,6 +229,8 @@ def _semantic_kind(candidate: FieldCandidate, data_type: str, medical: bool) -> 
     text, count = normalize(candidate.label), len(candidate.elements)
     if medical:
         return "text"
+    if data_type == "uf":
+        return "uf"
     if candidate.kind == "checkbox":
         return "boolean" if {normalize(option) for option in _options(candidate)} <= {"sim", "nao", "ignorado"} and _options(candidate) else "text"
     if candidate.kind == "digit_sequence":
@@ -228,8 +265,8 @@ def new_proposal(candidate: FieldCandidate, document: str | None, section: str |
     drop = set().union(*(IMPLIED.get(part, set()) for part in prefix.split(".")))
     label = re.sub(r"[\s:?]+$", "", candidate.label.strip()) or f"Campo {candidate.id}"
     tail = label.rsplit(" - ", 1)[-1]
-    key = f"{prefix}.{_slug(tail, drop) or _slug(label, drop) or 'campo_' + re.sub(r'[^a-z0-9]+', '_', candidate.id.lower())}"
-    key = key if key not in REGISTRY else f"{key}_novo"
+    slug = (_slug(tail, drop) or _slug(label, drop) or "campo_" + re.sub(r"[^a-z0-9]+", "_", candidate.id.lower()))[:40].strip("_")
+    key = f"{prefix}.{slug if slug[:1].isalpha() else 'campo_' + slug}"
     data_type = guess_data_type(candidate)
     kind = _semantic_kind(candidate, data_type, medical)
     where = f"seção {section}" if section else "documento"
@@ -242,35 +279,48 @@ def new_proposal(candidate: FieldCandidate, document: str | None, section: str |
 
 def _alternatives(ranked: list[tuple[str, float]], first: str | None = None) -> tuple[tuple[str, float], ...]:
     scores = dict(ranked)
-    ordered = ([(first, scores.get(first, 1.0))] if first else []) + [item for item in ranked if item[0] != first and item[1] >= 0.05]
+    first = first if first in scores else None
+    ordered = ([(first, scores[first])] if first else []) + [item for item in ranked if item[0] != first and item[1] >= 0.05]
     return tuple((key, round(score, 3)) for key, score in ordered[:3])
 
 
 def match_one(candidate: FieldCandidate, document: str | None, min_score: float = MIN_SCORE,
               min_margin: float = MIN_MARGIN) -> Match:
+    candidate = effective(candidate)
     section = section_of(document, candidate.section, candidate.section_title)
     text, count = normalize(candidate.label), len(candidate.elements)
 
     def new(reason: str, alternatives: tuple = (), score: float | None = None) -> Match:
         return Match(candidate.id, None, "new", "none", score, alternatives, reason, new_proposal(candidate, document, section, reason))
 
+    def ambiguous(reason: str, alternatives: tuple, method: str = "rules") -> Match:
+        return Match(candidate.id, None, "ambiguous", method, None, alternatives, reason)
+
     if not text:
         return new("Rótulo vazio: não há texto para comparar com o registro semântico.")
+    loose = allowed_keys(document, section, candidate.kind)
     allowed = allowed_keys(document, section, candidate.kind, count)
     ranked = registry_index().scores(candidate.label, allowed) if allowed else []
     binding = resolve_field(_rules_field(candidate, section), document)
     where = f" na seção {section}" if section else ""
     tied = [key for key, score in ranked if ranked[0][1] >= min_score and score >= ranked[0][1] - 0.02]
-    if binding and binding.key in allowed and section is None and len(tied) > 1 and binding.key in tied:
-        names = ", ".join(f"“{REGISTRY[key].label}”" for key in tied[:3])
-        return Match(candidate.id, None, "ambiguous", "rules", None, _alternatives(ranked, binding.key),
-                     f"Rótulo genérico sem seção identificada: pode ser {names}; revisar.")
     if binding and binding.key in allowed:
+        name = REGISTRY[binding.key].label
+        if section is None and len(tied) > 1 and binding.key in tied:
+            names = ", ".join(f"“{REGISTRY[key].label}”" for key in tied[:3])
+            return ambiguous(f"Rótulo genérico sem seção identificada: pode ser {names}; revisar.", _alternatives(ranked, binding.key))
+        if not presentable(candidate, binding.key, document):
+            options = ", ".join(_options(candidate)) or "nenhuma"
+            return ambiguous(f"A regra indica “{name}”, mas as opções detectadas ({options}) não representam os valores "
+                             "gerados; revisar as opções.", _alternatives(ranked, binding.key))
         return Match(candidate.id, binding.key, "matched", "rules", 1.0, _alternatives(ranked, binding.key),
-                     f"Regra semântica: “{candidate.label}”{where} corresponde a “{REGISTRY[binding.key].label}”.")
+                     f"Regra semântica: “{candidate.label}”{where} corresponde a “{name}”.")
+    if binding and binding.key in loose:
+        return ambiguous(f"A regra indica “{REGISTRY[binding.key].label}”, mas {count} caixa(s) não formam esse valor; "
+                         "revisar as caixas detectadas.", _alternatives(registry_index().scores(candidate.label, loose), binding.key))
     if binding and binding.key in allowed_keys(document, None, candidate.kind, count):
-        return Match(candidate.id, None, "ambiguous", "rules", None, _alternatives(ranked, binding.key),
-                     f"A regra indica “{REGISTRY[binding.key].label}”, que não pertence à seção {section}; revisar.")
+        return ambiguous(f"A regra indica “{REGISTRY[binding.key].label}”, que não pertence à seção {section}; revisar.",
+                         _alternatives(ranked))
     if section and candidate.kind == "digit_sequence" and text in {"data", "hora", "horario"}:
         expected = "date" if text == "data" else "time"
         choices = [key for key in allowed if REGISTRY[key].kind == expected]
@@ -280,6 +330,11 @@ def match_one(candidate: FieldCandidate, document: str | None, min_score: float 
                          f"A seção {section} e {count} caixas identificam “{REGISTRY[key].label}”.")
     if term := _has(text, excluded_terms(document)):
         return new(f"O termo “{term}” é clínico, estatístico ou administrativo e não tem chave no registro semântico.")
+    if candidate.kind == "checkbox" and allowed:
+        ranked = [item for item in ranked if presentable(candidate, item[0], document)]
+        if not ranked:
+            return new(f"Caixas de seleção só se vinculam a sexo ou a listas categóricas do registro com opções reconhecidas; "
+                       f"“{candidate.label}” não corresponde a nenhuma.")
     if not allowed:
         if section and not SECTIONS.get(document or "", {}).get(section, True):
             return new(f"A seção {section} não tem chaves no registro semântico deste documento.")
@@ -297,86 +352,148 @@ def match_one(candidate: FieldCandidate, document: str | None, min_score: float 
         return Match(candidate.id, None, "ambiguous", "ngram", round(best, 3), alternatives,
                      f"Correspondência incerta ({detail}): revisar entre {names}.")
     if candidate.kind == "checkbox":
-        return new(f"Caixas de seleção só se vinculam a chaves de sexo; “{candidate.label}” não corresponde a nenhuma.",
-                   alternatives, round(best, 3))
+        return new(f"Caixas de seleção só se vinculam a sexo ou a listas categóricas do registro; “{candidate.label}” não "
+                   "corresponde a nenhuma.", alternatives, round(best, 3))
     return new(f"Nenhuma chave acima do limiar: a melhor (“{REGISTRY[top].label}”) tem semelhança {best:.2f}.",
                alternatives, round(best, 3))
 
 
-def _assisted(matches: list[Match], candidates: list[FieldCandidate], document: str | None, provider: Any) -> list[Match]:
-    by_id = {candidate.id: candidate for candidate in candidates}
+def _proposal_update(proposal: dict, suggestion: dict) -> dict:
+    updated = dict(proposal)
+    protected = proposal.get("generator", "").startswith(MEDICAL_GENERATOR) or proposal.get("data_type") == "uf"
+    for field in ("label", "description", "group", "generator"):
+        value = suggestion.get(field)
+        if isinstance(value, str) and value.strip() and not (protected and field == "generator"):
+            updated[field] = value.strip()[:240]
+    key = suggestion.get("key")
+    if isinstance(key, str) and len(key) <= 100 and CUSTOM_KEY.fullmatch(key) and key not in REGISTRY:
+        updated["key"] = key
+    if not protected and suggestion.get("kind") in KINDS:
+        updated["kind"] = suggestion["kind"]
+    if not protected and suggestion.get("data_type") in FIELD_TYPES:
+        updated["data_type"] = suggestion["data_type"]
+    updated["assistant"] = True
+    return updated
+
+
+def _assisted(matches: list[Match], candidates: list[FieldCandidate], document: str | None, provider: Any,
+              status: Any = None, deadline: float | None = None, report: dict | None = None) -> list[Match]:
+    report = {} if report is None else report
+    warnings = report.setdefault("warnings", [])
+    by_id = {candidate.id: effective(candidate) for candidate in candidates}
     ambiguous = [match for match in matches if match.status == "ambiguous" and match.alternatives]
     new = [match for match in matches if match.status == "new"]
-    if not ambiguous and not new:
-        return matches
-    try:
-        status = provider.status()
-        available, name, detail = status.available, status.provider, status.detail
-    except Exception as exc:
-        available, name, detail = False, "assistente", str(exc) or type(exc).__name__
-    if not available:
-        if name == "none":
-            return matches
-        note = f" Assistente indisponível: {detail}."
-        return [replace(match, reason=match.reason + note) if match.status == "ambiguous" else match for match in matches]
-    updates: dict[str, Match] = {}
-    if ambiguous:
-        allowed = {match.candidate_id: match.alternatives for match in ambiguous}
+    if status is None:
         try:
-            choices, failure = provider.disambiguate(document, [by_id[key] for key in allowed], allowed), None
+            status = provider.status()
         except Exception as exc:
-            choices, failure = {}, str(exc) or type(exc).__name__
+            status = None
+            report.update(provider="assistente", model=None, available=False, detail=str(exc) or type(exc).__name__)
+    if status is not None:
+        report.update(provider=status.provider, model=status.model, available=bool(status.available), detail=status.detail)
+    if not ambiguous and not new:
+        report["status"] = "not_needed"
+        return matches
+    if not report["available"]:
+        report["status"] = "unavailable"
+        if report["provider"] == "none":
+            return matches
+        warnings.append(f"Assistente indisponível: {report['detail']}")
+        note = f" Assistente indisponível: {report['detail']}."
+        return [replace(match, reason=match.reason + note) if match.status == "ambiguous" else match for match in matches]
+    if hasattr(provider, "deadline"):
+        provider.deadline = deadline
+    failures: list[str] = []
+
+    def expired() -> bool:
+        return deadline is not None and time.monotonic() >= deadline
+
+    updates: dict[str, Match] = {}
+    offered = {}
+    for match in ambiguous:
+        valid = set(candidate_keys(by_id[match.candidate_id], document))
+        if options := tuple(item for item in match.alternatives if item[0] in valid):
+            offered[match.candidate_id] = options
+    if offered:
+        choices, failure = {}, None
+        if expired():
+            failure = BUDGET_EXCEEDED
+        else:
+            try:
+                choices = provider.disambiguate(document, [by_id[key] for key in offered], offered)
+            except Exception as exc:
+                failure = str(exc) or type(exc).__name__
+        if failure:
+            failures.append(f"desambiguação: {failure}")
         for match in ambiguous:
+            if match.candidate_id not in offered:
+                continue
             choice = choices.get(match.candidate_id)
             if not isinstance(choice, tuple) or len(choice) != 2:
                 note = f"falhou ({failure})" if failure else "não respondeu"
                 updates[match.candidate_id] = replace(match, reason=f"{match.reason} Assistente {note}.")
                 continue
             key, why = choice
-            scores = dict(match.alternatives)
+            scores = dict(offered[match.candidate_id])
+            candidate = by_id[match.candidate_id]
             if key is None:
-                candidate = by_id[match.candidate_id]
                 reason = f"Assistente: nenhuma chave existente se aplica — {why}"
                 updates[match.candidate_id] = Match(match.candidate_id, None, "new", "assistant", match.score, match.alternatives,
                                                     reason, new_proposal(candidate, document, section_of(
                                                         document, candidate.section, candidate.section_title), reason))
-            elif key in scores:
+            elif key in scores and key in candidate_keys(candidate, document) and presentable(candidate, key, document):
                 updates[match.candidate_id] = Match(match.candidate_id, key, "matched", "assistant", scores[key],
                                                     match.alternatives, f"Assistente escolheu “{REGISTRY[key].label}”: {why}")
+            else:
+                updates[match.candidate_id] = replace(match, reason=f"{match.reason} Assistente sugeriu uma chave inválida; ignorada.")
     pending = [match for match in new if match.proposal] + [match for match in updates.values() if match.status == "new"]
     if pending:
-        try:
-            extra = provider.propose_categories(document, [by_id[match.candidate_id] for match in pending])
-        except Exception:
-            extra = {}
+        extra = {}
+        if expired():
+            failures.append(f"categorias novas: {BUDGET_EXCEEDED}")
+        else:
+            try:
+                extra = provider.propose_categories(document, [by_id[match.candidate_id] for match in pending])
+            except Exception as exc:
+                failures.append(f"categorias novas: {str(exc) or type(exc).__name__}")
         for match in pending:
             suggestion = extra.get(match.candidate_id)
-            if not isinstance(suggestion, dict) or not suggestion:
-                continue
-            proposal = dict(match.proposal or {})
-            medical = proposal.get("generator", "").startswith(MEDICAL_GENERATOR)
-            for field in ("key", "label", "description", "kind", "group", "data_type", "generator"):
-                value = suggestion.get(field)
-                if isinstance(value, str) and value.strip() and not (medical and field in {"generator", "kind", "data_type"}):
-                    proposal[field] = value.strip()
-            proposal["assistant"] = True
-            updates[match.candidate_id] = replace(updates.get(match.candidate_id, match), proposal=proposal)
+            if isinstance(suggestion, dict) and suggestion:
+                current = updates.get(match.candidate_id, match)
+                updates[match.candidate_id] = replace(current, proposal=_proposal_update(current.proposal or {}, suggestion))
+    report["status"] = "degraded" if failures else "used"
+    warnings.extend(f"Assistente de IA ({failure}); resultados determinísticos mantidos." for failure in failures)
     return [updates.get(match.candidate_id, match) for match in matches]
 
 
-def _custom_definitions(definitions: Any) -> list[dict]:
-    entries = definitions.values() if isinstance(definitions, dict) else definitions or ()
-    approved = []
-    for entry in entries:
-        if not isinstance(entry, dict) or entry.get("status", "approved") != "approved":
+def _date_part(label: str) -> str | None:
+    words = set(normalize(label).split())
+    parts = [part for word, part in (("dia", "day"), ("mes", "month"), ("ano", "year")) if word in words]
+    return parts[0] if len(parts) == 1 and "data" not in words else None
+
+
+def unique_keys(matches: list[Match], candidates: list[FieldCandidate]) -> list[Match]:
+    labels = {candidate.id: candidate.label for candidate in candidates}
+    groups: dict[tuple[str, str | None], list[int]] = {}
+    for index, match in enumerate(matches):
+        if match.status == "matched" and match.key and not (match.key in REGISTRY and REGISTRY[match.key].kind in REPEATABLE_KINDS):
+            groups.setdefault((match.key, _date_part(labels.get(match.candidate_id, ""))), []).append(index)
+    result = list(matches)
+    for (key, _), indexes in groups.items():
+        if len(indexes) < 2:
             continue
-        try:
-            definition = validate_custom_definition(*(entry[name] for name in
-                                                      ("key", "label", "description", "data_type", "generator")))
-        except (KeyError, TypeError, ValueError):
-            continue
-        approved.append(definition)
-    return approved
+        best = max(indexes, key=lambda index: (matches[index].score or 0.0, METHOD_RANK.get(matches[index].method, 0), -index))
+        keeper = matches[best]
+        name = REGISTRY[key].label if key in REGISTRY else key
+        for index in indexes:
+            if index == best:
+                continue
+            match = matches[index]
+            alternatives = ((key, match.score or 0.0), *(item for item in match.alternatives if item[0] != key))[:3]
+            result[index] = Match(match.candidate_id, None, "ambiguous", match.method, match.score, alternatives,
+                                  f"{match.reason} A chave “{name}” já está no campo “{labels.get(keeper.candidate_id, '')}” "
+                                  f"({keeper.candidate_id}), com pontuação maior ou igual; revisar.")
+    return result
 
 
 def _custom_kind_fits(candidate: FieldCandidate, definition: dict) -> bool:
@@ -431,12 +548,15 @@ def _match_custom(candidate: FieldCandidate, match: Match, definitions: list[dic
 
 
 def match_candidates(analysis_or_candidates: Any, document: str | None, provider: Any = None, *,
-                     min_score: float = MIN_SCORE, min_margin: float = MIN_MARGIN,
-                     custom_definitions: Any = None) -> list[Match]:
+                     min_score: float = MIN_SCORE, min_margin: float = MIN_MARGIN, custom_definitions: Any = None,
+                     status: Any = None, budget: float | None = None, report: dict | None = None) -> list[Match]:
     candidates = list(getattr(analysis_or_candidates, "candidates", analysis_or_candidates))
+    deadline = time.monotonic() + budget if budget is not None else None
     document = document_context(document)
     matches = [match_one(candidate, document, min_score, min_margin) for candidate in candidates]
-    definitions = _custom_definitions(custom_definitions)
+    definitions = list(approved_definitions(custom_definitions).values())
     if definitions:
-        matches = [_match_custom(candidate, match, definitions) for candidate, match in zip(candidates, matches)]
-    return _assisted(matches, candidates, document, provider) if provider is not None else matches
+        matches = [_match_custom(effective(candidate), match, definitions) for candidate, match in zip(candidates, matches)]
+    if provider is not None:
+        matches = _assisted(matches, candidates, document, provider, status, deadline, report)
+    return unique_keys(matches, candidates)

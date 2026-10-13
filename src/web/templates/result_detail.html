@@ -3,7 +3,7 @@
 {% block title %}{{ result.job.name }} · Resultados{% endblock %}
 {% block body_class %}is-result-detail{% endblock %}
 {% block footer %}{% endblock %}
-{% block scripts %}<script src="/static/pdf_viewer.js?v={{ VERSION }}" defer></script><script src="/static/results.js?v={{ VERSION }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ asset('pdf_viewer.js') }}" defer></script><script src="{{ asset('results.js') }}" defer></script>{% endblock %}
 {% block content %}
 {% set job = result.job %}
 <div class="result-page" data-job-id="{{ job.id }}" data-back-url="{{ back_url }}">

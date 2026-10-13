@@ -92,6 +92,35 @@ class InterfaceTests(unittest.TestCase):
         self.assertTrue(all(path.startswith("/api/") for path in paths))
         self.assertNotIn("content-security-policy", self.client.get("/api/v1/health").headers)
 
+    def test_branding_logo_favicon_and_asset_versions(self):
+        page = self.page("/modelos").text
+        for name in ("favicon.ico", "favicon.svg", "favicon-32.png", "favicon-16.png", "apple-touch-icon.png", "manifest.webmanifest", "labrec-logo.svg", "ocrsd-logo.svg", "styles.css"):
+            self.assertRegex(page, rf"/static/{re.escape(name)}\?v=[0-9a-f]{{12}}")
+        labrec = page.index('class="brand-logo brand-labrec" src="/static/labrec-logo.svg?v=')
+        divider = page.index('class="brand-divider" aria-hidden="true"')
+        ocrsd = page.index('class="brand-logo brand-ocrsd" src="/static/ocrsd-logo.svg?v=')
+        self.assertLess(labrec, divider)
+        self.assertLess(divider, ocrsd)
+        self.assertNotIn("labrec-logo", page[page.index("<head>"):page.index("</head>")])
+        self.assertEqual(page.count('rel="icon"'), 4)
+        versioned = self.client.get(re.search(r'/static/favicon\.svg\?v=[0-9a-f]+', page).group(0))
+        self.assertEqual(versioned.headers["cache-control"], "public, max-age=31536000, immutable")
+        self.assertEqual(self.client.get("/static/favicon.svg").headers["cache-control"], "no-cache")
+        icon = self.client.get("/favicon.ico")
+        self.assertEqual((icon.status_code, icon.headers["content-type"]), (200, "image/x-icon"))
+        self.assertTrue(icon.content.startswith(b"\x00\x00\x01\x00\x03\x00"))
+        self.assertEqual(self.client.get("/apple-touch-icon.png").headers["content-type"], "image/png")
+        self.assertEqual(json.loads(self.client.get("/static/manifest.webmanifest").text)["icons"][1]["sizes"], "192x192")
+        static = ROOT / "src/web/static"
+        self.assertEqual((static / "ocrsd-logo.svg").read_bytes(), (ROOT / "ocrsd-logo.svg").read_bytes())
+        favicon = (static / "favicon.svg").read_text()
+        starts = [float(value) for value in re.findall(r'<path[^>]*\bd="M\s*(-?[\d.]+)', favicon)]
+        self.assertEqual(len(starts), 19)
+        self.assertTrue(all(value < 470 for value in starts))
+        logo = (ROOT / "ocrsd-logo.svg").read_text()
+        for path in re.findall(r'<path[^>]*\bd="M\s*-?[\d.]+[^>]*>', favicon):
+            self.assertIn(path.split(' d="')[1].split('"')[0], logo)
+
     def test_legacy_workspace_token_is_adopted(self):
         legacy = self.client.post("/api/v1/workspaces", json={}).json()["token"]
         adopted = self.hx("POST", "/sessao", data={"token": legacy})

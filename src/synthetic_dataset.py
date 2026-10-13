@@ -9,6 +9,7 @@ import secrets
 import string
 import unicodedata
 from dataclasses import asdict, dataclass, replace
+from functools import partial
 from datetime import date, time, timedelta
 from pathlib import Path
 from typing import Any, Callable
@@ -26,7 +27,7 @@ from src.neural_handwriting import NeuralPen, load_model, prepare_text, render_s
 from src.semantic import REGISTRY, VERSION as SEMANTIC_VERSION, SemanticRecord
 from src.semantic.custom import generate_custom_value, validate_custom_definition
 from src.semantic.data import CITIES, COMPLEMENTS, FIRST_NAMES, LAST_NAMES, LOCATION_PROFILES, OCCUPATIONS, STREETS, UF_VALUES
-from src.semantic.plan import semantic_plan
+from src.semantic.plan import SemanticPlan, semantic_plan
 from src.semantic.present import checkbox_choice, present_elements, present_text, validation_rules, value_kind
 from src.semantic.registry import CONTEXTS
 from src.semantic.resolve import Binding, document_context
@@ -103,6 +104,9 @@ def _location_group(field: dict) -> str | None:
 
 def _allowed(key: str, document: str | None) -> bool:
     return document not in CONTEXTS or document in REGISTRY[key].contexts
+
+
+RecordFactory = Callable[[int, str | None, SemanticPlan, list[str]], SemanticRecord]
 
 
 def _semantic_context(document: str | None, seed: int) -> dict:
@@ -673,7 +677,8 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                       handwriting_model=None, realistic_filters: bool = False,
                       filter_preset: str = "medium",
                       style_preset_uid: str | None = None,
-                      generation_metadata: dict | None = None) -> SyntheticDocument:
+                      generation_metadata: dict | None = None,
+                      record_factory: RecordFactory | None = None) -> SyntheticDocument:
     field_map = apply_shared_rules(field_map)
     reproduction = dict(generation_metadata or {})
     if not reproduction:
@@ -727,8 +732,8 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         text_neural_pen = neural_pen
     handwriting_style = random_handwriting_style(rng, handwriting_intensity, medium="pen")
     pencil_style = random_handwriting_style(rng, handwriting_intensity, medium="pencil")
-    generation_context = _semantic_context(field_map.get("template_id") or infer_document_type_key(template_path), rng.getrandbits(64))
-    record = generation_context["record"]
+    semantic_seed = rng.getrandbits(64)
+    generation_context = {"record": None, "document": document_context(field_map.get("template_id") or infer_document_type_key(template_path))}
     selected = [field for field in field_map.get("fields", []) if str(field["field_id"]) in selected_ids]
     custom_definitions = field_map.get("semantic_definitions") or {}
     custom_fields = [field for field in selected if isinstance(field.get("semantic"), str)
@@ -741,13 +746,20 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             raise ValueError(f"Definição semântica personalizada ausente: {key}")
         validate_custom_definition(*(definition[name] for name in ("key", "label", "description", "data_type", "generator")))
         if key not in custom_values:
-            custom_values[key] = generate_custom_value(definition, random.Random(f"{record.seed}:custom:{key}"))
+            custom_values[key] = generate_custom_value(definition, random.Random(f"{semantic_seed}:custom:{key}"))
     plan = semantic_plan([field for field in selected if field not in custom_fields], generation_context["document"])
     linked = plan.bindings
     generation_context["links"] = {key: linked[str(field["field_id"])].key for field in selected
                                    if str(field["field_id"]) in linked and (key := validation_rules(field).get("semantic_key"))}
-    bindings = plan.apply(record, [key for field in selected if field not in custom_fields and str(field["field_id"]) not in linked
-                                   for key in _legacy_keys(field, generation_context)])
+    legacy_keys = [key for field in selected if field not in custom_fields and str(field["field_id"]) not in linked
+                   for key in _legacy_keys(field, generation_context)]
+    if record_factory is None:
+        record = SemanticRecord(semantic_seed, generation_context["document"])
+        bindings = plan.apply(record, legacy_keys)
+    else:
+        record = record_factory(semantic_seed, generation_context["document"], plan, legacy_keys)
+        bindings = plan.bindings
+    generation_context["record"] = record
     bindings.update({str(field["field_id"]): Binding(field["semantic"], source="custom") for field in custom_fields})
     snapshot = record.snapshot()
     snapshot.update({key: value.isoformat() if isinstance(value, (date, time)) else value for key, value in custom_values.items()})
@@ -916,6 +928,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         "semantic_seed": record.seed,
         "semantic_context": record.context,
         "semantic_record": snapshot,
+        **({"semantic_provenance": record.provenance} if record.provenance else {}),
         "generation": reproduction,
     }
     json_path.write_text(json.dumps(ground_truth, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -933,7 +946,9 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
                      realistic_filters: bool = False,
                      filter_preset: str = "medium",
                      style_preset_uid: str | None = None,
-                     progress_callback: Callable[[int, int, SyntheticDocument], None] | None = None) -> list[SyntheticDocument]:
+                     progress_callback: Callable[[int, int, SyntheticDocument], None] | None = None,
+                     record_factory: Callable[[int, int, str | None, SemanticPlan, list[str]], SemanticRecord] | None = None,
+                     ) -> list[SyntheticDocument]:
     if count <= 0:
         raise ValueError("A quantidade deve ser maior que zero")
     if not selected_ids:
@@ -981,6 +996,7 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
             style_preset_uid=style_preset_uid,
             generation_metadata={"manifest": "dataset.json", "seed": seed, "index": index,
                                  "mapping_sha256": mapping_hash, "template_sha256": reproduction["template_sha256"]},
+            record_factory=None if record_factory is None else partial(record_factory, index),
         )
         generated.append(document)
         if progress_callback is not None:

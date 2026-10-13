@@ -85,6 +85,21 @@ def ring_ink(mask: np.ndarray, box: Sequence[float], near: float, far: float) ->
     return float(crop[keep].mean()) if keep.any() else 0.0
 
 
+def stroke(mask: np.ndarray, box: Sequence[float], limit: int) -> int:
+    x1, y1, x2, y2 = (int(v) for v in box)
+    xm, ym = (x1 + x2) // 2, (y1 + y2) // 2
+    sides = [mask[max(0, y1 - limit):y1, xm][::-1], mask[y2:y2 + limit, xm], mask[ym, max(0, x1 - limit):x1][::-1], mask[ym, x2:x2 + limit]]
+    return int(np.median([int((side > 0).argmin()) if side.size and not side.all() else side.size for side in sides]))
+
+
+def line_width(horizontal: np.ndarray, vertical: np.ndarray, box: Sequence[float], reach: int) -> int:
+    x1, y1, x2, y2 = (int(v) for v in box)
+    xm, ym = (x1 + x2) // 2, (y1 + y2) // 2
+    sides = [horizontal[max(0, y1 - reach):y1 + reach, xm], horizontal[max(0, y2 - reach):y2 + reach, xm],
+             vertical[ym, max(0, x1 - reach):x1 + reach], vertical[ym, max(0, x2 - reach):x2 + reach]]
+    return int(max(int((side > 0).sum()) for side in sides))
+
+
 def frame(mask: np.ndarray, box: Sequence[float], depth: int = 2) -> float:
     x1, y1, x2, y2 = (int(v) for v in box)
     h, w = mask.shape
@@ -102,7 +117,7 @@ def line_masks(bw: np.ndarray, length: float, bridge: float, hbridge: float | No
     return horizontal, vertical
 
 
-def clear(crop: np.ndarray, limit: float = 0.01) -> bool:
+def clear(crop: np.ndarray, limit: float = 0.05) -> bool:
     return not crop.size or float((crop > 0).mean()) < limit
 
 
@@ -262,6 +277,32 @@ def comb_runs(bw: np.ndarray, horizontal: np.ndarray, dpi: float, unit: float) -
                    for k in keep):
             keep.append(run)
     return keep
+
+
+def _pitch_cuts(xs: list[float], tolerance: float) -> list[int]:
+    steps = np.diff(xs)
+    for i in range(2, len(steps) - 1):
+        before, after = float(np.median(steps[max(0, i - 3):i])), float(np.median(steps[i:i + 3]))
+        if abs(after - before) > tolerance * min(before, after) and abs(steps[i] - steps[i - 1]) > tolerance * min(steps[i], steps[i - 1]):
+            return [i] + [i + j for j in _pitch_cuts(xs[i:], tolerance)]
+    return []
+
+
+def rise(vertical: np.ndarray, x: float, baseline: float, band: int = 3) -> int:
+    column = vertical[:max(0, int(baseline) - 1), max(0, int(x) - band):int(x) + band + 1].any(axis=1)[::-1]
+    return int(column.argmin()) if column.size and not column.all() else int(column.size)
+
+
+def split_run(run: dict, vertical: np.ndarray, unit: float, tolerance: float = 0.18) -> list[dict]:
+    xs, limit = run["xs"], 0.8 * run["pitch"] + 0.8 * unit
+    cuts = [i for i in range(1, len(xs) - 1) if rise(vertical, xs[i], run["baseline"]) > limit]
+    pieces, start = [], 0
+    for cut in cuts + [len(xs) - 1]:
+        segment = xs[start:cut + 1]
+        bounds = [0] + _pitch_cuts(segment, tolerance) + [len(segment) - 1]
+        pieces += [segment[a:b + 1] for a, b in zip(bounds, bounds[1:])]
+        start = cut
+    return [{**run, "xs": piece, "pitch": float(np.mean(np.diff(piece)))} for piece in pieces if len(piece) >= 3]
 
 
 def run_elements(run: dict, dpi: float, height_factor: float = 0.8) -> list[Box]:

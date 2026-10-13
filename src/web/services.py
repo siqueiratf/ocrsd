@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timezone
 import functools
 import hashlib
 import io
 import json
+import math
 from pathlib import Path
 import random
 import sqlite3
 import tempfile
 import threading
-from typing import Callable
+import time
+from typing import Any, Callable, Iterable
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from src.document_types import discover_document_types
@@ -22,6 +25,11 @@ from src.web.settings import Settings
 from src.writing_presets import list_presets
 
 NOTICE = "DOCUMENTO SINTÉTICO — SEM VALIDADE LEGAL"
+GENERATION_MODES = {"traditional": "Tradicional", "ai": "Assistida por IA", "ai_replay": "Reprodução de registros da IA"}
+AI_SETUP_HINT = ("Para habilitar, defina OCRSD_AI_PROVIDER=openai e mantenha um servidor local compatível com a API da OpenAI "
+                 "(por exemplo, Ollama) com o modelo {model} disponível.")
+ASSISTANT_TTL = 60.0
+ASSISTANT_TIMEOUT = 2.0
 STANDARD_PRESETS = (("padrao_fonte_natural", "Fonte manuscrita · natural", 0.65),
                     ("padrao_fonte_regular", "Fonte manuscrita · regular", 0.25),
                     ("padrao_fonte_variada", "Fonte manuscrita · variada", 0.95))
@@ -33,10 +41,54 @@ class ServiceError(Exception):
         super().__init__(message)
 
 
+class AssistantProbe:
+    def __init__(self, settings: Settings, cache_dir: Path | None = None):
+        from concurrent.futures import ThreadPoolExecutor
+
+        self.settings, self.cache_dir = settings, cache_dir
+        self.cache: dict[str, Any] = {}
+        self.lock = threading.Lock()
+        self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ocrsd-assistant")
+
+    def unavailable(self, detail: str):
+        from src.mapping_assist.providers import ProviderStatus
+
+        return ProviderStatus(False, self.settings.ai_provider, None if self.settings.ai_provider == "none" else self.settings.ai_model, detail)
+
+    def check(self):
+        from src.mapping_assist.providers import assistant_from_settings
+
+        return assistant_from_settings(self.settings, self.cache_dir).status()
+
+    def status(self):
+        with self.lock:
+            checked, status = self.cache.get("status", (float("-inf"), None))
+            if status is not None and time.monotonic() - checked <= ASSISTANT_TTL:
+                return status
+            check = self.cache.get("check")
+            if check is None:
+                check = self.cache["check"] = self.pool.submit(self.check)
+        try:
+            status = check.result(timeout=ASSISTANT_TIMEOUT)
+        except Exception:
+            return self.unavailable("Assistente de IA não respondeu a tempo")
+        with self.lock:
+            if self.cache.get("check") is check:
+                self.cache.pop("check")
+                self.cache["status"] = (time.monotonic(), status)
+        return status
+
+    def summary(self) -> dict:
+        status = self.status()
+        return {"available": bool(status.available), "provider": status.provider, "model": status.model or self.settings.ai_model,
+                "detail": status.detail, "hint": "" if status.available else AI_SETUP_HINT.format(model=self.settings.ai_model)}
+
+
 class Catalog:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, ai_status: Callable[[], Any] | None = None):
         self.settings = settings
         self.types = discover_document_types(settings.documents)
+        self.ai_status = ai_status
 
     def custom(self, key: str, owner_id: str | None = None) -> dict:
         database = self.settings.storage.resolve() / "jobs.sqlite3"
@@ -138,13 +190,18 @@ class Catalog:
     def document_models(self, custom: list[dict]) -> list[DocumentModelResponse]:
         builtins = []
         for item in self.types.values():
-            definition = json.loads(item.active_mapping.read_text(encoding="utf-8"))
-            builtins.append(DocumentModelResponse(id=item.key, label=item.label, description="Modelo padrão do OCRSD",
-                                                  status="published", version=1, field_count=len(definition["fields"]),
+            try:
+                definition = json.loads(item.active_mapping.read_text(encoding="utf-8"))
+                fields = definition["fields"] if isinstance(definition, dict) and isinstance(definition.get("fields"), list) else []
+            except (OSError, ValueError):
+                fields = []
+            builtins.append(DocumentModelResponse(id=item.key, label=item.label, description=item.description or "Modelo padrão do OCRSD",
+                                                  status="published", version=1, field_count=len(fields),
                                                   mapping_id=item.active_mapping.stem, builtin=True, editable=False))
         return builtins + [custom_model(row) for row in custom]
 
-    def validate(self, options: GenerationOptions, owner_id: str | None = None, definition: dict | None = None) -> GenerationOptions:
+    def validate(self, options: GenerationOptions, owner_id: str | None = None, definition: dict | None = None,
+                 replay: bool = False) -> GenerationOptions:
         if options.mapping_id is None:
             options = options.model_copy(update={"mapping_id": self.active_mapping(options.document_type, owner_id)})
         definition = validate_mapping(definition or self.definition(options.document_type, options.mapping_id, owner_id))
@@ -168,7 +225,33 @@ class Catalog:
             conflicts = writing_issues(definition, options.fields, options.writing)
             if conflicts:
                 raise ServiceError(422, "writing_incompatible", writing_message(options.writing, conflicts))
+        if options.generation_mode == "ai" and not replay:
+            if not ai_slots({**definition, "fields": selected}, options.document_type):
+                raise ServiceError(422, "ai_unsupported", "Os campos selecionados não admitem geração assistida por IA neste modelo; "
+                                                          "use a geração tradicional")
+            if self.ai_status is not None:
+                status = self.ai_status()
+                if not status.available:
+                    raise ServiceError(422, "ai_unavailable", f"Geração assistida por IA indisponível: {status.detail}. "
+                                                              + AI_SETUP_HINT.format(model=self.settings.ai_model))
         return options
+
+
+def ai_slots(definition: dict, document_type: str) -> tuple:
+    from src.semantic.assisted import slots_for
+    from src.semantic.resolve import document_context
+
+    context = document_context(definition.get("template_id") or document_type)
+    standard = [field for field in apply_shared_rules(definition)["fields"]
+                if not (isinstance(field.get("semantic"), str) and field["semantic"].startswith("custom."))]
+    return slots_for(context, [binding.key for binding in semantic_plan(standard, context).bindings.values()])
+
+
+def unavailable_custom_fields(definition: dict) -> dict[str, str]:
+    specs = definition.get("semantic_definitions") or {}
+    return {str(field["field_id"]): field["semantic"] for field in definition.get("fields", [])
+            if isinstance(field.get("semantic"), str) and field["semantic"].startswith("custom.")
+            and ((specs.get(field["semantic"]) or {}).get("generator") or {}).get("type", "unavailable") == "unavailable"}
 
 
 WRITING_SAMPLES = 64
@@ -236,7 +319,7 @@ def create_model(store, settings: Settings, owner_id: str, label: str, descripti
     if len(pdf) > settings.max_upload_bytes:
         raise ServiceError(413, "too_large", "O PDF excede o limite de upload")
     page_size = template_page_size(pdf)
-    source = mapping or {"template_id": "modelo_web", "dpi": 300, "page_size_px": list(page_size), "fields": []}
+    source = fit_mapping(mapping, page_size) if mapping else {"template_id": "modelo_web", "dpi": 300, "page_size_px": list(page_size), "fields": []}
     definition = validate_mapping(with_approved_semantics(store, owner_id, source), page_size)
     return store.create_model(owner_id, label, description, mapping_id, pdf, definition)
 
@@ -278,6 +361,93 @@ def save_mapping(catalog: Catalog, store, model_id: str, owner_id: str, definiti
     if model["status"] == "published" and mapping_issues(validated):
         store.set_status(model_id, owner_id, "draft")
     return model["mapping_id"]
+
+
+def fit_box(box: object, source: tuple[int, int], target: tuple[int, int]) -> object:
+    if not isinstance(box, list) or len(box) != 4 or not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in box):
+        return box
+    scaled = [round(value * target[index % 2] / source[index % 2]) for index, value in enumerate(box)]
+    return [max(0, min(value, target[index % 2])) for index, value in enumerate(scaled)]
+
+
+def fit_fields(fields: list, source: tuple[int, int], target: tuple[int, int]) -> list:
+    if tuple(source) == tuple(target):
+        return fields
+    fitted = []
+    for field in fields:
+        if not isinstance(field, dict):
+            fitted.append(field)
+            continue
+        elements = field.get("elements")
+        fitted.append({**field, "bbox": fit_box(field.get("bbox"), source, target),
+                       **({"elements": [{**element, "bbox": fit_box(element.get("bbox"), source, target)} if isinstance(element, dict)
+                                        else element for element in elements]} if isinstance(elements, list) else {})})
+    return fitted
+
+
+def close_size(size: object, target: tuple[int, int], tolerance: float = 0.01) -> tuple[int, int] | None:
+    try:
+        width, height = (int(value) for value in size)
+    except (TypeError, ValueError):
+        return None
+    if width <= 0 or height <= 0 or max(abs(width - target[0]) / target[0], abs(height - target[1]) / target[1]) > tolerance:
+        return None
+    return width, height
+
+
+def fit_mapping(definition: object, page_size: tuple[int, int]) -> object:
+    if not isinstance(definition, dict) or not isinstance(definition.get("fields"), list):
+        return definition
+    source = close_size(definition.get("page_size_px"), page_size)
+    if source is None or source == tuple(page_size):
+        return definition
+    return {**definition, "page_size_px": list(page_size), "fields": fit_fields(definition["fields"], source, page_size)}
+
+
+def apply_proposal(store, catalog: Catalog, model_id: str, owner_id: str, proposal: dict, accepted_ids: Iterable[str]) -> dict:
+    from src.mapping_assist.proposal import accept_suggestion
+
+    if model_id in catalog.types:
+        raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
+    model = store.model(model_id, owner_id)
+    current = catalog.definition(model_id, model["mapping_id"], owner_id)
+    suggested = proposal.get("fields") if isinstance(proposal, dict) else None
+    if not isinstance(suggested, list) or not all(isinstance(field, dict) for field in suggested):
+        raise ServiceError(422, "invalid_proposal", "A proposta precisa conter uma lista de campos")
+    target = tuple(int(value) for value in current["page_size_px"])
+    if "page_size_px" not in proposal:
+        raise ServiceError(422, "invalid_proposal", "A proposta não informa as dimensões da página")
+    size = close_size(proposal["page_size_px"], target)
+    if size is None:
+        raise ServiceError(422, "invalid_proposal", "A proposta não corresponde às dimensões da página do modelo")
+    candidates = {str((field.get("suggestion") or {}).get("candidate_id")): str(field.get("field_id")) for field in suggested
+                  if isinstance(field.get("suggestion"), dict) and field["suggestion"].get("candidate_id") is not None}
+    requested = {str(identifier) for identifier in accepted_ids}
+    known = {str(field.get("field_id")) for field in suggested}
+    unknown = requested - known - set(candidates)
+    if unknown:
+        raise ServiceError(422, "invalid_proposal", f"Sugestões inexistentes na proposta: {', '.join(sorted(unknown)[:5])}")
+    accepted = {identifier if identifier in known else candidates[identifier] for identifier in requested}
+    fields = [accept_suggestion(field) for field in current["fields"]
+              if not (isinstance(field.get("suggestion"), dict) and field["suggestion"].get("status", "suggested") == "suggested")]
+    used = {field["field_id"] for field in fields}
+    for field in fit_fields([field for field in suggested if str(field.get("field_id")) in accepted], size, target):
+        base = str(field.get("field_id"))
+        identifier, number = base, 2
+        while identifier in used:
+            identifier, number = f"{base}_{number}", number + 1
+        used.add(identifier)
+        fields.append({**accept_suggestion(field), "field_id": identifier})
+    source = proposal.get("provenance") if isinstance(proposal.get("provenance"), dict) else {}
+    provenance = {name: source.get(name) for name in ("method", "provider", "model", "registry_version", "analysis_id",
+                                                      "analysis_source", "page", "created_at")}
+    provenance.update(reviewed=True, reviewed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                      accepted=len(accepted), rejected=len(suggested) - len(accepted))
+    definition = {name: value for name, value in current.items() if name not in {"fields", "provenance", "semantic_definitions"}}
+    save_mapping(catalog, store, model_id, owner_id, {**definition, "fields": fields, "provenance": provenance})
+    if store.model(model_id, owner_id)["status"] != "draft":
+        store.set_status(model_id, owner_id, "draft")
+    return catalog.definition(model_id, model["mapping_id"], owner_id)
 
 
 def with_approved_semantics(store, owner_id: str, definition: dict) -> dict:
@@ -563,7 +733,7 @@ def template_page_size(pdf: bytes, dpi: int = 300) -> tuple[int, int]:
                 raise ServiceError(422, "invalid_pdf", "Use um PDF de página única")
             page = document[0]
             scale = dpi / 72
-            return round(page.rect.width * scale), round(page.rect.height * scale)
+            return math.ceil(round(page.rect.width * scale, 6)), math.ceil(round(page.rect.height * scale, 6))
     except ServiceError:
         raise
     except Exception:
@@ -707,24 +877,78 @@ def realism_previews(template: Path, preset: str, seed: int = 42) -> tuple[str, 
     return encoded(original), encoded(filtered), metadata
 
 
+class ReplayRecords:
+    def __init__(self, replay: dict):
+        self.documents = {int(item["index"]): item for item in replay.get("documents") or []}
+        self.source_job = replay.get("source_job")
+
+    def __call__(self, index: int, seed: int, context: str | None, plan, legacy_keys: list[str]):
+        from src.semantic.record import SemanticRecord
+
+        stored = self.documents.get(index)
+        if stored is None or int(stored["semantic_seed"]) != seed or stored.get("semantic_context") != context:
+            raise ValueError(f"Os registros armazenados não correspondem ao documento {index} desta geração")
+        record = SemanticRecord.from_values(stored["semantic_record"], context, seed)
+        plan.apply(record, legacy_keys)
+        record.provenance = {"mode": "ai_replay", "source_job": self.source_job, **({"source": stored["provenance"]} if stored.get("provenance") else {})}
+        return record
+
+
+def record_factory(options: GenerationOptions, settings: Settings, replay: dict | None = None) -> tuple[Callable | None, Callable[[], dict]]:
+    if replay is not None:
+        source = {key: value for key, value in (replay.get("generation") or {}).items() if key != "documents"}
+        return ReplayRecords(replay), lambda: {"mode": "ai_replay", "source_job": replay.get("source_job"), "source_generation": source,
+                                               "replayed_documents": len(replay.get("documents") or [])}
+    if options.generation_mode != "ai":
+        return None, lambda: {"mode": "traditional"}
+    from src.mapping_assist.providers import assistant_from_settings
+    from src.semantic.assisted import AssistedGenerationError, AssistedRecords
+
+    assistant = assistant_from_settings(settings, None)
+    try:
+        status = assistant.status()
+    except Exception as exc:
+        raise AssistedGenerationError(f"Assistente de IA indisponível: {exc}", []) from exc
+    if not status.available or not hasattr(assistant, "complete_json"):
+        raise AssistedGenerationError(f"Assistente de IA indisponível: {status.detail}", [])
+    factory = AssistedRecords(assistant, model_digest=assistant.model_digest())
+    return factory, lambda: {"mode": "ai", **factory.parameters, "documents": list(factory.documents)}
+
+
+def accepted_records(output: Path) -> dict:
+    manifest = json.loads((output / "dataset.json").read_text(encoding="utf-8"))
+    documents = []
+    for index, entry in enumerate(manifest.get("documents", []), start=1):
+        truth = json.loads((output / entry["ground_truth"]).read_text(encoding="utf-8"))
+        provenance = truth.get("semantic_provenance") or {}
+        documents.append({"index": index, "semantic_seed": truth["semantic_seed"], "semantic_context": truth.get("semantic_context"),
+                          "semantic_record": truth["semantic_record"],
+                          "provenance": {key: provenance.get(key) for key in ("mode", "provider", "model", "model_digest", "prompt_version",
+                                                                             "temperature", "scenario", "ai_keys") if key in provenance}})
+    return {"seed": manifest.get("seed"), "generation": manifest.get("generation"), "documents": documents}
+
+
 def generate(options: GenerationOptions, output: Path, settings: Settings,
              progress: Callable[[int], None], owner_id: str | None = None,
-             document_ready: Callable[[int, Path, Path], None] | None = None, source: dict | None = None) -> list[dict]:
+             document_ready: Callable[[int, Path, Path], None] | None = None, source: dict | None = None,
+             replay: dict | None = None) -> list[dict]:
     with tempfile.TemporaryDirectory(prefix="ocrsd-source-") as directory:
         catalog = Catalog(settings)
         if source:
-            options = catalog.validate(options, owner_id, source["definition"])
+            options = catalog.validate(options, owner_id, source["definition"], replay=replay is not None)
             template, mapping = source["template"], Path(directory) / f"{options.mapping_id}.json"
             mapping.write_text(json.dumps(source["definition"], ensure_ascii=False), encoding="utf-8")
         else:
-            options = catalog.validate(options, owner_id)
+            options = catalog.validate(options, owner_id, replay=replay is not None)
             template = catalog.document(options.document_type, owner_id).template
             mapping = catalog.mapping(options.document_type, options.mapping_id, owner_id)
-        return generate_from(options, template, mapping, output, progress, document_ready)
+        factory, generation = record_factory(options, settings, replay)
+        return generate_from(options, template, mapping, output, progress, document_ready, factory, generation)
 
 
 def generate_from(options: GenerationOptions, template: Path, mapping: Path, output: Path, progress: Callable[[int], None],
-                  document_ready: Callable[[int, Path, Path], None] | None = None) -> list[dict]:
+                  document_ready: Callable[[int, Path, Path], None] | None = None, factory: Callable | None = None,
+                  generation: Callable[[], dict] | None = None) -> list[dict]:
     from src.neural_handwriting import NeuralPen
     from src.synthetic_dataset import generate_dataset
 
@@ -748,12 +972,13 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
         handwriting=writing.handwriting, text_handwriting=writing.text_handwriting,
         handwriting_intensity=writing.intensity, neural_pen=pen,
         realistic_filters=options.filter_preset != "none", filter_preset=options.filter_preset if options.filter_preset != "none" else "medium",
-        progress_callback=finalize_document,
+        progress_callback=finalize_document, record_factory=factory,
     )
     manifest_path = output / "dataset.json"
     manifest = json.loads(manifest_path.read_text())
     manifest.update(template=options.document_type, mapping=options.mapping_id, synthetic=True, notice=NOTICE,
-                    options={**options.model_dump(), "seed": manifest["seed"]})
+                    options={**options.model_dump(), "seed": manifest["seed"]},
+                    generation=generation() if generation else {"mode": "traditional"})
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     files = sorted(path for path in output.iterdir() if path.suffix in {".pdf", ".json"})
     with ZipFile(output / "dataset.zip", "w", ZIP_DEFLATED) as archive:

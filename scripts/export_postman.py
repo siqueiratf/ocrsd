@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from src.semantic import VERSION
 from src.web.api import create_app
 from src.web.models import DocumentModelResponse, GenerationConfigResponse, GenerationOptions, JobDetail, JobResponse, ShareCreated, ShareResponse, SubmittedJob, WorkspaceResponse, Writing, WritingPresetStored
 from src.web.services import Catalog
@@ -54,6 +55,18 @@ def build_collection() -> dict:
     configuration = GenerationConfigResponse(id="1" * 32, name="Configuração DNV", options=options, created_at=timestamp, updated_at=timestamp)
     share = ShareResponse(id="2" * 32, job_id=job.id, allow_download=True, created_at=timestamp,
                           expires_at=timestamp + 3600, revoked_at=None)
+    analysis = {"id": "5" * 32, "model_id": "4" * 32, "page": 1, "status": "queued", "progress": 0, "stage": "Aguardando análise",
+                "error": None, "provenance": None, "proposal": None, "created_at": timestamp, "updated_at": timestamp,
+                "started_at": None, "finished_at": None}
+    analysis_provenance = {"method": "ocrsd-hybrid", "provider": "none", "model": None, "registry_version": VERSION, "analysis_id": "5" * 32,
+                           "analysis_source": "text_layer", "context": None, "page": 0, "reviewed": False,
+                           "assistant": {"configured": "none", "status": "unavailable", "detail": "Assistente de IA desativado", "warnings": []}}
+    proposal = {"template_id": "modelo_web", "dpi": 300, "page_size_px": [2481, 3508], "provenance": analysis_provenance,
+                "fields": [{"field_id": "newborn_name", "label": "Nome", "description": "Nome", "data_type": "person_name",
+                            "bbox": [180, 420, 1500, 500], "semantic": "newborn.name",
+                            "suggestion": {"status": "suggested", "candidate_id": "c001", "match": "matched", "method": "rules",
+                                           "score": 0.92, "alternatives": [], "reason": "Rótulo corresponde ao registro semântico.",
+                                           "proposal": None}}]}
     examples: dict[tuple[str, str], tuple[int, object, str]] = {
         ("/api/v1/health", "get"): (200, health, "application/json"),
         ("/api/v1/workspaces", "post"): (201, WorkspaceResponse(id="3" * 32, token="CHAVE_PRIVADA_DO_ESPACO").model_dump(), "application/json"),
@@ -65,6 +78,12 @@ def build_collection() -> dict:
         ("/api/v1/models/{model_id}", "delete"): (200, {"deleted": True}, "application/json"),
         ("/api/v1/document-types/{document_type}/mappings/{mapping_id}", "get"): (200, mapping, "application/json"),
         ("/api/v1/models/{model_id}/mapping", "put"): (200, mapping, "application/json"),
+        ("/api/v1/models/{model_id}/analyses", "post"): (202, analysis, "application/json"),
+        ("/api/v1/analyses/{analysis_id}", "get"): (200, {**analysis, "status": "succeeded", "progress": 100, "stage": "Proposta pronta para revisão",
+                                                          "started_at": timestamp + 1, "finished_at": timestamp + 9, "updated_at": timestamp + 9,
+                                                          "provenance": analysis_provenance, "proposal": proposal}, "application/json"),
+        ("/api/v1/models/{model_id}/analyses/{analysis_id}/apply", "post"): (200, mapping, "application/json"),
+        ("/api/v1/assistant", "get"): (200, {"available": False, "provider": "none", "model": None, "detail": "Assistente de IA desativado"}, "application/json"),
         ("/api/v1/capabilities", "get"): (200, capabilities, "application/json"),
         ("/api/v1/writing-presets", "get"): (200, built_in_presets, "application/json"),
         ("/api/v1/presets", "get"): (200, [preset.model_dump()], "application/json"),
@@ -92,7 +111,8 @@ def build_collection() -> dict:
         "models": "Listar modelos", "create_model": "Cadastrar template PDF", "duplicate_model": "Criar cópia editável",
         "update_model": "Atualizar metadados", "delete_model": "Excluir modelo", "template": "Template PDF",
         "model_preview": "Prévia PNG do template", "mapping": "Mapeamento e campos", "update_mapping": "Salvar mapeamento",
-        "capabilities": "Modelos, filtros e limites", "writing_presets": "Presets incluídos", "presets": "Listar presets privados",
+        "submit_analysis": "Analisar template do modelo", "analysis": "Acompanhar análise", "apply_analysis": "Aplicar sugestões aceitas",
+        "assistant": "Estado do assistente de IA", "capabilities": "Modelos, filtros e limites", "writing_presets": "Presets incluídos", "presets": "Listar presets privados",
         "semantic_definitions": "Listar definições semânticas", "create_semantic_definition": "Criar definição semântica",
         "update_semantic_definition": "Atualizar definição semântica", "delete_semantic_definition": "Excluir definição semântica",
         "create_preset": "Criar preset", "update_preset": "Atualizar preset", "delete_preset": "Excluir preset",
@@ -107,7 +127,7 @@ def build_collection() -> dict:
         "create_workspace": {},
         "create_model": {"label": "Meu modelo", "description": "Template de pesquisa", "filename": "template.pdf", "pdf_base64": "{{pdfBase64}}", "mapping_id": "default", "mapping": None},
         "duplicate_model": {}, "update_model": {"label": "Meu modelo", "description": "Versão revisada", "status": "draft"},
-        "update_mapping": {"definition": "__MAPPING__"},
+        "update_mapping": {"definition": "__MAPPING__"}, "submit_analysis": {"page": 1}, "apply_analysis": {"accepted": ["newborn_name"]},
         "create_semantic_definition": {"key": "custom.referencia_local", "label": "Referência local", "description": "Código fictício",
                                        "data_type": "text", "generator": {"type": "choices", "values": ["A1", "B2"]}},
         "update_semantic_definition": {"key": "custom.referencia_local", "label": "Referência local", "description": "Código fictício",
@@ -125,7 +145,7 @@ def build_collection() -> dict:
         for method, operation in methods.items():
             function = operation["operationId"].split("_api_v1")[0]
             resolved = path
-            for parameter in ("document_type", "mapping_id", "model_id", "preset_id", "configuration_id", "job_id", "artifact_id", "share_id", "key"):
+            for parameter in ("document_type", "mapping_id", "model_id", "preset_id", "configuration_id", "job_id", "artifact_id", "share_id", "analysis_id", "key"):
                 resolved = resolved.replace("{" + parameter + "}", "{{" + parameter + "}}")
             query = [{"key": parameter["name"], "value": str(parameter["schema"].get("default", "")).lower()}
                      for parameter in operation.get("parameters", []) if parameter["in"] == "query"]
@@ -151,6 +171,8 @@ def build_collection() -> dict:
             if function == "create_workspace": tests += ["const value = pm.response.json();", "pm.collectionVariables.set('workspace_token', value.token);"]
             if function == "document_types": tests += ["const value = pm.response.json()[0];", "pm.collectionVariables.set('document_type', value.id);", "pm.collectionVariables.set('mapping_id', value.mappings[0].id);", "pm.collectionVariables.set('model_id', value.id);"]
             if function == "mapping": tests += ["const value = pm.response.json();", "pm.collectionVariables.set('fields', JSON.stringify(value.fields.slice(0,3).map(item => item.field_id)));", "pm.collectionVariables.set('mappingDefinition', JSON.stringify(value.definition));"]
+            if function == "submit_analysis": tests += ["pm.collectionVariables.set('analysis_id', pm.response.json().id);", "pm.collectionVariables.set('poll_count', 0);"]
+            if function == "analysis": tests += ["const value = pm.response.json();", "const count = Number(pm.collectionVariables.get('poll_count') || 0) + 1;", "pm.collectionVariables.set('poll_count', count);", "if (['queued','running'].includes(value.status) && count < 600) { setTimeout(() => {}, 1500); pm.execution.setNextRequest(pm.info.requestName); }"]
             if function == "create_preset": tests += ["pm.collectionVariables.set('preset_id', pm.response.json().id);"]
             if function == "create_configuration": tests += ["pm.collectionVariables.set('configuration_id', pm.response.json().id);"]
             if function == "submit": tests += ["const value = pm.response.json();", "pm.collectionVariables.set('job_id', value.id);", "pm.collectionVariables.set('job_token', value.token);", "pm.collectionVariables.set('poll_count', 0);"]
@@ -173,9 +195,9 @@ def build_collection() -> dict:
         "baseUrl": "http://127.0.0.1:8000", "workspace_token": "", "document_type": document["id"], "mapping_id": mapping_id,
         "model_id": document["id"], "preset_id": "", "configuration_id": "", "key": "custom.referencia_local", "fields": json.dumps(options.fields),
         "mappingDefinition": json.dumps(mapping["definition"], ensure_ascii=False), "pdfBase64": "COLE_BASE64_DO_PDF",
-        "job_id": "", "job_token": "", "artifact_id": "", "share_id": "", "share_token": "", "poll_count": "0",
+        "analysis_id": "", "job_id": "", "job_token": "", "artifact_id": "", "share_id": "", "share_token": "", "poll_count": "0",
     }
-    order = ["Operação", "Espaço de trabalho", "Catálogo", "Modelos", "Presets", "Configurações", "Geração", "Jobs", "Resultados", "Compartilhamento"]
+    order = ["Operação", "Espaço de trabalho", "Catálogo", "Modelos", "Mapeamento assistido", "Presets", "Configurações", "Geração", "Jobs", "Resultados", "Compartilhamento"]
     items = [{"name": name, "item": groups.get(name, [])} for name in order]
     items.append({"name": "Contrato", "item": [{"name": "OpenAPI", "request": {"method": "GET", "auth": {"type": "noauth"}, "url": "{{baseUrl}}/api/openapi.json"}, "event": event(["pm.test('HTTP 200', () => pm.response.to.have.status(200));"])}, {"name": "Documentação interativa", "request": {"method": "GET", "auth": {"type": "noauth"}, "url": "{{baseUrl}}/api/docs"}}]})
     return {"info": {"name": "OCRSD API v1", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",

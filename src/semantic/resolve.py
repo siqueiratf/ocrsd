@@ -4,23 +4,18 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from src.semantic.registry import CONTEXTS, REGISTRY
+from src.semantic.registry import CLINICAL_TERMS, CONTEXTS, MEDICAL_TERMS, OBSTETRIC_TERMS, REGISTRY
 
 DATE_PARTS = ("day", "month", "year")
 EXTENSO = "DD de mês de AAAA"
 _ADDRESS = ("street", "number", "complement", "neighborhood", "cep", "municipality", "uf", "ibge")
 KEYS = frozenset(REGISTRY)
-EXCLUDED = (
-    "apgar", "peso", "comprimento", "perimetro", "raca", "cor", "escolaridade", "serie", "situacao conjugal", "estado civil",
-    "funcao", "tipo de documento", "tipo de gravidez", "tipo de parto", "apresentacao", "induzido", "cesarea ocorreu",
-    "assistido", "anomalia", "anomalias", "metodo", "cbo", "averbacao", "averbacoes", "anotacao", "anotacoes",
-    "livro", "folha", "termo", "causa", "causas", "cid", "assinatura", "observacao", "observacoes", "selo",
+EXCLUDED = CLINICAL_TERMS + (
+    "raca", "cor", "escolaridade", "serie", "situacao conjugal", "estado civil", "funcao", "tipo de documento",
+    "tipo de gravidez", "tipo de parto", "cesarea ocorreu", "assistido", "metodo", "cbo", "averbacao", "averbacoes",
+    "anotacao", "anotacoes", "livro", "folha", "termo", "assinatura", "observacao", "observacoes", "selo",
 )
-CONTEXT_EXCLUDED = {
-    "declaracao_obito": ("filhos", "gestacao", "gestacoes", "semanas", "gravidez", "parto", "partos", "aborto", "abortos",
-                         "fetal", "fetais", "nascidos vivos", "necropsia", "morte", "doenca", "diagnostico", "obstetrica",
-                         "puerperio", "gestante"),
-}
+CONTEXT_EXCLUDED = {"declaracao_obito": OBSTETRIC_TERMS + ("filhos", "semanas", "nascidos vivos")}
 ROLES = (
     ("filling", ("responsavel pelo preenchimento", "preenchimento", "preenchedor")),
     ("guardian", ("responsavel legal",)),
@@ -121,6 +116,11 @@ def _has(text: str, phrases: tuple[str, ...]) -> bool:
     return any(f" {phrase} " in padded for phrase in phrases)
 
 
+def medical_term(text: object) -> str | None:
+    padded = f" {normalize(text)} "
+    return next((term for term in MEDICAL_TERMS if f" {term} " in padded), None)
+
+
 def excluded_terms(document: str | None) -> tuple[str, ...]:
     return EXCLUDED + CONTEXT_EXCLUDED.get(document_context(document) or "", ())
 
@@ -135,7 +135,7 @@ def document_context(document: str | None) -> str | None:
         return None
     if text.startswith("dnv") or "nascido vivo" in text:
         return "dnv"
-    if text == "do" or "obito" in text:
+    if text == "do" or text.startswith("do ") or "obito" in text:
         return "declaracao_obito"
     if "certidao" in text and "nascimento" in text:
         return "certidao_nascimento"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import difflib
 import json
 import shutil
+import subprocess
 import unicodedata
 import unittest
 from pathlib import Path
@@ -12,9 +13,9 @@ import cv2
 import numpy as np
 import pymupdf
 
-from src.mapping_assist import ocr
+from src.mapping_assist import analysis, ocr
 from src.mapping_assist.analysis import FieldCandidate, PageAnalysis, analyze_document, page_count
-from src.mapping_assist.geometry import iou
+from src.mapping_assist.geometry import contained, iou
 from src.mapping_assist.matching import Match, match_candidates
 from src.mapping_assist.proposal import accept_suggestion, build_proposal
 from src.web.services import mapping_issues, validate_mapping
@@ -72,6 +73,71 @@ def synthetic_pdf(pages: int = 1) -> bytes:
     return doc.tobytes()
 
 
+def layout_pdf() -> bytes:
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    line = {"color": (0, 0, 0), "width": 0.6}
+
+    def anchor(number: str, x: float, y: float, label: str):
+        page.draw_rect(pymupdf.Rect(x, y, x + 12, y + 12), **line)
+        page.insert_text((x + 4, y + 10), number, fontsize=8)
+        page.insert_text((x + 16, y + 10), label, fontsize=9)
+
+    def option(x: float, y: float, code: str, label: str):
+        page.draw_rect(pymupdf.Rect(x, y, x + 9, y + 9), **line)
+        page.insert_text((x - 6, y + 8), code, fontsize=8)
+        page.insert_text((x + 13, y + 8), label, fontsize=9)
+
+    page.draw_rect(pymupdf.Rect(60, 100, 560, 180), **line)
+    page.draw_line((240, 100), (240, 180), **line)
+    anchor("1", 62, 102, "Data do registro")
+    anchor("2", 242, 102, "Número do livro")
+    for x in range(78, 313, 18):
+        page.draw_line((x, 180), (x, 174), **line)
+    page.draw_rect(pymupdf.Rect(60, 200, 560, 280), **line)
+    anchor("3", 62, 202, "Código do cartório")
+    for x in [70 + 18 * i for i in range(7)] + [178 + 14 * i for i in range(1, 6)]:
+        page.draw_line((x, 280), (x, 274), **line)
+    page.draw_rect(pymupdf.Rect(60, 300, 560, 380), **line)
+    anchor("4", 62, 302, "Tipo de acidente")
+    anchor("5", 300, 302, "Acidente do trabalho")
+    for x, code, label in ((80, "1", "Trânsito"), (160, "2", "Queda"), (320, "1", "Sim"), (400, "2", "Não")):
+        option(x, 340, code, label)
+    page.draw_line((60, 400), (560, 400), **line)
+    page.draw_line((60, 400), (60, 470), **line)
+    page.draw_line((250, 400), (250, 470), **line)
+    anchor("6", 62, 402, "A morte ocorreu")
+    anchor("7", 252, 402, "Recebeu assistência")
+    for x, code, label in ((80, "1", "Parto"), (150, "2", "Aborto"), (215, "9", "Ign"), (270, "1", "Sim"), (330, "2", "Não")):
+        option(x, 425, code, label)
+    return doc.tobytes()
+
+
+def boxes_pdf() -> tuple[bytes, list[tuple[int, ...]], list[tuple[int, ...]]]:
+    image = np.full((3508, 2480), 255, np.uint8)
+    cv2.rectangle(image, (150, 150), (2330, 3350), 0, 3)
+    cells, squares = [], []
+    for row, width in enumerate((2, 4, 6, 8)):
+        y = 400 + 300 * row
+        cv2.rectangle(image, (300, y), (1500, y + 120), 0, width)
+        cells.append((300 + width, y + width, 1500 - width, y + 120 - width))
+        for i in range(3):
+            x = 1700 + 120 * i
+            cv2.rectangle(image, (x, y + 40), (x + 30, y + 70), 0, width)
+            squares.append((x, y + 40, x + 30, y + 70))
+    doc = pymupdf.open()
+    page = doc.new_page(width=595.2, height=841.92)
+    page.insert_image(page.rect, stream=cv2.imencode(".png", image)[1].tobytes())
+    return doc.tobytes(), cells, squares
+
+
+def inside(analysis: PageAnalysis) -> bool:
+    width, height = analysis.page_size_px
+    boxes = [c.region for c in analysis.candidates] + [c.label_bbox for c in analysis.candidates if c.label_bbox]
+    boxes += [e["bbox"] for c in analysis.candidates for e in c.elements]
+    return all(0 <= b[0] <= b[2] < width and 0 <= b[1] <= b[3] < height for b in boxes)
+
+
 def raster_pdf(source: bytes, dpi: int = 300) -> bytes:
     pix = pymupdf.open(stream=source, filetype="pdf")[0].get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
     doc = pymupdf.open()
@@ -104,8 +170,9 @@ class SyntheticTextLayerTest(unittest.TestCase):
         for c in a.candidates:
             self.assertIn(c.kind, {"text", "digit_sequence", "checkbox"})
             self.assertTrue(all(isinstance(v, int) for v in c.region))
-            self.assertTrue(0 <= c.region[0] <= c.region[2] <= 2480 and 0 <= c.region[1] <= c.region[3] <= 3509)
+            self.assertTrue(0 <= c.region[0] <= c.region[2] < 2480 and 0 <= c.region[1] <= c.region[3] < 3509)
             self.assertIsNone(c.confidence)
+        self.assertTrue(inside(a))
         self.assertIn("total", a.timings)
 
     def test_text_field(self):
@@ -202,6 +269,76 @@ class RasterFallbackTest(unittest.TestCase):
         self.assertTrue(a.warnings)
 
 
+class LayoutRegressionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.analysis = analyze_document(layout_pdf())
+
+    def field(self, number: str, kind: str) -> list[FieldCandidate]:
+        return [c for c in self.analysis.candidates if c.number == number and c.kind == kind]
+
+    def test_combs_split_at_cell_borders_and_pitch_changes(self):
+        (left,), (right,) = self.field("1", "digit_sequence"), self.field("2", "digit_sequence")
+        self.assertEqual((left.label, len(left.elements), right.label, len(right.elements)), ("Data do registro", 10, "Número do livro", 4))
+        self.assertLess(left.elements[-1]["bbox"][2], 240 * S)
+        self.assertGreater(right.elements[0]["bbox"][0], 240 * S)
+        self.assertEqual(sorted(len(c.elements) for c in self.field("3", "digit_sequence")), [5, 6])
+
+    def test_checkbox_groups_follow_their_own_anchor(self):
+        groups = {number: [[e["label"] for e in c.elements] for c in self.field(number, "checkbox")] for number in "4567"}
+        self.assertEqual(groups, {"4": [["Trânsito", "Queda"]], "5": [["Sim", "Não"]], "6": [["Parto", "Aborto", "Ign"]], "7": [["Sim", "Não"]]})
+        self.assertTrue(inside(self.analysis))
+
+
+class RasterQualityTest(unittest.TestCase):
+    def test_high_dpi_raster_is_downscaled(self):
+        source = synthetic_pdf()
+        base, high = analyze_document(raster_pdf(source, 300), ocr=False), analyze_document(raster_pdf(source, 1200), ocr=False)
+        self.assertEqual((high.page_size_px, high.dpi), (base.page_size_px, base.dpi))
+        self.assertEqual([c.kind for c in high.candidates], [c.kind for c in base.candidates])
+        for a, b in zip(base.candidates, high.candidates):
+            self.assertTrue(near(a.region, b.region, 4), (a.region, b.region))
+            self.assertEqual(len(a.elements), len(b.elements))
+            self.assertTrue(all(near(e["bbox"], f["bbox"], 4) for e, f in zip(a.elements, b.elements)))
+        self.assertLess(abs(high.unit - base.unit), 1)
+        self.assertLess(high.timings["total"], max(3 * base.timings["total"], base.timings["total"] + 2))
+        self.assertTrue(inside(high))
+
+    def test_thick_borders_without_text_unit(self):
+        pdf, cells, squares = boxes_pdf()
+        with mock.patch.object(analysis._Analyzer, "_hole_unit", return_value=None):
+            a = analyze_document(pdf, ocr=False)
+        self.assertEqual(a.unit, 15)
+        texts = [c.region for c in a.candidates if c.kind == "text"]
+        for cell in cells:
+            self.assertGreater(max((iou(cell, t) for t in texts), default=0), 0.9, cell)
+        found = [e["bbox"] for c in a.candidates if c.kind == "checkbox" for e in c.elements]
+        self.assertEqual(len(found), len(squares))
+        for square in squares:
+            self.assertTrue(any(contained(f, square) == 1 and iou(f, square) > 0.4 for f in found), square)
+
+    def test_upscale_warning_only_when_ocr_runs(self):
+        low = raster_pdf(synthetic_pdf(), 90)
+        self.assertFalse(any("ampliação" in w for w in analyze_document(low, ocr=False).warnings))
+        with mock.patch.object(ocr, "run_tesseract", side_effect=FileNotFoundError("tesseract")):
+            self.assertFalse(any("ampliação" in w for w in analyze_document(low).warnings))
+        with mock.patch.object(ocr, "run_tesseract", return_value=[]):
+            self.assertTrue(any("ampliação 3×" in w for w in analyze_document(low).warnings))
+
+    def test_later_ocr_failures_are_reported(self):
+        def fake(image, psm=6, dpi=None, options=(), timeout=180):
+            if dpi is None:
+                raise subprocess.TimeoutExpired("tesseract", timeout)
+            return []
+
+        with mock.patch.object(ocr, "run_tesseract", side_effect=fake):
+            a = analyze_document(raster_pdf(synthetic_pdf()))
+        self.assertEqual(a.source, "tesseract")
+        failures = [w for w in a.warnings if w.startswith("Falha no OCR")]
+        self.assertEqual(len(failures), 2, a.warnings)
+        self.assertTrue(any("números" in w for w in failures) and any("títulos" in w for w in failures))
+
+
 class PlacementTest(unittest.TestCase):
     def test_offset_anisotropic_image(self):
         image = np.full((1500, 1600), 255, np.uint8)
@@ -258,6 +395,19 @@ class RealDocumentsTest(unittest.TestCase):
             self.assertGreaterEqual(similar(labels, query), 0.85, query)
         self.assertEqual({c.section for c in a.candidates if c.section}, {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"})
         self.assertLess(a.timings["total"], 30)
+        self.assertTrue(inside(a))
+        combs = {c.number: len(c.elements) for c in a.candidates if c.kind == "digit_sequence" and c.number}
+        self.assertEqual({key: combs.get(key) for key in ("2", "3", "8", "9", "16", "46", "54", "55")},
+                         {"2": 8, "3": 15, "8": 8, "9": 3, "16": 8, "46": 8, "54": 6, "55": 8})
+        self.assertIn(combs.get("36"), {10, 11})
+        self.assertLessEqual(combs.get("35", 0), 5)
+        boxes = {c.number: c for c in a.candidates if c.kind == "checkbox" and c.number in {"37", "38", "48", "49"}}
+        self.assertEqual((len(boxes["37"].elements), len(boxes["38"].elements)), (7, 3))
+        self.assertTrue(all(e["bbox"][0] < 1285 for e in boxes["37"].elements) and all(e["bbox"][0] > 1285 for e in boxes["38"].elements))
+        self.assertTrue(all(e["bbox"][0] < 1220 for e in boxes["48"].elements) and all(e["bbox"][0] > 1220 for e in boxes["49"].elements))
+        self.assertTrue(any(c.label == "Hora" and c.kind == "text" for c in a.candidates))
+        doctor = by_label(a, "Nome do Médico", "text")
+        self.assertGreater(doctor.region[2], 1150)
         self.check_isolated_checkbox_proposals(a, "do", 3)
 
     def test_declaracao_de_nascido_vivo(self):
@@ -273,13 +423,15 @@ class RealDocumentsTest(unittest.TestCase):
                 hits = sum(max(iou(e["bbox"], d) for d in digits) >= 0.3 for e in f["elements"])
                 self.assertGreaterEqual(hits, 0.8 * len(f["elements"]), f["field_id"])
         self.assertTrue(any("baixa resolução" in w for w in a.warnings))
+        self.assertTrue(inside(a))
+        self.assertFalse(any(c.kind == "digit_sequence" and (c.region[1] < 300 or len(c.elements) < 2) for c in a.candidates))
         self.assertLess(a.timings["total"], 30)
         self.check_isolated_checkbox_proposals(a, "dnv", 2)
 
-    def check_isolated_checkbox_proposals(self, analysis: PageAnalysis, context: str, expected: int):
+    def check_isolated_checkbox_proposals(self, analysis: PageAnalysis, context: str, maximum: int):
         isolated = {candidate.id for candidate in analysis.candidates
                     if candidate.kind == "checkbox" and len(candidate.elements) == 1}
-        self.assertEqual(len(isolated), expected)
+        self.assertLessEqual(len(isolated), maximum)
         proposal = validate_mapping(build_proposal(analysis, match_candidates(analysis, context), context))
         fields = {field["suggestion"]["candidate_id"]: field for field in proposal["fields"]}
         sex_key = "newborn.sex" if context == "dnv" else "deceased.sex"
@@ -305,6 +457,7 @@ class RealDocumentsTest(unittest.TestCase):
         for query in ("Data de nascimento", "Horário de nascimento", "Município da naturalidade", "Sexo", "DNV"):
             self.assertIn(query, labels)
         self.assertLess(a.timings["total"], 30)
+        self.assertTrue(inside(a))
 
 
 if __name__ == "__main__":

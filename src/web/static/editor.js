@@ -12,6 +12,7 @@
   const saveButton = app.querySelector('[data-salvar]')
   const saveState = app.querySelector('[data-estado]')
   const banner = app.querySelector('[data-banner]')
+  const aiProgress = app.querySelector('[data-ai-progress]')
   const narrow = window.matchMedia('(max-width: 1180px)')
   const labels = data.type_labels
   const categories = data.type_category
@@ -35,8 +36,12 @@
   let leaving = false
   let spaceDown = false
   let saving = false
+  let analysis = data.analysis || null
+  let readyJob = null
+  let dismissed = stored('analise-oculta')
 
   const clone = value => structuredClone(value)
+  const isSuggestion = item => item?.suggestion?.status === 'suggested'
   const normalize = text => String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   const field = () => selection?.kind === 'field' ? fields[selection.index] : null
   const element = () => field() && selection.element != null ? field().elements?.[selection.element] : null
@@ -46,14 +51,18 @@
 
   function snapshot() {
     return {
-      state: JSON.stringify({ fields, layout }),
+      state: JSON.stringify({ fields, layout, semantic_definitions: definition.semantic_definitions, provenance: definition.provenance }),
       meta: JSON.stringify(Object.fromEntries(['label', 'description'].map(name => [name, form.elements[name]?.value ?? '']))),
       fields: new Map(fields.map(item => [item.field_id, JSON.stringify(item)])),
       layout: new Map((layout?.elements ?? []).map(item => [item.id, JSON.stringify(item)])),
     }
   }
 
-  const dirty = () => saved.state !== JSON.stringify({ fields, layout }) || saved.meta !== JSON.stringify(metadata())
+  const dirty = () => saved.state !== JSON.stringify({ fields, layout, semantic_definitions: definition.semantic_definitions, provenance: definition.provenance }) || saved.meta !== JSON.stringify(metadata())
+
+  function pendingSuggestions() {
+    return fields.filter(isSuggestion)
+  }
 
   function h(tag, attributes = {}, ...children) {
     const node = document.createElement(tag)
@@ -107,7 +116,7 @@
     return [Math.round(transformed.x), Math.round(transformed.y)]
   }
 
-  function remember(state = { fields: clone(fields), layout: clone(layout) }) {
+  function remember(state = { fields: clone(fields), layout: clone(layout), semantic_definitions: clone(definition.semantic_definitions), provenance: clone(definition.provenance) }) {
     past = [...past.slice(-79), state]
     future = []
   }
@@ -239,7 +248,7 @@
     for (const [index, item] of fields.entries()) {
       const active = selection?.kind === 'field' && selection.index === index
       const issues = fieldIssues(item, index)
-      const group = s('g', { class: `box cat-${category(item)}${active && selection.element == null ? ' is-selected' : ''}${isUnsaved(saved.fields, item.field_id, item) ? ' is-unsaved' : ''}${issues.length ? ' is-invalid' : ''}`, 'data-campo': index })
+      const group = s('g', { class: `box cat-${category(item)}${isSuggestion(item) ? ' is-suggestion' : ''}${active && selection.element == null ? ' is-selected' : ''}${isUnsaved(saved.fields, item.field_id, item) ? ' is-unsaved' : ''}${issues.length ? ' is-invalid' : ''}`, 'data-campo': index })
       renderBox(group, item.bbox, `f:${index}`, active && selection.element == null, item.label || item.field_id || 'Campo sem ID')
       for (const [position, child] of (item.elements || []).entries()) {
         const current = active && selection.element === position
@@ -286,7 +295,8 @@
         const visible = matches(item.label, item.field_id, item.description, labels[item.data_type]) || children.length
         if (!visible) continue
         const flags = []
-        if (fieldIssues(item, index).length) flags.push(h('span', { class: 'tree-flag is-invalid', text: 'Revisar' }))
+        if (isSuggestion(item)) flags.push(h('span', { class: 'tree-flag is-suggestion', text: 'Sugestão' }))
+        else if (fieldIssues(item, index).length) flags.push(h('span', { class: 'tree-flag is-invalid', text: 'Revisar' }))
         else if (isUnsaved(saved.fields, item.field_id, item)) flags.push(h('span', { class: 'tree-flag is-unsaved', text: 'Não salvo' }))
         const selected = selection?.kind === 'field' && selection.index === index && selection.element == null
         groupRows.push(treeRow({ 'data-ref': `f:${index}`, 'aria-selected': String(selected), 'data-categoria': category(item) },
@@ -426,7 +436,7 @@
     const spec = { ...semanticSpec(item), key, part }
     const option = meanings.get(key)
     if (option && option.kind !== 'date') delete spec.format
-    if (!part || (option && option.kind !== 'date') || wholeDate(item)) delete spec.part
+    if (!part || key.startsWith('custom.') || (option && option.kind !== 'date') || wholeDate(item)) delete spec.part
     setPath(item, 'semantic', Object.keys(spec).length > 1 ? spec : key)
   }
 
@@ -448,7 +458,7 @@
     return [
       h('label', { class: 'field', 'data-field-path': 'semantic', title: 'Valor do registro sintético coerente que preenche este campo' },
         h('span', { text: 'Significado' }), input, h('small', { class: 'hint', text: hint }), h('small', { class: 'field-message', 'data-message': 'semantic', hidden: true })),
-      chosen?.kind === 'date' && !wholeDate(item)
+      chosen?.kind === 'date' && !spec.key?.startsWith('custom.') && !wholeDate(item)
         ? control('Parte da data', 'semantic.part', 'semantic', { source: { semantic: spec }, choices: [['', 'Completa'], ...data.date_parts], tooltip: 'Parte da data escrita neste campo' })
         : null,
     ]
@@ -510,6 +520,60 @@
       h('div', {}, h('b', { text: title, 'data-titulo-inspetor': true }), h('small', { text: subtitle })))
   }
 
+  function suggestionControls(item) {
+    if (!isSuggestion(item)) return null
+    const { proposal, reason, issues = [] } = item.suggestion
+    const chosen = meanings.get(semanticSpec(item).key)
+    const body = [
+      h('p', { class: 'suggestion-summary', text: chosen ? `Significado sugerido: ${chosen.label}.` : proposal ? 'Sem categoria existente para este campo.' : 'Sem significado associado.' }),
+      reason ? h('p', { class: 'hint', text: reason }) : null,
+      ...issues.map(issue => h('p', { class: 'field-message', text: issue })),
+      proposal ? h('p', { class: 'hint', text: 'Escolha um significado existente em “Significado”, ajuste o tipo, crie uma categoria reutilizável abaixo ou rejeite a área.' }) : null,
+      h('div', { class: 'inspector-actions' },
+        h('button', { type: 'button', class: 'btn btn-sm btn-accept-suggestion', 'data-acao': 'aceitar-sugestao', text: 'Aceitar sugestão' }),
+        h('button', { type: 'button', class: 'btn btn-sm btn-danger', 'data-acao': 'rejeitar-sugestao', title: 'Remove a área sugerida (Delete)', text: 'Rejeitar' }),
+        h('button', { type: 'button', class: 'btn btn-sm', 'data-acao': 'proxima-sugestao', text: 'Próxima' })),
+    ]
+    if (proposal) {
+      const defaults = semanticDefaults(item, proposal)
+      const key = /^custom(\.[a-z][a-z0-9_]*){1,5}$/.test(proposal.key || '') ? proposal.key
+        : `custom.${normalize(proposal.label || item.label).replace(/[^a-z0-9]+/g, '_').replace(/^[^a-z]+|_+$/g, '').slice(0, 48) || 'campo'}`
+      const generator = semanticGeneratorSelect(defaults.generator)
+      const options = name => ({ 'data-generator-options': name, hidden: defaults.generator !== name })
+      body.push(h('details', { class: 'suggestion-new-definition' },
+        h('summary', { text: `Criar categoria “${proposal.label || item.label}”` }),
+        h('div', { class: 'form-stack compact' },
+          h('p', { class: 'hint', text: 'A categoria fica salva no seu espaço e é reutilizada em mapeamentos futuros. Campos médicos exigem fonte e regras próprias antes da geração.' }),
+          h('label', { class: 'field' }, h('span', { text: 'Identificador' }), h('input', { 'data-new-semantic': 'key', value: key, maxlength: 100, spellcheck: 'false' })),
+          h('label', { class: 'field' }, h('span', { text: 'Nome' }), h('input', { 'data-new-semantic': 'label', value: proposal.label || item.label, maxlength: 100 })),
+          h('label', { class: 'field' }, h('span', { text: 'Descrição' }), h('textarea', { 'data-new-semantic': 'description', rows: 2, maxlength: 500, text: proposal.description || item.label })),
+          h('label', { class: 'field' }, h('span', { text: 'Tipo do valor' }), semanticTypeSelect(defaults.type)),
+          h('label', { class: 'field' }, h('span', { text: 'Gerador' }), generator),
+          h('p', { class: 'hint', ...options('unavailable'), text: 'Sem gerador validado o modelo não pode ser publicado com este campo.' }),
+          h('label', { class: 'field', ...options('choices') }, h('span', { text: 'Valores permitidos, um por linha' }), h('textarea', { 'data-new-semantic': 'values', rows: 3, placeholder: 'Primeiro valor\nSegundo valor', text: defaults.values.join('\n') })),
+          h('small', { class: 'hint', ...options('choices'), text: 'Para data use AAAA-MM-DD; para hora use HH:MM; para sim ou não use true e false.' }),
+          h('div', { class: 'grid-2', ...options('integer_range') },
+            h('label', { class: 'field' }, h('span', { text: 'Mínimo' }), h('input', { type: 'number', 'data-new-semantic': 'min', value: 0 })),
+            h('label', { class: 'field' }, h('span', { text: 'Máximo' }), h('input', { type: 'number', 'data-new-semantic': 'max', value: defaults.max ?? 100 }))),
+          h('button', { type: 'button', class: 'btn btn-sm', 'data-acao': 'criar-semantica', text: 'Criar categoria e aceitar' }))))
+    }
+    return section('Sugestão da análise', body)
+  }
+
+  function semanticTypeSelect(value) {
+    const input = h('select', { 'data-new-semantic': 'data_type' })
+    for (const [key, label] of [['text', 'Texto'], ['integer', 'Inteiro'], ['boolean', 'Sim ou não'], ['date', 'Data'], ['time', 'Hora']]) input.add(new Option(label, key))
+    input.value = value
+    return input
+  }
+
+  function semanticGeneratorSelect(value) {
+    const input = h('select', { 'data-new-semantic': 'generator' })
+    for (const [key, label] of [['unavailable', 'Sem gerador validado'], ['choices', 'Lista de valores'], ['integer_range', 'Intervalo inteiro']]) input.add(new Option(label, key))
+    input.value = value
+    return input
+  }
+
   function renderInspector() {
     const item = target()
     documentPanel.hidden = Boolean(item)
@@ -538,6 +602,8 @@
     } else {
       const type = item.data_type || 'text'
       parts.push(inspectorHead(item.label || item.field_id || 'Campo sem ID', `${labels[type] || type}${item.custom_type ? ` · tipo ${item.custom_type}` : ''}`, data.type_icons?.[type] || 'type-text', category(item)))
+      const suggestion = suggestionControls(item)
+      if (suggestion) parts.push(suggestion)
       const issues = fieldIssues(item, selection.index)
       if (issues.length) parts.push(h('ul', { class: 'issues inspector-issues' }, issues.map(issue => h('li', { text: issue.message }))))
       parts.push(section('Identificação', [
@@ -550,7 +616,7 @@
       parts.push(dataSection(item))
       if (['checkbox', 'digit_sequence', 'text_sequence'].includes(type) || splitDate(item) || dnvBoxes(item)) parts.push(elementsSection(item))
       parts.push(geometrySection(item))
-      const known = new Set(['field_id', 'label', 'description', 'data_type', 'bbox', 'validation', 'elements', 'selection_mode', 'render_as_printed', 'always_redact', 'notes', 'bloco', 'custom_type', 'semantic'])
+      const known = new Set(['field_id', 'label', 'description', 'data_type', 'bbox', 'validation', 'elements', 'selection_mode', 'render_as_printed', 'always_redact', 'notes', 'bloco', 'custom_type', 'semantic', 'suggestion'])
       const preserved = Object.keys(item).filter(key => !known.has(key))
       parts.push(section('Avançado', [
         control('Exibir como texto digitado', 'render_as_printed', 'bool', { tooltip: 'Ignora a escrita manuscrita na geração' }),
@@ -609,6 +675,7 @@
     saveState.dataset.estado = saving ? 'salvando' : isDirty ? 'pendente' : saveState.dataset.estado === 'erro' ? 'erro' : 'salvo'
     app.querySelector('[data-estado-texto]').textContent = saving ? 'Salvando…' : isDirty ? 'Alterações não salvas' : saveState.dataset.estado === 'erro' ? 'Falha ao salvar' : 'Salvo'
     saveButton.disabled = saving || !isDirty
+    renderAnalysis()
     const publish = app.querySelector('[data-publicar]')
     if (publish) {
       const pending = publicationIssues()
@@ -625,6 +692,14 @@
   function publicationIssues() {
     const issues = fields.flatMap((item, index) => fieldIssues(item, index).map(issue => `${item.label || item.field_id || 'Campo sem ID'}: ${issue.message}`))
     if (!fields.length) issues.unshift('Adicione ao menos um campo ao documento')
+    const pending = pendingSuggestions().length
+    if (pending) issues.unshift(`Revise ${pending} sugestão(ões) antes de publicar`)
+    if (definition.provenance && !definition.provenance.reviewed) issues.unshift('Conclua a revisão do mapeamento assistido')
+    for (const item of fields) {
+      const key = semanticSpec(item).key
+      const spec = definition.semantic_definitions?.[key]
+      if (spec?.generator?.type === 'unavailable') issues.push(`${item.label}: configure um gerador validado para ${key}`)
+    }
     return issues
   }
 
@@ -810,7 +885,7 @@
     const handle = event.target.closest('[data-handle]')
     const item = target()
     if (handle && item) {
-      drag = { kind: 'resize', direction: handle.dataset.handle, start: position, original: [...item.bbox], before: { fields: clone(fields), layout: clone(layout) }, moved: false }
+      drag = { kind: 'resize', direction: handle.dataset.handle, start: position, original: [...item.bbox], before: { fields: clone(fields), layout: clone(layout), semantic_definitions: clone(definition.semantic_definitions), provenance: clone(definition.provenance) }, moved: false }
       svg.setPointerCapture(event.pointerId)
       return
     }
@@ -824,7 +899,7 @@
     if (!same) select(next)
     const current = target()
     drag = {
-      kind: 'move', start: position, client: [event.clientX, event.clientY], original: [...current.bbox], before: { fields: clone(fields), layout: clone(layout) }, moved: false,
+      kind: 'move', start: position, client: [event.clientX, event.clientY], original: [...current.bbox], before: { fields: clone(fields), layout: clone(layout), semantic_definitions: clone(definition.semantic_definitions), provenance: clone(definition.provenance) }, moved: false,
       children: selection.kind === 'field' && selection.element == null ? (current.elements || []).map(child => [...child.bbox]) : null,
     }
     svg.setPointerCapture(event.pointerId)
@@ -988,6 +1063,12 @@
 
   inspector.addEventListener('change', () => { editing = '' })
 
+  inspector.addEventListener('change', event => {
+    if (event.target.dataset.newSemantic !== 'generator') return
+    const container = event.target.closest('.suggestion-new-definition')
+    for (const options of container.querySelectorAll('[data-generator-options]')) options.hidden = options.dataset.generatorOptions !== event.target.value
+  })
+
   function applyTypeDefaults(item) {
     const rules = item.validation || {}
     if (item.data_type === 'uf' && !rules.allowed_values) item.validation = { ...rules, allowed_values: [...data.uf_values], max_edit_distance: 1 }
@@ -1032,6 +1113,7 @@
     if (!target()) return
     if (selection.kind === 'layout') commit(() => layout.elements.splice(selection.index, 1), null)
     else if (selection.element != null) commit(() => field().elements.splice(selection.element, 1), { ...selection, element: null })
+    else if (isSuggestion(field())) rejectSuggestion()
     else commit(() => fields.splice(selection.index, 1), null)
   }
 
@@ -1053,10 +1135,12 @@
   function undo() {
     const previous = past.at(-1)
     if (!previous) return
-    future = [{ fields: clone(fields), layout: clone(layout) }, ...future]
+    future = [{ fields: clone(fields), layout: clone(layout), semantic_definitions: clone(definition.semantic_definitions), provenance: clone(definition.provenance) }, ...future]
     past = past.slice(0, -1)
     fields = previous.fields
     layout = previous.layout
+    definition.semantic_definitions = previous.semantic_definitions
+    definition.provenance = previous.provenance
     if (!target()) selection = null
     editing = ''
     render()
@@ -1065,10 +1149,12 @@
   function redo() {
     const next = future[0]
     if (!next) return
-    past = [...past, { fields: clone(fields), layout: clone(layout) }]
+    past = [...past, { fields: clone(fields), layout: clone(layout), semantic_definitions: clone(definition.semantic_definitions), provenance: clone(definition.provenance) }]
     future = future.slice(1)
     fields = next.fields
     layout = next.layout
+    definition.semantic_definitions = next.semantic_definitions
+    definition.provenance = next.provenance
     if (!target()) selection = null
     editing = ''
     render()
@@ -1081,6 +1167,11 @@
     const state = await response.json()
     definition = state.definition
     data.semantic_inferred = state.semantic_inferred
+    if (state.model) data.model = state.model
+    if (state.semantic_options) {
+      meanings.clear()
+      for (const option of state.semantic_options) meanings.set(option.key, option)
+    }
     fields = clone(definition.fields)
     layout = state.layout ? clone(state.layout) : null
     revision = state.revision
@@ -1093,10 +1184,300 @@
   }
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify({ ...definition, fields }, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify(effectiveDefinition(), null, 2)], { type: 'application/json' })
     const link = h('a', { href: URL.createObjectURL(blob), download: `${data.mapping_id}.json` })
     link.click()
     setTimeout(() => URL.revokeObjectURL(link.href), 30000)
+  }
+
+  function effectiveDefinition() {
+    return { ...definition, fields }
+  }
+
+  const PROVENANCE_KEYS = ['method', 'provider', 'model', 'registry_version', 'analysis_id', 'analysis_source', 'page', 'created_at']
+  const assistUrl = (suffix = '') => `/modelos/${encodeURIComponent(data.model.id)}/mapear-ia${suffix}`
+  const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`
+
+  async function parseResponse(response) {
+    const text = await response.text()
+    let body = {}
+    try { body = JSON.parse(text) } catch {}
+    if (!response.ok) {
+      const page = new DOMParser().parseFromString(text, 'text/html')
+      throw new Error(body.error?.message || page.querySelector('[data-notice-title], .lead')?.textContent.trim() || `Falha HTTP ${response.status}`)
+    }
+    return body
+  }
+
+  function request(url, options = {}) {
+    return fetch(url, { credentials: 'same-origin', ...options, headers: { 'HX-Request': 'true', ...(options.headers || {}) } }).then(parseResponse)
+  }
+
+  function safeSuggestion(item, index) {
+    return isSuggestion(item) && item.suggestion.match === 'matched' && Boolean(semanticSpec(item).key) &&
+      !(item.suggestion.issues || []).length && !fieldIssues(item, index).length
+  }
+
+  function analysisPhase() {
+    const pending = pendingSuggestions().length
+    if (analysis?.status === 'failed' && dismissed !== `${analysis.id}:failed`) return 'failed'
+    if (['queued', 'running'].includes(analysis?.status)) return analysis.status
+    if (readyJob) return 'ready'
+    if (pending) return 'review'
+    return definition.provenance?.reviewed && definition.provenance.analysis_id && dirty() ? 'done' : null
+  }
+
+  function providerNote(provenance) {
+    if (!provenance) return ''
+    return provenance.provider && provenance.provider !== 'none'
+      ? `Associações apoiadas por IA local (${provenance.model || provenance.provider}).`
+      : 'Análise sem IA local: associações por regras e geometria do PDF.'
+  }
+
+  function setText(selector, text) {
+    const node = aiProgress.querySelector(selector)
+    if (node.textContent !== text) node.textContent = text
+    node.hidden = !text
+  }
+
+  function renderAnalysis() {
+    const button = app.querySelector('[data-acao="mapear-ia"]')
+    const busy = ['queued', 'running'].includes(analysis?.status)
+    if (button) {
+      button.hidden = data.model.status !== 'draft'
+      button.disabled = busy
+    }
+    if (!aiProgress) return
+    const phase = analysisPhase()
+    aiProgress.hidden = !phase || dismissed === `${analysis?.id || definition.provenance?.analysis_id}:${phase}`
+    if (aiProgress.hidden) return
+    const pending = pendingSuggestions().length
+    const safe = fields.filter(safeSuggestion).length
+    const count = readyJob?.proposal?.fields?.length || 0
+    const [title, detail, note] = {
+      queued: ['Análise na fila', analysis?.stage || 'Aguardando processamento', ''],
+      running: ['Analisando o documento', analysis?.stage || 'Processando o PDF', ''],
+      failed: ['Análise não concluída', analysis?.error || 'Não foi possível analisar o documento. Tente novamente.', ''],
+      ready: ['Sugestões prontas', count ? `${plural(count, 'área sugerida', 'áreas sugeridas')}. Suas alterações foram mantidas; importe para revisar no documento.` : 'Nenhuma área foi detectada no PDF.', providerNote(readyJob?.proposal?.provenance)],
+      review: ['Revisão das sugestões', `${plural(pending, 'sugestão pendente', 'sugestões pendentes')}. Selecione cada área tracejada para aceitar, ajustar ou rejeitar.`, providerNote(definition.provenance)],
+      done: ['Revisão concluída', 'Salve o mapeamento e publique o modelo para usá-lo na geração.', ''],
+    }[phase]
+    aiProgress.dataset.status = { failed: 'failed', done: 'succeeded' }[phase] || 'running'
+    setText('[data-ai-progress-title]', title)
+    setText('[data-ai-progress-detail]', detail)
+    setText('[data-ai-progress-note]', note)
+    const bar = aiProgress.querySelector('[data-ai-progress-bar]')
+    bar.hidden = !busy
+    bar.value = Math.max(0, Math.min(100, Number(analysis?.progress) || 0))
+    const visible = { 'importar-proposta': phase === 'ready' && count > 0, 'proxima-sugestao': phase === 'review',
+      'aceitar-seguras': phase === 'review' && safe > 0, 'descartar-sugestoes': phase === 'review' }
+    for (const [action, show] of Object.entries(visible)) aiProgress.querySelector(`[data-acao="${action}"]`).hidden = !show
+    aiProgress.querySelector('[data-acao="aceitar-seguras"]').textContent = `Aceitar associações seguras (${safe})`
+  }
+
+  function hideAnalysis() {
+    const phase = analysisPhase()
+    dismissed = `${analysis?.id || definition.provenance?.analysis_id}:${phase}`
+    if (['failed', 'ready'].includes(phase)) store('analise-oculta', dismissed)
+    renderAnalysis()
+  }
+
+  async function startAnalysis() {
+    if (['queued', 'running'].includes(analysis?.status)) return
+    const pending = pendingSuggestions().length
+    if (pending && !window.confirm(`A nova análise substituirá ${plural(pending, 'sugestão ainda não revisada', 'sugestões ainda não revisadas')}. Continuar?`)) return
+    readyJob = null
+    try {
+      analysis = await request(assistUrl(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 1 }) })
+    } catch (error) {
+      toast(error.message || 'Não foi possível iniciar a análise')
+      return
+    }
+    renderAnalysis()
+    await track(analysis.id, true)
+  }
+
+  async function track(id, auto) {
+    const started = Date.now()
+    try {
+      while (Date.now() - started < 15 * 60 * 1000) {
+        const job = await request(assistUrl(`/${encodeURIComponent(id)}`))
+        analysis = job
+        if (job.status === 'succeeded') {
+          readyJob = job
+          if (auto && !dirty() && job.proposal?.fields?.length) await importReady(job)
+          else renderAnalysis()
+          return
+        }
+        renderAnalysis()
+        if (job.status !== 'queued' && job.status !== 'running') return
+        await new Promise(resolve => setTimeout(resolve, 1500))
+      }
+      throw new Error('A análise está demorando mais que o esperado. Recarregue a página mais tarde para ver o resultado.')
+    } catch (error) {
+      analysis = { ...(analysis || {}), id, status: 'failed', error: error.message || 'Não foi possível acompanhar a análise' }
+      renderAnalysis()
+    }
+  }
+
+  async function importReady(fresh) {
+    if (!readyJob) return
+    try {
+      const job = fresh || await request(assistUrl(`/${encodeURIComponent(readyJob.id)}`))
+      if (job.stale) throw new Error('O PDF do modelo mudou depois da análise. Execute uma nova análise.')
+      importProposal(job.proposal)
+      readyJob = null
+      renderAnalysis()
+    } catch (error) {
+      toast(error.message || 'Não foi possível importar as sugestões')
+    }
+  }
+
+  function overlap(a, b) {
+    const width = Math.min(a[2], b[2]) - Math.max(a[0], b[0])
+    const height = Math.min(a[3], b[3]) - Math.max(a[1], b[1])
+    if (width <= 0 || height <= 0) return 0
+    const area = box => (box[2] - box[0]) * (box[3] - box[1])
+    return width * height / (area(a) + area(b) - width * height)
+  }
+
+  function importProposal(proposal) {
+    if (!Array.isArray(proposal?.fields) || !Array.isArray(proposal.page_size_px) || proposal.page_size_px.some((value, index) => Math.abs(value - size[index]) > 2)) {
+      throw new Error('A proposta não corresponde à página aberta no editor. Execute uma nova análise.')
+    }
+    const kept = fields.filter(item => !isSuggestion(item))
+    const used = new Set(kept.map(item => String(item.field_id)))
+    const incoming = []
+    let skipped = 0
+    for (const suggested of clone(proposal.fields)) {
+      const bbox = bounded(suggested.bbox)
+      if (kept.some(item => overlap(item.bbox, bbox) >= 0.6)) {
+        skipped += 1
+        continue
+      }
+      const original = String(suggested.field_id || '')
+      const id = uniqueId(original || suggested.label, used)
+      used.add(id)
+      const rename = child => id !== original && String(child.element_id).startsWith(`${original}_`) ? `${id}${String(child.element_id).slice(original.length)}` : child.element_id
+      const item = { ...suggested, field_id: id, bbox }
+      if (Array.isArray(suggested.elements)) item.elements = suggested.elements.map(child => ({ ...child, element_id: rename(child), bbox: bounded(child.bbox, 1) }))
+      incoming.push(item)
+    }
+    if (!incoming.length && kept.length === fields.length) {
+      toast(skipped ? 'As áreas detectadas já estão mapeadas; nenhuma sugestão nova.' : 'A análise não encontrou áreas para sugerir.', 'sucesso')
+      return
+    }
+    const source = proposal.provenance || {}
+    commit(() => {
+      fields = [...kept, ...incoming]
+      definition.provenance = { ...Object.fromEntries(PROVENANCE_KEYS.map(name => [name, source[name] ?? null])), reviewed: !incoming.length, accepted: 0, rejected: 0 }
+      definition.semantic_definitions = { ...(definition.semantic_definitions || {}), ...(proposal.semantic_definitions || {}) }
+    }, null)
+    if (incoming.length) {
+      showTab('contextos')
+      select({ kind: 'field', index: kept.length, element: null }, true)
+    }
+    toast(`${plural(incoming.length, 'sugestão adicionada', 'sugestões adicionadas')} para revisão${skipped ? ` · ${plural(skipped, 'área já mapeada foi ignorada', 'áreas já mapeadas foram ignoradas')}` : ''}`, 'sucesso')
+  }
+
+  function review(indices, accept) {
+    const chosen = new Set(indices.filter(index => isSuggestion(fields[index])))
+    if (!chosen.size) return 0
+    commit(() => {
+      if (accept) for (const index of chosen) delete fields[index].suggestion
+      else fields = fields.filter((_, index) => !chosen.has(index))
+      if (definition.provenance) {
+        const counter = accept ? 'accepted' : 'rejected'
+        definition.provenance = { ...definition.provenance, [counter]: (definition.provenance[counter] || 0) + chosen.size }
+        if (!pendingSuggestions().length) definition.provenance = { ...definition.provenance, reviewed: true, reviewed_at: new Date().toISOString() }
+      }
+    }, null)
+    return chosen.size
+  }
+
+  function goToSuggestion(from = 0) {
+    const order = [...fields.keys()].filter(index => isSuggestion(fields[index]))
+    const index = order.find(position => position >= from) ?? order[0]
+    select(index == null ? null : { kind: 'field', index, element: null }, index != null)
+  }
+
+  function acceptSuggestion() {
+    const index = selection?.index
+    if (!isSuggestion(field())) return
+    review([index], true)
+    goToSuggestion(index + 1)
+  }
+
+  function rejectSuggestion() {
+    const index = selection?.index
+    if (!isSuggestion(field())) return
+    review([index], false)
+    goToSuggestion(index)
+  }
+
+  function acceptSafe() {
+    const count = review(fields.flatMap((item, index) => safeSuggestion(item, index) ? [index] : []), true)
+    if (count) toast(`${plural(count, 'associação aceita', 'associações aceitas')}. Revise as sugestões restantes.`, 'sucesso')
+  }
+
+  function discardSuggestions() {
+    const pending = fields.flatMap((item, index) => isSuggestion(item) ? [index] : [])
+    if (!pending.length || !window.confirm(`Descartar ${plural(pending.length, 'sugestão ainda não revisada', 'sugestões ainda não revisadas')}? Os campos já aceitos são mantidos.`)) return
+    review(pending, false)
+  }
+
+  function semanticDefaults(item, proposal) {
+    const kind = proposal.kind
+    const type = item.data_type === 'digit_sequence' ? 'integer' : ['boolean', 'integer', 'date', 'time'].includes(kind) ? kind : 'text'
+    const values = item.data_type === 'checkbox' ? [...new Set((item.elements || []).map(child => String(child.value ?? child.label ?? '').trim()).filter(Boolean))] : []
+    if (values.length >= 2 && (type === 'text' || item.data_type === 'checkbox')) return { type: 'text', generator: 'choices', values }
+    if (type === 'integer') return { type, generator: 'integer_range', values, max: Math.min(1000000, 10 ** Math.min(6, (item.elements || []).length || 3) - 1) }
+    return { type, generator: 'unavailable', values: [] }
+  }
+
+  async function createSemanticDefinition(button) {
+    const item = field()
+    if (!isSuggestion(item)) return
+    const container = button.closest('.suggestion-new-definition')
+    const value = name => container.querySelector(`[data-new-semantic="${name}"]`)?.value.trim() || ''
+    const dataType = value('data_type')
+    const method = value('generator')
+    let generator = { type: method }
+    if (method === 'choices') {
+      const lines = value('values').split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+      if (dataType === 'boolean' && lines.some(line => !['true', 'false'].includes(line.toLowerCase()))) {
+        toast('Para valores de sim ou não, use true ou false, um por linha.')
+        return
+      }
+      generator.values = dataType === 'integer' ? lines.map(Number) : dataType === 'boolean' ? lines.map(line => line.toLowerCase() === 'true') : lines
+    } else if (method === 'integer_range') generator = { type: method, min: Number(value('min')), max: Number(value('max')) }
+    button.disabled = true
+    try {
+      const spec = await request(`/modelos/${encodeURIComponent(data.model.id)}/definicoes-semanticas`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: value('key'), label: value('label'), description: value('description'), data_type: dataType, generator }),
+      })
+      meanings.set(spec.key, { key: spec.key, label: spec.label, description: spec.description, kind: spec.data_type, group: 'Personalizados' })
+      if (field() !== item) {
+        render()
+        toast('Categoria criada. Selecione o campo desejado para associá-la.', 'sucesso')
+        return
+      }
+      commit(() => {
+        definition.semantic_definitions = { ...(definition.semantic_definitions || {}), [spec.key]: Object.fromEntries(['key', 'label', 'description', 'data_type', 'generator'].map(name => [name, spec[name]])) }
+        item.semantic = spec.key
+        const compatible = { boolean: ['checkbox', 'text', 'enum'], integer: ['integer', 'decimal', 'digit_sequence', 'checkbox'], date: ['date', 'digit_sequence'], time: ['time', 'digit_sequence'], text: ['text', 'enum', 'person_name', 'occupation', 'checkbox'] }[spec.data_type]
+        if (!compatible.includes(item.data_type)) {
+          item.data_type = { boolean: 'text', integer: 'integer', date: 'date', time: 'time', text: 'text' }[spec.data_type]
+          applyTypeDefaults(item)
+        }
+      })
+      acceptSuggestion()
+      toast(`Categoria “${spec.label}” criada, associada e aceita. Ela fica disponível para outros mapeamentos.`, 'sucesso')
+    } catch (error) {
+      button.disabled = false
+      toast(error.message || 'Não foi possível criar a categoria')
+    }
   }
 
   function togglePanel(side) {
@@ -1172,6 +1553,10 @@
     const action = event.target.closest('[data-acao]')?.dataset.acao
     const actions = {
       duplicar: duplicate, excluir: remove, desfazer: undo, refazer: redo, recarregar: reload, exportar: exportJson,
+      'mapear-ia': startAnalysis, 'fechar-ai-progresso': hideAnalysis, 'importar-proposta': () => importReady(),
+      'aceitar-sugestao': acceptSuggestion, 'rejeitar-sugestao': rejectSuggestion, 'aceitar-seguras': acceptSafe, 'descartar-sugestoes': discardSuggestions,
+      'proxima-sugestao': () => goToSuggestion(selection?.kind === 'field' ? selection.index + 1 : 0),
+      'criar-semantica': () => createSemanticDefinition(event.target.closest('[data-acao]')),
       afastar: () => setZoom(zoom / OCRSDPdfView.ZOOM_STEP), aproximar: () => setZoom(zoom * OCRSDPdfView.ZOOM_STEP), ajustar: () => fit('page'), largura: () => fit('width'),
       'painel-esquerdo': () => togglePanel('esquerdo'), 'painel-direito': () => togglePanel('direito'),
       'tela-cheia': () => document.fullscreenElement ? document.exitFullscreen() : app.requestFullscreen?.(),
@@ -1257,7 +1642,7 @@
   }
 
   function payload(parameters) {
-    parameters.definition = JSON.stringify({ ...definition, fields })
+    parameters.definition = JSON.stringify(effectiveDefinition())
     parameters.layout = layout ? JSON.stringify(layout) : ''
   }
 
@@ -1318,7 +1703,10 @@
     renderHeader()
   })
 
-  document.body.addEventListener('htmx:oobAfterSwap', () => renderHeader())
+  document.body.addEventListener('htmx:oobAfterSwap', event => {
+    if (event.detail.target?.id === 'publicacao') data.model.status = app.querySelector('#publicacao .state-published') ? 'published' : 'draft'
+    renderHeader()
+  })
 
   document.addEventListener('htmx:beforeRequest', event => {
     if (event.target.closest?.('[data-saida]')) leaving = true
@@ -1410,4 +1798,6 @@
   for (const name of JSON.parse(stored('grupos') || '[]')) app.querySelector(`[data-grupo="${CSS.escape(name)}"] .group-toggle`)?.setAttribute('aria-expanded', 'false')
   render()
   requestAnimationFrame(() => fit('width'))
+  if (['queued', 'running'].includes(analysis?.status)) track(analysis.id, true)
+  else if (analysis?.status === 'succeeded' && data.model.status === 'draft' && definition.provenance?.analysis_id !== analysis.id && !fields.some(isSuggestion)) track(analysis.id, false)
 })()

@@ -58,7 +58,7 @@
 
   const form = document.querySelector('[data-field-form]')
   if (form) {
-    const boxes = [...form.querySelectorAll('input[name="fields"]')]
+    const boxes = [...form.querySelectorAll('input[name="fields"]:not(:disabled)')]
     const entries = [...form.querySelectorAll('[data-field-id]')]
     const list = form.querySelector('.wizard-field-scroll')
     const count = document.getElementById('wizard-field-count')
@@ -87,10 +87,10 @@
       })
       entries.forEach(entry => entry.classList.toggle('is-selected', selected.has(entry.dataset.fieldId)))
       form.querySelectorAll('[data-field-section]').forEach(section => {
-        const group = [...section.querySelectorAll('input[name="fields"]')]
+        const group = [...section.querySelectorAll('input[name="fields"]:not(:disabled)')]
         const chosen = group.filter(box => box.checked).length
         const toggle = section.querySelector('[data-field-group-checkbox]')
-        toggle.checked = chosen === group.length
+        toggle.checked = group.length > 0 && chosen === group.length
         toggle.indeterminate = chosen > 0 && chosen < group.length
         section.querySelector('[data-group-count]').textContent = `${chosen} de ${group.length}`
       })
@@ -109,7 +109,7 @@
       }
       if (event.target.matches('[data-selected-only]')) filter()
       if (event.target.matches('[data-field-group-checkbox]')) {
-        event.target.closest('[data-field-section]').querySelectorAll('input[name="fields"]').forEach(box => { box.checked = event.target.checked })
+        event.target.closest('[data-field-section]').querySelectorAll('input[name="fields"]:not(:disabled)').forEach(box => { box.checked = event.target.checked })
         sync()
       }
     })

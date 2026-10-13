@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "macros.html" import icon %}
 {% block title %}Resultados{% endblock %}
-{% block scripts %}<script src="/static/results.js?v={{ VERSION }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ asset('results.js') }}" defer></script>{% endblock %}
 {% block content %}
 <section class="results-library">
   <header class="results-head"><h1>Resultados</h1></header>

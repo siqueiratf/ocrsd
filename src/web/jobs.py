@@ -20,6 +20,7 @@ from src.web.settings import Settings
 
 
 SEED_SEQUENCE = itertools.count()
+ANALYSIS_CONTEXTS = {"dnv", "certidao_nascimento", "declaracao_obito"}
 
 
 def fresh_seed(db: sqlite3.Connection) -> int:
@@ -90,6 +91,13 @@ class JobStore:
                     UNIQUE(owner_id, key)
                 );
                 CREATE INDEX IF NOT EXISTS custom_semantics_owner ON custom_semantics(owner_id, label);
+                CREATE TABLE IF NOT EXISTS analyses (
+                    id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, model_id TEXT NOT NULL,
+                    status TEXT NOT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL,
+                    started_at REAL, finished_at REAL, error TEXT, result TEXT, provenance TEXT
+                );
+                CREATE INDEX IF NOT EXISTS analyses_model ON analyses(model_id, owner_id, created_at);
+                CREATE INDEX IF NOT EXISTS analyses_queue ON analyses(status, created_at);
                 CREATE TABLE IF NOT EXISTS preset_grants (
                     preset_id TEXT NOT NULL, workspace_id TEXT NOT NULL, created_at REAL NOT NULL,
                     PRIMARY KEY (preset_id, workspace_id)
@@ -117,6 +125,16 @@ class JobStore:
                 db.execute("ALTER TABLE jobs ADD COLUMN source_mapping TEXT")
             if "source_template" not in columns:
                 db.execute("ALTER TABLE jobs ADD COLUMN source_template TEXT")
+            for column in ("records", "replay_of"):
+                if column not in columns:
+                    db.execute(f"ALTER TABLE jobs ADD COLUMN {column} TEXT")
+            analysis_columns = {row[1] for row in db.execute("PRAGMA table_info(analyses)")}
+            for column, definition in (("page", "INTEGER NOT NULL DEFAULT 1"), ("context", "TEXT"), ("mapping_id", "TEXT NOT NULL DEFAULT 'default'"),
+                                       ("model_version", "INTEGER"), ("mapping_revision", "TEXT"), ("pdf_sha256", "TEXT"),
+                                       ("progress", "INTEGER NOT NULL DEFAULT 0"), ("stage", "TEXT NOT NULL DEFAULT ''"),
+                                       ("expires_at", "REAL NOT NULL DEFAULT 0"), ("client", "TEXT")):
+                if column not in analysis_columns:
+                    db.execute(f"ALTER TABLE analyses ADD COLUMN {column} {definition}")
             preset_columns = {row[1] for row in db.execute("PRAGMA table_info(presets)")}
             for column, definition in (("description", "TEXT NOT NULL DEFAULT ''"), ("version", "INTEGER NOT NULL DEFAULT 1"),
                                        ("share_token_hash", "TEXT")):
@@ -178,8 +196,23 @@ class JobStore:
             return None
         return {"definition": json.loads(row["source_mapping"]), "template": template}
 
+    def save_records(self, identifier: str, records: dict) -> None:
+        with self.connection() as db:
+            db.execute("UPDATE jobs SET records=? WHERE id=?", (json.dumps(records, ensure_ascii=False), identifier))
+
+    def records(self, row: dict) -> dict | None:
+        try:
+            records = json.loads(row["records"]) if row.get("records") else None
+        except ValueError:
+            return None
+        return records if isinstance(records, dict) and isinstance(records.get("documents"), list) else None
+
+    def replay(self, row: dict) -> dict | None:
+        records = self.records(row) if row.get("replay_of") else None
+        return {**records, "source_job": row["replay_of"]} if records else None
+
     def submit(self, options: GenerationOptions, client: str, owner_id: str | None = None, preset: dict | None = None,
-               source: dict | None = None) -> tuple[dict, str]:
+               source: dict | None = None, replay: tuple[str, dict] | None = None) -> tuple[dict, str]:
         if not self.settings.accepting_jobs:
             raise ServiceError(503, "maintenance", "Novos jobs temporariamente suspensos")
         template_hash = self.keep_template(source["template"]) if source else None
@@ -190,22 +223,22 @@ class JobStore:
         client_hash = hashlib.sha256(client.encode()).hexdigest()
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            if db.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','running')").fetchone()[0] >= self.settings.max_pending:
+            if self.pending(db) >= self.settings.max_pending:
                 raise ServiceError(429, "queue_full", "Fila cheia; tente mais tarde")
             if db.execute("SELECT COUNT(*) FROM jobs WHERE client=? AND created_at>?", (client_hash, now - 3600)).fetchone()[0] >= self.settings.jobs_per_hour:
                 raise ServiceError(429, "rate_limit", "Limite horário de jobs atingido")
             reserved = db.execute("SELECT COUNT(*) FROM jobs WHERE status != 'expired'").fetchone()[0]
-            if (reserved + 1) * self.settings.max_job_bytes > self.settings.max_storage_bytes:
+            if (reserved + 1) * self.settings.max_job_bytes + self.cache_bytes() > self.settings.max_storage_bytes:
                 raise ServiceError(429, "storage_quota", "Armazenamento reservado esgotado; aguarde a expiração")
             if shutil.disk_usage(self.root).free < self.settings.min_free_bytes + self.settings.max_job_bytes:
                 raise ServiceError(503, "storage_full", "Espaço insuficiente para um novo job")
             if options.seed is None:
                 options = options.model_copy(update={"seed": fresh_seed(db)})
-            db.execute("INSERT INTO jobs (id,token_hash,client,options,status,total,created_at,updated_at,expires_at,owner_id,preset,source_mapping,source_template) "
-                       "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            db.execute("INSERT INTO jobs (id,token_hash,client,options,status,total,created_at,updated_at,expires_at,owner_id,preset,source_mapping,source_template,replay_of,records) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                        (identifier, hashlib.sha256(token.encode()).hexdigest(), client_hash, options.model_dump_json(), "queued", options.count, now, now,
                         now + self.settings.retention_hours * 3600, owner_id, json.dumps(preset, ensure_ascii=False) if preset else None,
-                        mapping, template_hash))
+                        mapping, template_hash, replay[0] if replay else None, json.dumps(replay[1], ensure_ascii=False) if replay else None))
         return self.get(identifier), token
 
     def get(self, identifier: str) -> dict:
@@ -365,6 +398,25 @@ class JobStore:
                 for path in directory.iterdir():
                     if path.is_file() and path.name not in published:
                         path.unlink()
+        self.recover_analyses()
+
+    @property
+    def ai_cache(self) -> Path:
+        return self.root / "ai-cache"
+
+    def cache_bytes(self) -> int:
+        return sum(path.stat().st_size for path in self.ai_cache.glob("*.json") if path.is_file()) if self.ai_cache.is_dir() else 0
+
+    def cleanup_ai_cache(self) -> None:
+        if not self.ai_cache.is_dir():
+            return
+        limit = time.time() - self.settings.retention_hours * 3600
+        for path in self.ai_cache.iterdir():
+            try:
+                if path.is_file() and path.stat().st_mtime < limit:
+                    path.unlink()
+            except OSError:
+                pass
 
     def directory(self, identifier: str) -> Path:
         if len(identifier) != 32 or any(c not in "0123456789abcdef" for c in identifier):
@@ -380,6 +432,8 @@ class JobStore:
             shutil.rmtree(self.directory(row[0]), ignore_errors=True)
         with self.connection() as db:
             db.execute("DELETE FROM jobs WHERE status='expired' AND expires_at<?", (now - 86400,))
+        self.cleanup_analyses()
+        self.cleanup_ai_cache()
 
     def artifacts(self, row: dict) -> list[dict]:
         if row["status"] == "expired" or row["expires_at"] < time.time():
@@ -423,6 +477,157 @@ class JobStore:
         if not row or owner_id is None or row["owner_id"] != owner_id:
             raise ServiceError(404, "not_found", "Modelo não encontrado")
         return dict(row)
+
+    def analysis_directory(self, identifier: str) -> Path:
+        if len(identifier) != 32 or any(character not in "0123456789abcdef" for character in identifier):
+            raise ServiceError(404, "not_found", "Análise não encontrada")
+        return self.root / "analyses" / identifier
+
+    def analysis_context(self, model: dict) -> str | None:
+        from src.semantic.resolve import document_context
+
+        path = self.model_directory(model["id"]) / f'{model["mapping_id"]}.json'
+        try:
+            template_id = json.loads(path.read_text(encoding="utf-8")).get("template_id")
+        except (OSError, ValueError, AttributeError):
+            template_id = None
+        return next((context for value in (template_id, model["label"])
+                     if (context := document_context(value)) in ANALYSIS_CONTEXTS), None)
+
+    def submit_analysis(self, model_id: str, owner_id: str, page: int = 1, client: str | None = None) -> dict:
+        from src.mapping_assist.analysis import page_count
+
+        if not self.settings.accepting_jobs:
+            raise ServiceError(503, "maintenance", "Novas análises temporariamente suspensas")
+        model = self.model(model_id, owner_id)
+        if model["status"] != "draft":
+            raise ServiceError(409, "model_published", "Duplique o modelo publicado antes de analisar o mapeamento")
+        if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+            raise ServiceError(422, "invalid_page", "Informe uma página válida a partir de 1")
+        template = self.model_directory(model_id) / "template.pdf"
+        if not template.is_file() or template.is_symlink():
+            raise ServiceError(422, "invalid_pdf", "Template PDF do modelo indisponível")
+        if template.stat().st_size > self.settings.max_upload_bytes:
+            raise ServiceError(413, "file_too_large", "Template PDF excede o limite de upload")
+        try:
+            pages = page_count(template)
+        except Exception as exc:
+            raise ServiceError(422, "invalid_pdf", "Template PDF inválido") from exc
+        if page > pages:
+            raise ServiceError(422, "invalid_page", f"O PDF tem apenas {pages} página(s)")
+        identifier = uuid4().hex
+        directory = self.analysis_directory(identifier)
+        directory.mkdir(mode=0o700, parents=True)
+        try:
+            snapshot = directory / "template.pdf"
+            shutil.copyfile(template, snapshot)
+            pdf_sha256 = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+            mapping_path = self.model_directory(model_id) / f'{model["mapping_id"]}.json'
+            mapping_revision = hashlib.sha256(mapping_path.read_bytes()).hexdigest() if mapping_path.is_file() else None
+            now = time.time()
+            client_hash = hashlib.sha256(client.encode()).hexdigest() if client else None
+            context = self.analysis_context(model)
+            with self.connection() as db:
+                db.execute("BEGIN IMMEDIATE")
+                active = db.execute("SELECT id FROM analyses WHERE model_id=? AND owner_id=? AND page=? AND status IN ('queued','running') "
+                                    "ORDER BY created_at DESC LIMIT 1", (model_id, owner_id, page)).fetchone()
+                if active is None:
+                    if self.pending(db, "analyses") >= self.settings.max_pending_analyses:
+                        raise ServiceError(429, "queue_full", "Fila de análises cheia; tente mais tarde")
+                    recent = db.execute("SELECT COUNT(*) FROM analyses WHERE created_at>? AND (owner_id=? OR client=?)",
+                                        (now - 3600, owner_id, client_hash)).fetchone()[0]
+                    if recent >= self.settings.jobs_per_hour:
+                        raise ServiceError(429, "rate_limit", "Limite horário de análises atingido")
+                    db.execute("INSERT INTO analyses (id,owner_id,model_id,page,context,mapping_id,model_version,mapping_revision,pdf_sha256,"
+                               "status,stage,created_at,updated_at,expires_at,client) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                               (identifier, owner_id, model_id, page, context, model["mapping_id"], model["version"],
+                                mapping_revision, pdf_sha256, "queued", "Aguardando análise", now, now,
+                                now + self.settings.retention_hours * 3600, client_hash))
+        except Exception:
+            shutil.rmtree(directory, ignore_errors=True)
+            raise
+        if active is not None:
+            shutil.rmtree(directory, ignore_errors=True)
+            return self.analysis(active["id"], owner_id)
+        return self.analysis(identifier, owner_id)
+
+    @staticmethod
+    def pending(db: sqlite3.Connection, table: str = "jobs") -> int:
+        return db.execute(f"SELECT COUNT(*) FROM {table} WHERE status IN ('queued','running')").fetchone()[0]
+
+    @staticmethod
+    def analysis_view(data: dict) -> dict:
+        if data["status"] == "expired":
+            raise ServiceError(410, "expired", "Resultado da análise expirado")
+        return {"id": data["id"], "model_id": data["model_id"], "page": data["page"], "status": data["status"],
+                "progress": data["progress"], "stage": data["stage"], "error": data["error"],
+                "provenance": json.loads(data["provenance"]) if data["provenance"] else None,
+                "proposal": json.loads(data["result"]) if data["result"] else None,
+                "created_at": data["created_at"], "updated_at": data["updated_at"],
+                "started_at": data["started_at"], "finished_at": data["finished_at"]}
+
+    def analysis(self, identifier: str, owner_id: str) -> dict:
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM analyses WHERE id=? AND owner_id=?", (identifier, owner_id)).fetchone()
+        if row is None:
+            raise ServiceError(404, "not_found", "Análise não encontrada")
+        return self.analysis_view(dict(row))
+
+    def latest_analysis(self, model_id: str, owner_id: str) -> dict | None:
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM analyses WHERE model_id=? AND owner_id=? AND status!='expired' "
+                             "ORDER BY created_at DESC LIMIT 1", (model_id, owner_id)).fetchone()
+        return self.analysis_view(dict(row)) if row else None
+
+    def analysis_row(self, identifier: str) -> dict | None:
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM analyses WHERE id=?", (identifier,)).fetchone()
+        return dict(row) if row else None
+
+    def claim_analysis(self) -> dict | None:
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM analyses WHERE status='queued' ORDER BY created_at LIMIT 1").fetchone()
+            if row is None:
+                return None
+            now = time.time()
+            db.execute("UPDATE analyses SET status='running',progress=5,stage='Preparando PDF',started_at=?,updated_at=? WHERE id=?",
+                       (now, now, row["id"]))
+            return dict(db.execute("SELECT * FROM analyses WHERE id=?", (row["id"],)).fetchone())
+
+    def update_analysis_progress(self, identifier: str, progress: int, stage: str) -> None:
+        with self.connection() as db:
+            db.execute("UPDATE analyses SET progress=?,stage=?,updated_at=? WHERE id=? AND status='running'",
+                       (max(0, min(progress, 99)), stage[:100], time.time(), identifier))
+
+    def finish_analysis(self, identifier: str, proposal: dict | None = None, error: str | None = None,
+                        provenance: dict | None = None) -> None:
+        now = time.time()
+        failed = error is not None or proposal is None
+        with self.connection() as db:
+            db.execute("UPDATE analyses SET status=?,progress=100,stage=?,result=?,error=?,provenance=?,updated_at=?,finished_at=?,expires_at=? "
+                       "WHERE id=? AND status='running'",
+                       ("failed" if failed else "succeeded", "Falha na análise" if failed else "Proposta pronta para revisão",
+                        None if failed else json.dumps(proposal, ensure_ascii=False),
+                        (error or "A análise não pôde ser concluída") if failed else None,
+                        json.dumps(provenance, ensure_ascii=False) if provenance else None,
+                        now, now, now + self.settings.retention_hours * 3600, identifier))
+        shutil.rmtree(self.analysis_directory(identifier), ignore_errors=True)
+
+    def recover_analyses(self) -> None:
+        with self.connection() as db:
+            rows = db.execute("SELECT id FROM analyses WHERE status='running'").fetchall()
+        for row in rows:
+            self.finish_analysis(row[0], error="Worker interrompido; inicie uma nova análise")
+
+    def cleanup_analyses(self) -> None:
+        now = time.time()
+        with self.connection() as db:
+            rows = db.execute("SELECT id FROM analyses WHERE status IN ('succeeded','failed') AND expires_at<?", (now,)).fetchall()
+            db.execute("UPDATE analyses SET status='expired',result=NULL WHERE status IN ('succeeded','failed') AND expires_at<?", (now,))
+            db.execute("DELETE FROM analyses WHERE status='expired' AND expires_at<?", (now - 86400,))
+        for row in rows:
+            shutil.rmtree(self.analysis_directory(row["id"]), ignore_errors=True)
 
     def list_models(self, owner_id: str) -> list[dict]:
         with self.connection() as db:
@@ -540,8 +745,16 @@ class JobStore:
             used = db.execute("SELECT COUNT(*) FROM jobs WHERE owner_id=? AND json_extract(options,'$.document_type')=?", (owner_id, identifier)).fetchone()[0]
             if used:
                 raise ServiceError(409, "model_in_use", "O modelo possui gerações associadas e não pode ser excluído")
+            if db.execute("SELECT 1 FROM analyses WHERE model_id=? AND owner_id=? AND status IN ('queued','running')",
+                          (identifier, owner_id)).fetchone():
+                raise ServiceError(409, "analysis_in_progress", "Aguarde o fim da análise antes de excluir o modelo")
+            analyses = [row[0] for row in db.execute("SELECT id FROM analyses WHERE model_id=? AND owner_id=?",
+                                                     (identifier, owner_id)).fetchall()]
+            db.execute("DELETE FROM analyses WHERE model_id=? AND owner_id=?", (identifier, owner_id))
             db.execute("DELETE FROM models WHERE id=?", (identifier,))
         shutil.rmtree(self.model_directory(identifier))
+        for analysis_id in analyses:
+            shutil.rmtree(self.analysis_directory(analysis_id), ignore_errors=True)
 
     def list_presets(self, owner_id: str) -> list[dict]:
         with self.connection() as db:

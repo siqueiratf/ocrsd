@@ -7,13 +7,14 @@ from typing import Any, Callable, Iterable, Sequence
 
 from src.semantic.constraints import violations
 from src.semantic.generators import GENERATORS
-from src.semantic.registry import ENTITY_KEYS, semantic_field
+from src.semantic.registry import ENTITY_KEYS, REGISTRY, semantic_field
 
 
 class SemanticConstraintError(ValueError):
     def __init__(self, violations: list[str], attempts: int = 0):
         self.violations = list(violations)
-        prefix = f"Não foi possível gerar um registro sintético coerente após {attempts} tentativas"
+        prefix = (f"Não foi possível gerar um registro sintético coerente após {attempts} tentativas" if attempts
+                  else "O registro sintético não atende às restrições semânticas")
         super().__init__(f"{prefix}: " + "; ".join(self.violations))
 
 
@@ -22,6 +23,35 @@ def _json_value(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, time):
         return value.strftime("%H:%M")
+    return value
+
+
+def stored_value(key: str, value: Any) -> Any:
+    kind = semantic_field(key).kind
+    if value is None:
+        return None
+    if kind == "date":
+        if isinstance(value, date):
+            return value
+        if not isinstance(value, str):
+            raise ValueError(f"{key} precisa ser uma data AAAA-MM-DD")
+        return date.fromisoformat(value)
+    if kind == "time":
+        if isinstance(value, time):
+            return value
+        if not isinstance(value, str) or len(value) != 5:
+            raise ValueError(f"{key} precisa ser um horário HH:MM")
+        return time.fromisoformat(value)
+    if kind == "integer":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"{key} precisa ser um número inteiro")
+        return value
+    if kind == "boolean":
+        if not isinstance(value, bool):
+            raise ValueError(f"{key} precisa ser verdadeiro ou falso")
+        return value
+    if not isinstance(value, str):
+        raise ValueError(f"{key} precisa ser um texto")
     return value
 
 
@@ -41,6 +71,36 @@ class SemanticRecord:
         self._stack: list[str] = []
         self._requires: dict[str, list[tuple[Any, str]]] = {}
         self._links: dict[str, Any] = {}
+        self._frozen: set[str] = set()
+        self.provenance: dict | None = None
+
+    @classmethod
+    def from_values(cls, values: dict[str, Any], context: str | None, seed: int = 0) -> SemanticRecord:
+        record = cls(seed, context)
+        problems = []
+        for key, value in values.items():
+            if key.startswith("custom."):
+                continue
+            if key not in REGISTRY:
+                problems.append(f"Chave semântica desconhecida: {key}")
+                continue
+            try:
+                record._values[key] = stored_value(key, value)
+            except ValueError as exc:
+                problems.append(str(exc))
+        if problems:
+            raise SemanticConstraintError(problems)
+        record._frozen = {entity for entity, keys in ENTITY_KEYS.items() if keys and all(key in record._values for key in keys)}
+        partial = {semantic_field(key).entity for key in record._values} - record._frozen
+        if partial:
+            raise SemanticConstraintError([f"Registro incompleto para a entidade {entity}: faltam "
+                                           + ", ".join(key for key in ENTITY_KEYS[entity] if key not in record._values)
+                                           for entity in sorted(partial)])
+        return record
+
+    @property
+    def frozen(self) -> bool:
+        return bool(self._frozen)
 
     def value(self, key: str) -> Any:
         entity = semantic_field(key).entity
@@ -108,6 +168,12 @@ class SemanticRecord:
             semantic_field(key)
         targets = keys + [key for key in self._requires if key not in keys]
         failures: list[tuple[str, set[str]]] = []
+        if self._frozen:
+            for key in targets:
+                self.value(key)
+            if failures := self._failures():
+                raise SemanticConstraintError([message for message, _ in failures], 0)
+            return {key: self._values[key] for key in keys}
         for attempt in range(self.max_attempts):
             for key in targets:
                 self.value(key)
@@ -142,6 +208,8 @@ class SemanticRecord:
         return found
 
     def _generate(self, entity: str) -> None:
+        if entity in self._frozen:
+            raise RuntimeError(f"A entidade {entity} do registro armazenado não pode ser gerada novamente")
         if entity in self._stack:
             raise RuntimeError(f"Dependência circular entre entidades semânticas: {' -> '.join(self._stack + [entity])}")
         attempt = self._attempts.get(entity, 0)

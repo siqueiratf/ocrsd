@@ -245,3 +245,16 @@ def semantic_field(key: str) -> SemanticField:
 def semantic_options() -> list[dict]:
     return [{"key": field.key, "label": field.label, "group": field.group, "kind": field.kind, "description": field.description}
             for field in FIELDS]
+
+
+CLINICAL_TERMS = (
+    "causa", "causas", "cause", "cid", "icd", "doenca", "doencas", "disease", "diagnostico", "diagnosticos", "diagnosis",
+    "patologia", "patologias", "patologico", "morbido", "morbidos", "necropsia", "morte", "anomalia", "anomalias", "apgar",
+    "peso", "perimetro", "comprimento", "apresentacao", "induzido", "assistencia medica", "lesao", "lesoes", "acidente",
+    "suicidio", "homicidio", "violencia", "cirurgia", "tratamento", "obstetrica", "puerperio",
+)
+OBSTETRIC_TERMS = (
+    "gravidez", "parto", "partos", "gestacao", "gestacoes", "gestante", "fetal", "fetais", "aborto", "abortos", "cesarea",
+    "cesareas", "menstruacao",
+)
+MEDICAL_TERMS = CLINICAL_TERMS + OBSTETRIC_TERMS

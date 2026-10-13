@@ -1,0 +1,13 @@
+{
+  "name": "OCRSD · Only Civil Registry Synthetic Dataset",
+  "short_name": "OCRSD",
+  "start_url": "/modelos",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#16446f",
+  "icons": [
+    {"src": "/static/favicon.svg", "type": "image/svg+xml", "sizes": "any"},
+    {"src": "/static/favicon-192.png", "type": "image/png", "sizes": "192x192"},
+    {"src": "/static/favicon-512.png", "type": "image/png", "sizes": "512x512"}
+  ]
+}

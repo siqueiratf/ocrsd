@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.mapping_assist.matching import Match, guess_data_type, section_of
 from src.semantic import VERSION
-from src.semantic.custom import validate_custom_definition
+from src.semantic.custom import approved_definitions
 from src.semantic.plan import semantic_plan
 from src.semantic.registry import REGISTRY
 from src.semantic.resolve import document_context, normalize
@@ -52,6 +52,9 @@ def _date_part(label: str, key: str | None) -> str | None:
 
 
 def _data_type(candidate: FieldCandidate, key: str | None, proposal: dict | None, custom: dict[str, dict]) -> str:
+    if candidate.kind == "digit_sequence" and (REGISTRY[key].kind == "uf" if key in REGISTRY else
+                                               not key and (proposal or {}).get("data_type") == "uf"):
+        return "uf"
     if candidate.kind in {"checkbox", "digit_sequence"}:
         return candidate.kind
     if key:
@@ -83,21 +86,10 @@ def _elements(candidate: FieldCandidate, field_id: str, scale: float, size: tupl
     return elements
 
 
-def _custom_catalog(definitions: list[dict] | dict[str, dict] | None) -> dict[str, dict]:
-    raw_custom = definitions.values() if isinstance(definitions, dict) else definitions or []
-    custom = {}
-    for spec in raw_custom:
-        if spec.get("status", "approved") != "approved":
-            continue
-        normalized = validate_custom_definition(*(spec[name] for name in ("key", "label", "description", "data_type", "generator")))
-        custom[normalized["key"]] = normalized
-    return custom
-
-
 def build_proposal(analysis: PageAnalysis, matches: list[Match], document: str | None, provenance: dict | None = None,
                    *, custom_definitions: list[dict] | dict[str, dict] | None = None) -> dict:
     provenance = dict(provenance or {})
-    custom = _custom_catalog(custom_definitions)
+    custom = approved_definitions(custom_definitions)
     context = document_context(document)
     template = str(provenance.pop("template_id", None) or document or "modelo_web")
     scale = DPI / analysis.dpi if analysis.dpi else 1.0
@@ -176,20 +168,7 @@ def accept_suggestion(field: dict, key: str | None = None,
                       *, custom_definitions: list[dict] | dict[str, dict] | None = None) -> dict:
     accepted = {name: value for name, value in field.items() if name != "suggestion"}
     if key is not None:
-        if key not in REGISTRY and key not in _custom_catalog(custom_definitions):
+        if key not in REGISTRY and key not in approved_definitions(custom_definitions):
             raise ValueError(f"Chave semântica desconhecida: {key}")
         accepted["semantic"] = key
     return accepted
-
-
-def strip_suggestions(definition: dict) -> dict:
-    fields = definition.get("fields") or []
-    pending = [field for field in fields if isinstance(field.get("suggestion"), dict)
-               and field["suggestion"].get("status", "suggested") == "suggested"]
-    if pending:
-        raise ValueError(f"Há {len(pending)} sugestão(ões) pendente(s) de revisão.")
-    stripped = {**definition, "fields": [{name: value for name, value in field.items() if name != "suggestion"} for field in fields]}
-    if isinstance(definition.get("provenance"), dict):
-        stripped["provenance"] = {**definition["provenance"], "reviewed": True,
-                                  "reviewed_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    return stripped

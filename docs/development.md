@@ -39,9 +39,9 @@ A interface está organizada em três áreas, mantendo o processamento no backen
 
 | Área | Escopo |
 | --- | --- |
-| Modelos | Cadastro de templates PDF, modelos padrão protegidos com “Duplicar e editar”, metadados e canvas com caixas, zoom, movimentação, redimensionamento, busca, undo/redo, propriedades, validações e exportação do mapa no schema existente. |
-| Geração | Seleção de modelo (o mapa ativo do modelo é carregado sem escolha), campos, quantidade, semente única automática, escrita impressa/manuscrita, estilos distintos, presets privados, configurações reutilizáveis e realismo com prévia executada pelo backend. |
-| Resultados | Histórico privado persistente, busca/filtro, progresso, cancelamento, PDFs, ground truth, manifesto, downloads, repetição e compartilhamentos revogáveis com permissão de download. |
+| Modelos | Cadastro de templates PDF, modelos padrão protegidos com “Duplicar e editar” (nome e descrição vêm de `label` e `description` no `modelo.json` da pasta), metadados e canvas com caixas, zoom, movimentação, redimensionamento, busca, undo/redo, propriedades, validações e exportação do mapa no schema existente. |
+| Geração | Seleção de modelo (o mapa ativo do modelo é carregado sem escolha), campos agrupados por `section_label`/`bloco` (campos `custom.*` com gerador `unavailable` aparecem bloqueados, “Sem gerador validado”), quantidade com modo de geração tradicional ou assistido por IA (desabilitado, com o motivo, quando o provedor está indisponível; o servidor recusa com 422), semente única automática, escrita impressa/manuscrita, estilos distintos, presets privados, configurações reutilizáveis e realismo com prévia executada pelo backend. |
+| Resultados | Histórico privado persistente, busca/filtro, progresso, cancelamento, PDFs, ground truth, manifesto (com `generation`: modo, provedor, modelo, digest, versão do prompt, temperatura e resumo por documento), downloads, repetição e compartilhamentos revogáveis com permissão de download. Os detalhes mostram o modo de geração e a proveniência resumida da IA. Jobs assistidos guardam no SQLite (`jobs.records`) os registros aceitos; “Reproduzir exatamente” os renderiza de novo sem chamar a IA e marca o manifesto como `ai_replay`. Falhas da IA após as tentativas encerram o job com o diagnóstico, sem recorrer à geração tradicional. |
 
 Presets criados pela web são privados e armazenados por proprietário, sem um arquivo
 JSON global mutável. A configuração do dataset copia seus parâmetros para o job. O
@@ -94,6 +94,13 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 | `OCRSD_ACCEPTING_JOBS` | true | false suspende submissões; consulta/download continuam |
 | `OCRSD_BIND_ADDRESS` | `127.0.0.1` no exemplo | Interface do host usada pela publicação web |
 | `OCRSD_HTTP_PORT` | 8080 | Porta HTTP local ou privada da interface web |
+| `OCRSD_MAX_PENDING_ANALYSES` | 5 | Análises de mapeamento assistido na fila, separadas dos jobs de geração |
+| `OCRSD_ANALYSIS_TIMEOUT` | 300 | Tempo máximo do subprocesso de análise em segundos |
+| `OCRSD_AI_PROVIDER` | `none` | `openai` usa um servidor local compatível (Ollama `/v1`, `llama-server`); sem ele, a análise é determinística |
+| `OCRSD_AI_BASE_URL` | `http://127.0.0.1:11434/v1` | Endereço do servidor de IA; somente loopback, salvo `OCRSD_AI_ALLOW_REMOTE=true` com HTTPS |
+| `OCRSD_AI_MODEL` | `qwen3:1.7b` | Modelo instalado manualmente pelo administrador; nenhum peso é baixado automaticamente |
+| `OCRSD_AI_TIMEOUT` / `OCRSD_AI_BUDGET` | 60 / 90 | Tempo por requisição e orçamento total da IA por análise, em segundos |
+| `OCRSD_MAPPING_MIN_SCORE` / `OCRSD_MAPPING_MIN_MARGIN` | 0.5 / 0.2 | Similaridade mínima e margem para associar um rótulo a uma chave semântica |
 
 O worker verifica tempo/disco a cada 0,5 s e limita CPU, memória virtual e tamanho
 individual de arquivo. A medição de volume pode ultrapassar brevemente o teto entre

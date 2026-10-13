@@ -20,33 +20,6 @@
   })
   setInterval(refreshDurations, 1000)
 
-  const tooltip = document.createElement('div')
-  tooltip.className = 'result-status-tooltip'
-  tooltip.setAttribute('role', 'tooltip')
-  tooltip.id = 'result-status-tooltip'
-  tooltip.hidden = true
-  let tooltipTarget = null
-  const placeTooltip = target => {
-    if (tooltipTarget && tooltipTarget !== target) tooltipTarget.removeAttribute('aria-describedby')
-    tooltipTarget = target
-    if (!target) { tooltip.hidden = true; return }
-    if (!tooltip.isConnected) document.body.append(tooltip)
-    tooltip.textContent = target.dataset.statusTooltip
-    tooltip.hidden = false
-    target.setAttribute('aria-describedby', tooltip.id)
-    const box = target.getBoundingClientRect()
-    const width = tooltip.offsetWidth
-    const height = tooltip.offsetHeight
-    const below = box.bottom + 6 + height <= document.documentElement.clientHeight - 8
-    tooltip.style.translate = `${Math.round(Math.max(8, Math.min(box.left + box.width / 2 - width / 2, document.documentElement.clientWidth - width - 8)))}px ${Math.round(below ? box.bottom + 6 : Math.max(8, box.top - height - 6))}px`
-  }
-  document.addEventListener('mouseover', event => { if (event.target.matches?.('[data-status-tooltip]')) placeTooltip(event.target) })
-  document.addEventListener('mouseout', event => { if (event.target.matches?.('[data-status-tooltip]') && event.target === tooltipTarget) placeTooltip(null) })
-  document.addEventListener('focusin', event => { if (event.target.matches?.('[data-status-tooltip]')) placeTooltip(event.target) })
-  document.addEventListener('focusout', event => { if (event.target === tooltipTarget) placeTooltip(null) })
-  document.addEventListener('scroll', () => placeTooltip(null), true)
-  window.addEventListener('resize', () => placeTooltip(null))
-
   function positionMenu(menu) {
     const trigger = menu.querySelector('summary').getBoundingClientRect()
     const popup = menu.querySelector('.menu-list')
@@ -140,7 +113,7 @@
 
   const editing = () => document.querySelector('[data-result-name-cell][data-editing]')
   document.addEventListener('htmx:beforeRequest', event => {
-    if (event.detail.elt.matches?.('[data-results-polling]') && (editing() || document.querySelector('#tabela-jobs details.menu[open]') || tooltipTarget)) event.preventDefault()
+    if (event.detail.elt.matches?.('[data-results-polling]') && (editing() || document.querySelector('#tabela-jobs details.menu[open]') || document.querySelector('#tabela-jobs')?.contains(window.OCRSDTooltip?.active()))) event.preventDefault()
   })
 
   function startRename(cell) {
@@ -232,7 +205,6 @@
   })
   document.addEventListener('input', event => { if (event.target.matches('[data-rename-form] input')) event.target.setCustomValidity('') })
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && tooltipTarget) placeTooltip(null)
     if (event.target.matches?.('[data-result-name]') && ['Enter', 'F2'].includes(event.key)) {
       event.preventDefault()
       startRename(event.target.closest('[data-result-name-cell]'))

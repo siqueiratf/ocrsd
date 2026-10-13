@@ -4,6 +4,14 @@
 
 ### Interface web
 
+- Dicas (`data-tooltip`) centralizadas em `tooltips.js`: uma camada única no top layer do
+  navegador (Popover API), com posição ajustada às bordas da janela, abertura por mouse ou
+  foco de teclado e fechamento após trocas HTMX. As dicas não ficam mais atrás de cards,
+  tabelas, barras fixas, diálogos ou do PDF em tela cheia, nem cortadas na última linha de
+  Resultados. Escala única de `z-index` em `:root` para navegação, menus, avisos e dicas.
+- Cabeçalho com os logotipos LabREC e OCRSD lado a lado, em SVG, separados por um divisor
+  vertical; favicon com somente o símbolo gráfico do logotipo, em SVG, ICO e PNG de 16, 32, 48,
+  180, 192 e 512 px; arquivos estáticos versionados por conteúdo.
 - Interface migrada de React/Vite para páginas FastAPI com Jinja2 e HTMX,
   renderizadas no servidor, sem etapa de build nem dependências Node.
 - Cabeçalho com o logotipo oficial do LabREC em SVG, extraído de `labrec.pdf`, com
@@ -44,6 +52,27 @@
   até serem fechados.
 - Etapa Campos destaca e localiza no PDF o campo marcado, inclusive fora da área
   visível; etapa Escrita desativa estilos incompatíveis com os campos escolhidos.
+
+### Mapeamento assistido
+
+- Análise híbrida de templates (`src/mapping_assist/`): camada de texto do PDF ou OCR
+  local com Tesseract (`por`), geometria vetorial ou raster (células, caixas de
+  dígitos, checkboxes, números de campo e blocos laterais) e coordenadas no sistema de
+  pixels do mapeamento; sem OCR, a análise continua só com a geometria.
+- Associação semântica por regras e similaridade de n-gramas restrita à seção do
+  formulário; rótulos sem correspondência viram propostas de categoria nova para
+  revisão, e campos médicos exigem regra validada (ex.: CID-10) antes da geração.
+- Assistente de IA local opcional (`OCRSD_AI_PROVIDER=openai`, servidor compatível em
+  loopback, como Ollama ou `llama-server`), consultado só em casos ambíguos, com
+  orçamento de tempo, cache e retorno ao resultado determinístico em caso de falha.
+- Análises como jobs em segundo plano no worker, com fila, limite de tempo e cota
+  próprios; API `/api/v1/models/{id}/analyses`, `/api/v1/analyses/{id}`,
+  `/analyses/{id}/apply` e `/api/v1/assistant`; script `scripts/evaluate_mapping.py`
+  com precisão, revocação, IoU, acurácia semântica, correções manuais, tempo e memória.
+- Editor com “Mapear com IA” para modelos próprios em rascunho: progresso, sugestões
+  tracejadas sobre o PDF, aceitar, rejeitar ou ajustar cada sugestão, criar categorias
+  semânticas reutilizáveis e proveniência da revisão no mapeamento. Sugestões
+  pendentes bloqueiam a publicação; modelos padrão continuam protegidos.
 
 ### Motor de geração
 

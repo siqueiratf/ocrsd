@@ -20,21 +20,28 @@ class DocumentType:
     dataset: Path
 
     @property
+    def metadata(self) -> dict:
+        path = self.root / "modelo.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        except (OSError, ValueError):
+            data = {}
+        return data if isinstance(data, dict) else {}
+
+    @property
     def label(self) -> str:
-        return self.key.replace("_", " ").upper()
+        label = self.metadata.get("label")
+        return label.strip() if isinstance(label, str) and label.strip() else self.key.replace("_", " ").upper()
+
+    @property
+    def description(self) -> str:
+        description = self.metadata.get("description")
+        return description.strip() if isinstance(description, str) else ""
 
     @property
     def active_mapping(self) -> Path:
-        metadata = self.root / "modelo.json"
-        if metadata.is_file():
-            try:
-                name = json.loads(metadata.read_text(encoding="utf-8")).get("active_mapping")
-            except (ValueError, AttributeError):
-                name = None
-            chosen = next((path for path in self.mappings if path.stem == name), None)
-            if chosen:
-                return chosen
-        return self.mappings[0]
+        name = self.metadata.get("active_mapping")
+        return next((path for path in self.mappings if path.stem == name), self.mappings[0])
 
 
 def discover_document_types(root: Path = DOCUMENTS_ROOT) -> dict[str, DocumentType]:

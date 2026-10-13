@@ -1,4 +1,6 @@
 import base64
+import functools
+import hashlib
 import json
 import os
 import re
@@ -12,7 +14,7 @@ from urllib.parse import quote, urlencode
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
@@ -20,13 +22,14 @@ from starlette.background import BackgroundTask
 from pydantic import BaseModel, ValidationError
 from starlette.datastructures import FormData, UploadFile
 
-from src.web.models import GenerationOptions, Identifier, ModelUpdate, ShareCreate, Writing
+from src.web.models import GenerationOptions, Identifier, ModelUpdate, SemanticDefinitionCreate, ShareCreate, Writing
 from src.web.palette import (CUSTOM_BASES, EDITOR_OPTIONS, GENERATION_RULES, ICON_NAMES, LAYOUT_PALETTE, PALETTE, TYPE_LABELS,
                              custom_field_config, custom_palette)
-from src.web.services import (BUILTIN_PROTECTED, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, Catalog, ServiceError, create_blank_model, create_model,
-                              duplicate_model, mapping_issues, preview_generation, preview_key, preview_strip, render_writing_samples,
+from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, Catalog, ServiceError, create_blank_model, create_model,
+                              duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key, preview_strip, render_writing_samples,
                               realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count, render_preview, revision, save_mapping, validate_layout,
-                              semantic_inferred, validate_mapping, writing_issues, writing_message)
+                              semantic_inferred, unavailable_custom_fields, validate_mapping, with_approved_semantics, writing_issues,
+                              writing_message)
 from src.web.settings import Settings
 from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model_defaults, preset_title, writing_summary
 
@@ -50,7 +53,9 @@ LABELS = {"name": "Nome", "count": "Quantidade de documentos", "seed": "Seed ale
           "model": "Modelo de escrita", "intensity": "Variação da escrita", "writer": "Identidade do escritor",
           "bias": "Regularidade", "color": "Cor", "width": "Espessura", "pressure": "Pressão", "dropout": "Falhas",
           "text_policy": "Caracteres não suportados", "label": "Nome do modelo", "description": "Descrição",
-          "expires_in_hours": "Validade do link"}
+          "expires_in_hours": "Validade do link", "generation_mode": "Modo de geração"}
+BLOCKED_FIELD = "Sem gerador validado"
+AI_FAILURE = "A geração assistida por IA falhou:"
 try:
     TIMEZONE = ZoneInfo("America/Sao_Paulo")
 except ZoneInfoNotFoundError:
@@ -130,7 +135,8 @@ def options_state(form: FormData) -> dict:
     return {"preset": text(form, "preset"), "name": text(form, "name"), "document_type": text(form, "document_type"),
             "mapping_id": text(form, "mapping_id"), "fields": [str(item) for item in form.getlist("fields")],
             "count": parsed(form, "count", int, 1), "seed": parsed(form, "seed", int),
-            "writing": writing_state(form), "filter_preset": text(form, "filter_preset") or "none"}
+            "writing": writing_state(form), "filter_preset": text(form, "filter_preset") or "none",
+            "generation_mode": text(form, "generation_mode") or "traditional"}
 
 
 def set_cookie(response: Response, request: Request, name: str, value: str, max_age: int, path: str = "/") -> None:
@@ -138,12 +144,22 @@ def set_cookie(response: Response, request: Request, name: str, value: str, max_
                         secure=request.url.scheme == "https")
 
 
-def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Callable[[Request, int, str], Response]:
+def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=None) -> Callable[[Request, int, str], Response]:
     templates = Jinja2Templates(directory=ROOT / "templates")
     templates.env.filters.update(data=format_date, tamanho=format_size)
     templates.env.globals.update(FILTERS=FILTERS, STATUS=STATUS, ACTIVE=ACTIVE, TYPE_LABELS=TYPE_LABELS,
-                                 PAGE_SIZES=PAGE_SIZES, ORIENTATIONS=ORIENTATIONS, VERSION=app.version)
+                                 PAGE_SIZES=PAGE_SIZES, ORIENTATIONS=ORIENTATIONS, GENERATION_MODES=GENERATION_MODES)
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
+
+    @functools.lru_cache(maxsize=128)
+    def asset_digest(name: str, modified: int) -> str:
+        return hashlib.sha256((ROOT / "static" / name).read_bytes()).hexdigest()[:12]
+
+    def asset(name: str) -> str:
+        path = ROOT / "static" / name
+        return f"/static/{name}?v={asset_digest(name, path.stat().st_mtime_ns)}"
+
+    templates.env.globals["asset"] = asset
     router = APIRouter(include_in_schema=False)
 
     def render(request: Request, name: str, status_code: int = 200, headers: dict | None = None, **context) -> HTMLResponse:
@@ -240,7 +256,13 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
 
     def wizard_initial() -> dict:
         return {"document_type": "", "mapping_id": "", "fields": [], "count": min(10, settings.max_count),
-                "preset": "padrao_fonte_natural", "filter_preset": "none", "step": 1}
+                "preset": "padrao_fonte_natural", "filter_preset": "none", "generation_mode": "traditional", "step": 1}
+
+    def assistant_summary() -> dict:
+        if probe is None:
+            return {"available": False, "provider": settings.ai_provider, "model": settings.ai_model, "detail": "Assistente de IA desativado",
+                    "hint": ""}
+        return probe.summary()
 
     def reused_state(owner_id: str, row: dict) -> dict:
         options = store.detail(row).options
@@ -249,6 +271,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
         reference = json.loads(row["preset"]) if row.get("preset") else None
         state = {**wizard_initial(), "document_type": options.document_type, "mapping_id": options.mapping_id,
                  "fields": list(options.fields), "count": options.count, "filter_preset": options.filter_preset,
+                 "generation_mode": options.generation_mode,
                  "preset": "original_snapshot", "writing_snapshot": options.writing.model_dump(),
                  "original_preset_name": reference["name"] if reference else "Configuração original", "step": 6}
         try:
@@ -266,7 +289,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
             state["original_model_unavailable"] = True
         return state
 
-    def wizard_context(owner_id: str, state: dict, identifier: str, step: int, error: str = "") -> dict:
+    def wizard_context(owner_id: str, state: dict, identifier: str, step: int, error: str = "", assistant: dict | None = None) -> dict:
         owned = store.list_models(owner_id)
         published = [row for row in owned if row["status"] == "published"]
         unpublished = next((row for row in owned if row["id"] == state.get("document_type") and row["status"] != "published"), None)
@@ -286,6 +309,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
             except ServiceError:
                 pass
         fields = []
+        blocked = unavailable_custom_fields(definition) if definition else {}
         if definition:
             for field in definition["fields"]:
                 section = field.get("bloco")
@@ -296,7 +320,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                                "data_type": field.get("data_type", "text"),
                                "group": field.get("section_label") or field.get("group_label") or (DNV_GROUPS.get(str(section)) if current and current["id"] == "dnv" else None) or section or "Outros campos",
                                "description": field.get("description") or "", "official_variable": field.get("official_variable") or "",
-                               "bbox": field.get("bbox"), "elements": field.get("elements") or []})
+                               "bbox": field.get("bbox"), "elements": field.get("elements") or [],
+                               "blocked": BLOCKED_FIELD if str(field["field_id"]) in blocked else ""})
         groups = {}
         for field in fields:
             groups.setdefault(field["group"], []).append(field)
@@ -329,7 +354,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                     raise ServiceError(422, "preset_unavailable", "O preset de escrita selecionado não está disponível. Volte à etapa Escrita.")
                 data = {"name": f"Dataset {state['document_type']}", "document_type": state["document_type"],
                         "mapping_id": state["mapping_id"], "fields": state["fields"], "count": state["count"],
-                        "writing": selected_style["writing"], "filter_preset": state["filter_preset"]}
+                        "writing": selected_style["writing"], "filter_preset": state["filter_preset"],
+                        "generation_mode": state.get("generation_mode", "traditional")}
                 catalog.validate(validated(GenerationOptions, data), owner_id)
             except ServiceError as exc:
                 error = exc.message
@@ -337,7 +363,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                 "wizard_notice": " ".join(notices),
                 "types": types, "model_info": models, "current_type": current, "mapping": mapping,
                 "definition": definition, "fields": fields, "groups": groups, "styles": styles,
-                "selected_style": selected_style,
+                "selected_style": selected_style, "assistant": assistant, "selectable": [field for field in fields if not field["blocked"]],
                 "max_count": settings.max_count, "unpublished": unpublished}
 
     def wizard_url(identifier: str, step: int) -> str:
@@ -380,6 +406,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                  "Limite de armazenamento do job excedido", "Espaço livre insuficiente"}
         if message in known:
             return message
+        if message and message.startswith(AI_FAILURE):
+            return message
         if message and message.startswith("A geração foi rejeitada pelo motor:"):
             return "Os parâmetros foram rejeitados pelo motor de geração"
         return "A geração foi interrompida por uma falha interna"
@@ -394,11 +422,13 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                 problem = exc.message
         by_name = {item["name"]: item for item in artifacts}
         documents = []
+        generation = None
         manifest_artifact = by_name.get("dataset.json")
         if manifest_artifact:
             path, _ = store.artifact(row, manifest_artifact["id"])
             try:
                 manifest = json.loads(path.read_text(encoding="utf-8"))
+                generation = manifest.get("generation") if isinstance(manifest.get("generation"), dict) else None
                 for entry in manifest.get("documents", []):
                     if not isinstance(entry, dict):
                         continue
@@ -434,7 +464,26 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                 "safe_error": safe_job_error(row.get("error")),
                 "problem": problem, "preset": json.loads(row["preset"]) if row.get("preset") else None,
                 "archive": next((item for item in artifacts if item["media_type"] == "application/zip"), None),
-                "manifest": manifest_artifact}
+                "manifest": manifest_artifact, "generation": generation_info(row, detail, generation)}
+
+    def generation_info(row: dict, detail, generation: dict | None) -> dict:
+        mode = (generation or {}).get("mode") or ("ai_replay" if row.get("replay_of") else
+                                                  detail.options.generation_mode if detail.options else "traditional")
+        mode = mode if mode in GENERATION_MODES else "traditional"
+        info = {"mode": mode, "label": GENERATION_MODES[mode], "source_job": row.get("replay_of") or (generation or {}).get("source_job")}
+        if mode == "traditional":
+            return info
+        records = store.records(row) or {}
+        parameters = (generation or {}).get("source_generation") if mode == "ai_replay" else generation
+        parameters = parameters or (records.get("generation") if mode == "ai_replay" else None) or {}
+        documents = (generation or {}).get("documents") if mode == "ai" else (records.get("generation") or {}).get("documents")
+        documents = [item for item in documents or [] if isinstance(item, dict)]
+        digest = str(parameters.get("model_digest") or "").removeprefix("sha256:")
+        info["ai"] = {"provider": parameters.get("provider"), "model": parameters.get("model"), "digest": digest[:12] or None,
+                      "prompt_version": parameters.get("prompt_version"), "temperature": parameters.get("temperature"),
+                      "accepted": sum(item.get("status") == "accepted" for item in documents) if documents else None,
+                      "attempts": sum(int(item.get("attempts") or 0) for item in documents) if documents else None} if parameters else None
+        return info
 
     def jobs_context(owner_id: str, search: str, status: str, selected: str = "", document_type: str = "", order: str = "recentes", page: int = 1) -> dict:
         status = ",".join(item for item in dict.fromkeys(status.split(",")) if item in STATUS)
@@ -461,6 +510,14 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
     async def index():
         return RedirectResponse("/modelos", 303)
 
+    @router.get("/favicon.ico")
+    async def favicon():
+        return FileResponse(ROOT / "static" / "favicon.ico", media_type="image/x-icon", headers={"Cache-Control": "public, max-age=86400"})
+
+    @router.get("/apple-touch-icon.png")
+    async def touch_icon():
+        return FileResponse(ROOT / "static" / "apple-touch-icon.png", media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
     @router.post("/sessao")
     async def adopt_session(request: Request):
         form = await request.form()
@@ -484,11 +541,32 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
     def editor_state(owner_id: str, model) -> dict:
         definition = catalog.definition(model.id, model.mapping_id, None if model.builtin else owner_id)
         layout = None if model.builtin else store.layout(model.id)
-        return {"definition": definition, "layout": layout, "revision": revision(*editor_paths(owner_id, model))}
+        mapping = editor_paths(owner_id, model)[0]
+        return {"definition": definition, "layout": layout, "revision": revision(*editor_paths(owner_id, model)),
+                "mapping_revision": hashlib.sha256(mapping.read_bytes()).hexdigest()}
 
     def editor_view(owner_id: str, model) -> dict:
         state = editor_state(owner_id, model)
-        return {**state, "semantic_inferred": semantic_inferred(state["definition"], state["definition"].get("template_id") or model.id)}
+        custom = [{"key": item["key"], "label": item["label"], "description": item["description"],
+                   "group": "Personalizados", "kind": item["data_type"]}
+                  for item in store.list_custom_semantics(owner_id)]
+        latest = None if model.builtin else store.latest_analysis(model.id, owner_id)
+        return {**state, "semantic_inferred": semantic_inferred(state["definition"], state["definition"].get("template_id") or model.id),
+                "semantic_options": [*EDITOR_OPTIONS["semantic_options"], *custom],
+                "analysis": latest and {name: latest[name] for name in ("id", "status", "progress", "stage", "error")},
+                "model": {"id": model.id, "label": model.label, "builtin": model.builtin, "status": model.status,
+                          "version": model.version}}
+
+    def assist_model(owner_id: str, model_id: str):
+        model = model_entry(owner_id, model_id)
+        if model.builtin:
+            raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
+        if store.layout(model.id) is not None:
+            raise ServiceError(422, "mapping_assist_unavailable",
+                               "Documentos compostos não usam o mapeamento com IA; mapeie os campos manualmente")
+        if model.status != "draft":
+            raise ServiceError(422, "mapping_assist_unavailable", "Volte o modelo para rascunho antes de analisar o PDF")
+        return model
 
     def publication(request: Request, model, issues: list[str], message: str = "", oob: bool = False) -> HTMLResponse:
         return render(request, "partials/publication.html", model=model, issues=issues, message=message, oob=oob)
@@ -556,10 +634,48 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
             store.wizard_draft(draft, owner_id)
         return render(request, "editor.html", page="modelos", layout_page="editor", model=model, groups=groups, return_draft=draft,
                       composed=composed, issues=mapping_issues(state["definition"]), icon_names=ICON_NAMES,
-                      editor={**state, **EDITOR_OPTIONS, "model": {"id": model.id, "label": model.label, "builtin": model.builtin},
+                      editor={**EDITOR_OPTIONS, **state,
                               "mapping_id": model.mapping_id, "palette": groups,
                               "preview": None if composed else f'/modelos/{model.id}/previa.png?largura=2400&v={state["revision"]}',
                               "source": f"/modelos/{model.id}/estado.json"})
+
+    @router.post("/modelos/{model_id}/mapear-ia", status_code=202)
+    async def start_mapping_assist(request: Request, model_id: Identifier, owner_id: Owner):
+        model = assist_model(owner_id, model_id)
+        try:
+            payload = await request.json()
+        except ValueError as exc:
+            raise ServiceError(422, "invalid_page", "Informe a página do documento") from exc
+        if not isinstance(payload, dict) or type(payload.get("page")) is not int or payload["page"] != 1:
+            raise ServiceError(422, "invalid_page", "O editor atual analisa a página 1 do documento")
+        return JSONResponse(store.submit_analysis(model.id, owner_id, 1, request.client.host if request.client else "unknown"),
+                            status_code=202)
+
+    @router.get("/modelos/{model_id}/mapear-ia/{job_id}")
+    async def mapping_assist_result(model_id: Identifier, job_id: Identifier, owner_id: Owner):
+        model = model_entry(owner_id, model_id)
+        if model.builtin:
+            raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
+        result = store.analysis(job_id, owner_id)
+        if result["model_id"] != model.id:
+            raise ServiceError(404, "not_found", "Análise não encontrada para este modelo")
+        proposal = result["proposal"]
+        if proposal:
+            current = catalog.definition(model.id, model.mapping_id, owner_id)
+            template = hashlib.sha256((store.model_directory(model.id) / "template.pdf").read_bytes()).hexdigest()
+            result["proposal"] = fit_mapping(proposal, tuple(current["page_size_px"]))
+            result["stale"] = (proposal.get("provenance") or {}).get("pdf_sha256") not in (None, template)
+        return JSONResponse(result)
+
+    @router.post("/modelos/{model_id}/definicoes-semanticas", status_code=201)
+    async def create_semantic_definition_ui(request: Request, model_id: Identifier, owner_id: Owner):
+        assist_model(owner_id, model_id)
+        try:
+            payload = await request.json()
+        except ValueError as exc:
+            raise ServiceError(422, "invalid_semantic", "Definição semântica inválida") from exc
+        definition = validated(SemanticDefinitionCreate, payload)
+        return JSONResponse(store.save_custom_semantic(owner_id, **definition.model_dump()), status_code=201)
 
     @router.get("/modelos/{model_id}/estado.json")
     async def editor_json(model_id: Identifier, owner_id: Owner):
@@ -580,7 +696,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
         page_size = tuple(current["definition"]["page_size_px"])
         if not isinstance(definition, dict):
             raise ServiceError(422, "invalid_mapping", "O mapeamento precisa ser um objeto JSON")
-        definition = validate_mapping({**definition, "dpi": current["definition"]["dpi"], "page_size_px": list(page_size)}, page_size)
+        definition = validate_mapping(with_approved_semantics(store, owner_id,
+                                      {**definition, "dpi": current["definition"]["dpi"], "page_size_px": list(page_size)}), page_size)
         if (layout is None) != (current["layout"] is None):
             raise ServiceError(422, "invalid_layout", "Somente documentos compostos aceitam elementos de layout")
         return definition, layout if layout is None else validate_layout(layout, page_size)
@@ -712,12 +829,12 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
             state = wizard_initial()
             if rascunho and store.draft(owner_id):
                 old = store.draft(owner_id)
-                state.update({key: old[key] for key in ("document_type", "mapping_id", "fields", "count", "preset", "filter_preset", "step") if key in old})
+                state.update({key: old[key] for key in ("document_type", "mapping_id", "fields", "count", "preset", "filter_preset", "generation_mode", "step") if key in old})
             elif job:
                 state = reused_state(owner_id, owned_job(owner_id, job))
             elif configuracao:
                 old = store.config(configuracao, owner_id)["options"]
-                state.update({key: old[key] for key in ("document_type", "mapping_id", "fields", "count", "filter_preset") if key in old})
+                state.update({key: old[key] for key in ("document_type", "mapping_id", "fields", "count", "filter_preset", "generation_mode") if key in old})
             if modelo:
                 state["document_type"] = modelo
             identifier = store.create_wizard_draft(owner_id, state)
@@ -738,7 +855,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
         etapa = max(1, min(6, etapa))
         if etapa > state.get("step", 1):
             etapa = state.get("step", 1)
-        return render(request, "generation.html", page="geracao", **wizard_context(owner_id, state, identifier, etapa))
+        assistant = await run_in_threadpool(assistant_summary) if etapa == 3 else None
+        return render(request, "generation.html", page="geracao", **wizard_context(owner_id, state, identifier, etapa, assistant=assistant))
 
     @router.get("/geracao/mapeamento/previa")
     async def wizard_mapping_preview(request: Request, owner_id: Owner, draft: str):
@@ -770,6 +888,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                 count = parsed(form, "count", int)
                 if isinstance(count, int) and 1 <= count <= settings.max_count:
                     state["count"] = count
+                if text(form, "generation_mode") in {"traditional", "ai"}:
+                    state["generation_mode"] = text(form, "generation_mode")
             elif step == 4 and text(form, "preset"):
                 state["preset"] = "original_snapshot" if text(form, "preset") == "original_snapshot" and state.get("writing_snapshot") else preset(owner_id, text(form, "preset"))["id"]
             elif step == 5 and text(form, "filter_preset") in FILTERS:
@@ -793,12 +913,22 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                 selected = [str(value) for value in form.getlist("fields")]
                 if not selected or len(selected) != len(set(selected)) or set(selected) - allowed:
                     raise ServiceError(422, "validation_error", "Selecione ao menos um campo existente")
+                blocked = sorted(set(selected) & set(unavailable_custom_fields(definition)))
+                if blocked:
+                    raise ServiceError(422, "validation_error", f"O campo {blocked[0]} não pode ser gerado: {BLOCKED_FIELD.lower()}")
                 state["fields"] = selected
             elif step == 3:
                 count = parsed(form, "count", int)
                 if not isinstance(count, int) or not 1 <= count <= settings.max_count:
                     raise ServiceError(422, "validation_error", f"Informe de 1 a {settings.max_count} documentos")
-                state["count"] = count
+                mode = text(form, "generation_mode") or "traditional"
+                if mode not in {"traditional", "ai"}:
+                    raise ServiceError(422, "validation_error", "Selecione um modo de geração válido")
+                if mode == "ai":
+                    assistant = await run_in_threadpool(assistant_summary)
+                    if not assistant["available"]:
+                        raise ServiceError(422, "ai_unavailable", f"Geração assistida por IA indisponível: {assistant['detail']}. {assistant['hint']}".strip())
+                state.update(count=count, generation_mode=mode)
             elif step == 4:
                 if not text(form, "preset"):
                     raise ServiceError(422, "validation_error", "Selecione um estilo de escrita")
@@ -832,7 +962,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
                       if state["preset"] == "original_snapshot" and state.get("writing_snapshot") else preset(owner_id, state["preset"]))
             data = {"name": f"Dataset {state['document_type']}", "document_type": state["document_type"],
                     "mapping_id": state["mapping_id"], "fields": state["fields"], "count": state["count"],
-                    "writing": chosen["writing"], "filter_preset": state["filter_preset"]}
+                    "writing": chosen["writing"], "filter_preset": state["filter_preset"],
+                    "generation_mode": state.get("generation_mode", "traditional")}
             options = catalog.validate(validated(GenerationOptions, data), owner_id)
             reference = {"id": chosen["id"], "name": chosen["title"], "version": chosen["version"], "kind": chosen["kind"], "adjusted": False}
             row, _ = store.submit(options, request.client.host if request.client else "unknown", owner_id, reference,
@@ -1124,10 +1255,17 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog) -> Calla
         detail = store.detail(row)
         if detail.options is None or detail.options.seed is None:
             raise ServiceError(422, "invalid_configuration", "A configuração original não está disponível para reprodução")
+        replay = None
+        if detail.options.generation_mode == "ai":
+            records = store.records(row)
+            if row["status"] != "succeeded" or not records or len(records["documents"]) != detail.options.count:
+                raise ServiceError(422, "records_unavailable", "Os registros aceitos pela IA nesta geração não estão disponíveis; "
+                                                               "a reprodução exata exige uma geração assistida concluída")
+            replay = (row.get("replay_of") or row["id"], records)
         source = store.source(row) or catalog.source(detail.options, owner_id)
-        options = catalog.validate(detail.options, owner_id, source["definition"])
+        options = catalog.validate(detail.options, owner_id, source["definition"], replay=replay is not None)
         reference = json.loads(row["preset"]) if row.get("preset") else None
-        created, _ = store.submit(options, request.client.host if request.client else "unknown", owner_id, reference, source)
+        created, _ = store.submit(options, request.client.host if request.client else "unknown", owner_id, reference, source, replay)
         store.rename_job(created["id"], owner_id, f"{detail.name} · reprodução"[:100])
         return Response(headers={"HX-Redirect": f'/resultados/{created["id"]}'})
 

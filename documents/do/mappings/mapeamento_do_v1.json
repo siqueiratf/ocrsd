@@ -1,0 +1,4456 @@
+{
+ "template_id": "do_v1",
+ "dpi": 300,
+ "page_size_px": [
+  2550,
+  3300
+ ],
+ "source_template": "documents/do/do.pdf",
+ "reference_manual": "Declaração de Óbito: manual de instruções para preenchimento (Ministério da Saúde, 2022), Anexo A - modelo DO versão 01/10, 2ª impressão 11/2010",
+ "shared_rules": {
+  "RULE_UF": {
+   "description": "Sigla da Unidade da Federacao. Duas letras. Uma das 27 siglas oficiais.",
+   "allowed_values": [
+    "AC",
+    "AL",
+    "AP",
+    "AM",
+    "BA",
+    "CE",
+    "DF",
+    "ES",
+    "GO",
+    "MA",
+    "MT",
+    "MS",
+    "MG",
+    "PA",
+    "PB",
+    "PR",
+    "PE",
+    "PI",
+    "RJ",
+    "RN",
+    "RS",
+    "RO",
+    "RR",
+    "SC",
+    "SP",
+    "SE",
+    "TO"
+   ],
+   "max_edit_distance": 1
+  },
+  "RULE_DATE_DDMMYYYY": {
+   "description": "Data no formato dia, mes, ano (ddmmaaaa). Oito digitos, sem separadores.",
+   "digit_count": 8,
+   "format": "DDMMYYYY"
+  },
+  "RULE_CEP": {
+   "description": "Codigo de Enderecamento Postal completo. Oito digitos numericos, sem separadores.",
+   "digit_count": 8,
+   "pattern": "^[0-9]{8}$"
+  },
+  "RULE_CODIGO_OPCIONAL": {
+   "description": "Campo de codigo administrativo (Cnes, IBGE, CBO etc). O manual afirma que esse codigo nao precisa ser preenchido pelo declarante. Trate como opcional."
+  },
+  "RULE_PERSON_NAME": {
+   "description": "Nome de pessoa. Apenas letras, apostrofo e hifen. Sem digitos.",
+   "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+   "allow_digits": false,
+   "portuguese_rules": true,
+   "language": "pt-BR"
+  }
+ },
+ "fields": [
+  {
+   "field_id": "1",
+   "bloco": "I",
+   "official_variable": "1",
+   "label": "Tipo de óbito",
+   "description": "Tipo de óbito",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "tipo_obito_fetal",
+     "label": "Fetal",
+     "value": "1",
+     "bbox": [
+      488,
+      482,
+      515,
+      502
+     ]
+    },
+    {
+     "element_id": "tipo_obito_nao_fetal",
+     "label": "Não Fetal",
+     "value": "2",
+     "bbox": [
+      488,
+      509,
+      515,
+      529
+     ]
+    }
+   ],
+   "bbox": [
+    464,
+    444,
+    645,
+    536
+   ]
+  },
+  {
+   "field_id": "2",
+   "bloco": "I",
+   "official_variable": "2",
+   "label": "Data do óbito",
+   "description": "Data do óbito",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "data_obito_d0",
+     "label": "Data do óbito D0",
+     "bbox": [
+      653,
+      478,
+      696,
+      533
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "data_obito_d1",
+     "label": "Data do óbito D1",
+     "bbox": [
+      700,
+      478,
+      743,
+      533
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "data_obito_m0",
+     "label": "Data do óbito M0",
+     "bbox": [
+      747,
+      478,
+      790,
+      533
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "data_obito_m1",
+     "label": "Data do óbito M1",
+     "bbox": [
+      794,
+      478,
+      837,
+      533
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "data_obito_y0",
+     "label": "Data do óbito Y0",
+     "bbox": [
+      841,
+      478,
+      884,
+      533
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "data_obito_y1",
+     "label": "Data do óbito Y1",
+     "bbox": [
+      888,
+      478,
+      932,
+      533
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "data_obito_y2",
+     "label": "Data do óbito Y2",
+     "bbox": [
+      936,
+      478,
+      980,
+      533
+     ],
+     "index": 6
+    },
+    {
+     "element_id": "data_obito_y3",
+     "label": "Data do óbito Y3",
+     "bbox": [
+      984,
+      478,
+      1028,
+      533
+     ],
+     "index": 7
+    }
+   ],
+   "validation": {
+    "digit_count": 8
+   },
+   "rule_refs": [
+    "RULE_DATE_DDMMYYYY"
+   ],
+   "semantic": "death.date",
+   "bbox": [
+    651,
+    478,
+    1030,
+    533
+   ]
+  },
+  {
+   "field_id": "2_hora",
+   "bloco": "I",
+   "official_variable": null,
+   "label": "Data do óbito - Hora",
+   "description": "Data do óbito - Hora",
+   "data_type": "time",
+   "parent_field_id": "2",
+   "semantic": "death.time",
+   "validation": {
+    "pattern": "^([01][0-9]|2[0-3])[:h][0-5][0-9]$"
+   },
+   "bbox": [
+    1035,
+    478,
+    1125,
+    533
+   ]
+  },
+  {
+   "field_id": "3",
+   "bloco": "I",
+   "official_variable": "3",
+   "label": "Cartão SUS",
+   "description": "Cartão SUS",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "cns_0",
+     "label": "Cartão SUS 1",
+     "bbox": [
+      1139,
+      478,
+      1168,
+      533
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "cns_1",
+     "label": "Cartão SUS 2",
+     "bbox": [
+      1172,
+      478,
+      1201,
+      533
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "cns_2",
+     "label": "Cartão SUS 3",
+     "bbox": [
+      1205,
+      478,
+      1234,
+      533
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "cns_3",
+     "label": "Cartão SUS 4",
+     "bbox": [
+      1238,
+      478,
+      1267,
+      533
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "cns_4",
+     "label": "Cartão SUS 5",
+     "bbox": [
+      1271,
+      478,
+      1300,
+      533
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "cns_5",
+     "label": "Cartão SUS 6",
+     "bbox": [
+      1304,
+      478,
+      1333,
+      533
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "cns_6",
+     "label": "Cartão SUS 7",
+     "bbox": [
+      1337,
+      478,
+      1366,
+      533
+     ],
+     "index": 6
+    },
+    {
+     "element_id": "cns_7",
+     "label": "Cartão SUS 8",
+     "bbox": [
+      1370,
+      478,
+      1399,
+      533
+     ],
+     "index": 7
+    },
+    {
+     "element_id": "cns_8",
+     "label": "Cartão SUS 9",
+     "bbox": [
+      1403,
+      478,
+      1432,
+      533
+     ],
+     "index": 8
+    },
+    {
+     "element_id": "cns_9",
+     "label": "Cartão SUS 10",
+     "bbox": [
+      1436,
+      478,
+      1465,
+      533
+     ],
+     "index": 9
+    },
+    {
+     "element_id": "cns_10",
+     "label": "Cartão SUS 11",
+     "bbox": [
+      1469,
+      478,
+      1498,
+      533
+     ],
+     "index": 10
+    },
+    {
+     "element_id": "cns_11",
+     "label": "Cartão SUS 12",
+     "bbox": [
+      1502,
+      478,
+      1531,
+      533
+     ],
+     "index": 11
+    },
+    {
+     "element_id": "cns_12",
+     "label": "Cartão SUS 13",
+     "bbox": [
+      1535,
+      478,
+      1564,
+      533
+     ],
+     "index": 12
+    },
+    {
+     "element_id": "cns_13",
+     "label": "Cartão SUS 14",
+     "bbox": [
+      1568,
+      478,
+      1597,
+      533
+     ],
+     "index": 13
+    },
+    {
+     "element_id": "cns_14",
+     "label": "Cartão SUS 15",
+     "bbox": [
+      1601,
+      478,
+      1630,
+      533
+     ],
+     "index": 14
+    }
+   ],
+   "validation": {
+    "pattern": "^[0-9]{15}$",
+    "digit_count": 15
+   },
+   "bbox": [
+    1137,
+    478,
+    1632,
+    533
+   ]
+  },
+  {
+   "field_id": "4",
+   "bloco": "I",
+   "official_variable": "4",
+   "label": "Naturalidade",
+   "description": "Naturalidade",
+   "data_type": "municipality",
+   "bbox": [
+    1653,
+    462,
+    2118,
+    514
+   ]
+  },
+  {
+   "field_id": "5",
+   "bloco": "I",
+   "official_variable": "5",
+   "label": "Nome do Falecido",
+   "description": "Nome do Falecido",
+   "data_type": "person_name",
+   "semantic": "deceased.name",
+   "rule_refs": [
+    "RULE_PERSON_NAME"
+   ],
+   "bbox": [
+    469,
+    567,
+    2118,
+    609
+   ]
+  },
+  {
+   "field_id": "6",
+   "bloco": "I",
+   "official_variable": "6",
+   "label": "Nome do Pai",
+   "description": "Nome do Pai",
+   "data_type": "person_name",
+   "semantic": "deceased.father_name",
+   "rule_refs": [
+    "RULE_PERSON_NAME"
+   ],
+   "bbox": [
+    469,
+    642,
+    1313,
+    689
+   ]
+  },
+  {
+   "field_id": "7",
+   "bloco": "I",
+   "official_variable": "7",
+   "label": "Nome da Mãe",
+   "description": "Nome da Mãe",
+   "data_type": "person_name",
+   "semantic": "deceased.mother_name",
+   "rule_refs": [
+    "RULE_PERSON_NAME"
+   ],
+   "bbox": [
+    1331,
+    642,
+    2118,
+    689
+   ]
+  },
+  {
+   "field_id": "8",
+   "bloco": "I",
+   "official_variable": "8",
+   "label": "Data de nascimento",
+   "description": "Data de nascimento",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "data_nascimento_d0",
+     "label": "Data de nascimento D0",
+     "bbox": [
+      471,
+      738,
+      516,
+      792
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "data_nascimento_d1",
+     "label": "Data de nascimento D1",
+     "bbox": [
+      520,
+      738,
+      563,
+      792
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "data_nascimento_m0",
+     "label": "Data de nascimento M0",
+     "bbox": [
+      567,
+      738,
+      610,
+      792
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "data_nascimento_m1",
+     "label": "Data de nascimento M1",
+     "bbox": [
+      614,
+      738,
+      657,
+      792
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "data_nascimento_y0",
+     "label": "Data de nascimento Y0",
+     "bbox": [
+      661,
+      738,
+      705,
+      792
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "data_nascimento_y1",
+     "label": "Data de nascimento Y1",
+     "bbox": [
+      709,
+      738,
+      752,
+      792
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "data_nascimento_y2",
+     "label": "Data de nascimento Y2",
+     "bbox": [
+      756,
+      738,
+      800,
+      792
+     ],
+     "index": 6
+    },
+    {
+     "element_id": "data_nascimento_y3",
+     "label": "Data de nascimento Y3",
+     "bbox": [
+      804,
+      738,
+      848,
+      792
+     ],
+     "index": 7
+    }
+   ],
+   "validation": {
+    "digit_count": 8
+   },
+   "rule_refs": [
+    "RULE_DATE_DDMMYYYY"
+   ],
+   "semantic": "deceased.birth_date",
+   "bbox": [
+    469,
+    738,
+    850,
+    792
+   ]
+  },
+  {
+   "field_id": "9_anos",
+   "bloco": "I",
+   "official_variable": "9",
+   "label": "Idade - Anos completos",
+   "description": "Idade - Anos completos",
+   "data_type": "integer",
+   "parent_field_id": "9",
+   "semantic": "deceased.age",
+   "validation": {
+    "min": 1,
+    "max": 120
+   },
+   "bbox": [
+    861,
+    735,
+    1000,
+    792
+   ]
+  },
+  {
+   "field_id": "9_meses",
+   "bloco": "I",
+   "official_variable": "9",
+   "label": "Idade - Menores de 1 ano - Meses",
+   "description": "Idade - Menores de 1 ano - Meses",
+   "data_type": "integer",
+   "parent_field_id": "9",
+   "validation": {
+    "min": 0,
+    "max": 11
+   },
+   "bbox": [
+    1009,
+    750,
+    1071,
+    792
+   ],
+   "semantic": null
+  },
+  {
+   "field_id": "9_dias",
+   "bloco": "I",
+   "official_variable": "9",
+   "label": "Idade - Menores de 1 ano - Dias",
+   "description": "Idade - Menores de 1 ano - Dias",
+   "data_type": "integer",
+   "parent_field_id": "9",
+   "validation": {
+    "min": 0,
+    "max": 30
+   },
+   "bbox": [
+    1080,
+    750,
+    1138,
+    792
+   ],
+   "semantic": null
+  },
+  {
+   "field_id": "9_horas",
+   "bloco": "I",
+   "official_variable": "9",
+   "label": "Idade - Menores de 1 ano - Horas",
+   "description": "Idade - Menores de 1 ano - Horas",
+   "data_type": "integer",
+   "parent_field_id": "9",
+   "validation": {
+    "min": 0,
+    "max": 23
+   },
+   "bbox": [
+    1147,
+    750,
+    1212,
+    792
+   ],
+   "semantic": null
+  },
+  {
+   "field_id": "9_minutos",
+   "bloco": "I",
+   "official_variable": "9",
+   "label": "Idade - Menores de 1 ano - Minutos",
+   "description": "Idade - Menores de 1 ano - Minutos",
+   "data_type": "integer",
+   "parent_field_id": "9",
+   "validation": {
+    "min": 0,
+    "max": 59
+   },
+   "bbox": [
+    1221,
+    750,
+    1283,
+    792
+   ],
+   "semantic": null
+  },
+  {
+   "field_id": "9_ignorado",
+   "bloco": "I",
+   "official_variable": "9",
+   "label": "Idade - Ignorado",
+   "description": "Idade - Ignorado",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "idade_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1316,
+      745,
+      1343,
+      765
+     ]
+    }
+   ],
+   "parent_field_id": "9",
+   "bbox": [
+    1287,
+    694,
+    1368,
+    795
+   ]
+  },
+  {
+   "field_id": "10",
+   "bloco": "I",
+   "official_variable": "10",
+   "label": "Sexo",
+   "description": "Sexo",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "sexo_masculino",
+     "label": "M - Masc.",
+     "value": "M",
+     "bbox": [
+      1379,
+      719,
+      1406,
+      739
+     ]
+    },
+    {
+     "element_id": "sexo_feminino",
+     "label": "F - Fem.",
+     "value": "F",
+     "bbox": [
+      1379,
+      743,
+      1406,
+      763
+     ]
+    },
+    {
+     "element_id": "sexo_ignorado",
+     "label": "I - Ignorado",
+     "value": "I",
+     "bbox": [
+      1379,
+      769,
+      1406,
+      789
+     ]
+    }
+   ],
+   "semantic": "deceased.sex",
+   "bbox": [
+    1376,
+    694,
+    1524,
+    795
+   ]
+  },
+  {
+   "field_id": "11",
+   "bloco": "I",
+   "official_variable": "11",
+   "label": "Raça/Cor",
+   "description": "Raça/Cor",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "raca_cor_branca",
+     "label": "Branca",
+     "value": "1",
+     "bbox": [
+      1544,
+      720,
+      1571,
+      740
+     ]
+    },
+    {
+     "element_id": "raca_cor_preta",
+     "label": "Preta",
+     "value": "2",
+     "bbox": [
+      1545,
+      745,
+      1572,
+      765
+     ]
+    },
+    {
+     "element_id": "raca_cor_amarela",
+     "label": "Amarela",
+     "value": "3",
+     "bbox": [
+      1544,
+      770,
+      1571,
+      790
+     ]
+    },
+    {
+     "element_id": "raca_cor_parda",
+     "label": "Parda",
+     "value": "4",
+     "bbox": [
+      1653,
+      720,
+      1680,
+      740
+     ]
+    },
+    {
+     "element_id": "raca_cor_indigena",
+     "label": "Indígena",
+     "value": "5",
+     "bbox": [
+      1653,
+      745,
+      1680,
+      765
+     ]
+    }
+   ],
+   "bbox": [
+    1531,
+    694,
+    1766,
+    795
+   ]
+  },
+  {
+   "field_id": "12",
+   "bloco": "I",
+   "official_variable": "12",
+   "label": "Situação conjugal",
+   "description": "Situação conjugal",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "situacao_conjugal_solteiro",
+     "label": "Solteiro",
+     "value": "1",
+     "bbox": [
+      1787,
+      718,
+      1814,
+      738
+     ]
+    },
+    {
+     "element_id": "situacao_conjugal_casado",
+     "label": "Casado",
+     "value": "2",
+     "bbox": [
+      1787,
+      745,
+      1814,
+      765
+     ]
+    },
+    {
+     "element_id": "situacao_conjugal_viuvo",
+     "label": "Viúvo",
+     "value": "3",
+     "bbox": [
+      1787,
+      771,
+      1814,
+      791
+     ]
+    },
+    {
+     "element_id": "situacao_conjugal_separado",
+     "label": "Separado judicialmente/divorciado",
+     "value": "4",
+     "bbox": [
+      1911,
+      718,
+      1938,
+      738
+     ]
+    },
+    {
+     "element_id": "situacao_conjugal_uniao_estavel",
+     "label": "União estável",
+     "value": "5",
+     "bbox": [
+      1911,
+      745,
+      1938,
+      765
+     ]
+    },
+    {
+     "element_id": "situacao_conjugal_ignorada",
+     "label": "Ignorada",
+     "value": "9",
+     "bbox": [
+      1911,
+      770,
+      1938,
+      790
+     ]
+    }
+   ],
+   "bbox": [
+    1766,
+    694,
+    2122,
+    795
+   ]
+  },
+  {
+   "field_id": "13",
+   "bloco": "I",
+   "official_variable": "13",
+   "label": "Escolaridade (última série concluída) - Nível",
+   "description": "Escolaridade (última série concluída) - Nível",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "escolaridade_sem",
+     "label": "Sem escolaridade",
+     "value": "0",
+     "bbox": [
+      488,
+      834,
+      515,
+      854
+     ]
+    },
+    {
+     "element_id": "escolaridade_fund1",
+     "label": "Fundamental I (1ª a 4ª Série)",
+     "value": "1",
+     "bbox": [
+      488,
+      860,
+      515,
+      880
+     ]
+    },
+    {
+     "element_id": "escolaridade_fund2",
+     "label": "Fundamental II (5ª a 8ª Série)",
+     "value": "2",
+     "bbox": [
+      488,
+      886,
+      515,
+      906
+     ]
+    },
+    {
+     "element_id": "escolaridade_medio",
+     "label": "Médio (antigo 2º grau)",
+     "value": "3",
+     "bbox": [
+      826,
+      834,
+      853,
+      854
+     ]
+    },
+    {
+     "element_id": "escolaridade_sup_inc",
+     "label": "Superior incompleto",
+     "value": "4",
+     "bbox": [
+      826,
+      860,
+      853,
+      880
+     ]
+    },
+    {
+     "element_id": "escolaridade_sup_comp",
+     "label": "Superior completo",
+     "value": "5",
+     "bbox": [
+      826,
+      886,
+      853,
+      906
+     ]
+    },
+    {
+     "element_id": "escolaridade_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1082,
+      866,
+      1109,
+      886
+     ]
+    }
+   ],
+   "bbox": [
+    464,
+    799,
+    1132,
+    916
+   ]
+  },
+  {
+   "field_id": "13_serie",
+   "bloco": "I",
+   "official_variable": "13",
+   "label": "Escolaridade - Série",
+   "description": "Escolaridade - Série",
+   "data_type": "integer",
+   "parent_field_id": "13",
+   "validation": {
+    "min": 1,
+    "max": 9
+   },
+   "bbox": [
+    1137,
+    850,
+    1225,
+    913
+   ]
+  },
+  {
+   "field_id": "14",
+   "bloco": "I",
+   "official_variable": "14",
+   "label": "Ocupação habitual",
+   "description": "Ocupação habitual",
+   "data_type": "occupation",
+   "semantic": "deceased.occupation",
+   "bbox": [
+    1241,
+    860,
+    1870,
+    913
+   ]
+  },
+  {
+   "field_id": "14_codigo_cbo",
+   "bloco": "I",
+   "official_variable": null,
+   "label": "Ocupação habitual - Código CBO 2002",
+   "description": "Ocupação habitual - Código CBO 2002",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "cbo_0",
+     "label": "Ocupação habitual - Código CBO 2002 1",
+     "bbox": [
+      1876,
+      868,
+      1909,
+      912
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "cbo_1",
+     "label": "Ocupação habitual - Código CBO 2002 2",
+     "bbox": [
+      1913,
+      868,
+      1952,
+      912
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "cbo_2",
+     "label": "Ocupação habitual - Código CBO 2002 3",
+     "bbox": [
+      1956,
+      868,
+      1995,
+      912
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "cbo_3",
+     "label": "Ocupação habitual - Código CBO 2002 4",
+     "bbox": [
+      1999,
+      868,
+      2037,
+      912
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "cbo_4",
+     "label": "Ocupação habitual - Código CBO 2002 5",
+     "bbox": [
+      2041,
+      868,
+      2080,
+      912
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "cbo_5",
+     "label": "Ocupação habitual - Código CBO 2002 6",
+     "bbox": [
+      2084,
+      868,
+      2120,
+      912
+     ],
+     "index": 5
+    }
+   ],
+   "validation": {
+    "digit_count": 6
+   },
+   "parent_field_id": "14",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    1874,
+    868,
+    2122,
+    912
+   ]
+  },
+  {
+   "field_id": "15",
+   "bloco": "II",
+   "official_variable": "15",
+   "label": "Logradouro (rua, praça, avenida, etc.)",
+   "description": "Logradouro (rua, praça, avenida, etc.)",
+   "data_type": "address",
+   "semantic": "deceased.residence.street",
+   "bbox": [
+    469,
+    948,
+    1373,
+    987
+   ]
+  },
+  {
+   "field_id": "15_numero",
+   "bloco": "II",
+   "official_variable": null,
+   "label": "Logradouro - Número",
+   "description": "Logradouro - Número",
+   "data_type": "integer",
+   "parent_field_id": "15",
+   "semantic": "deceased.residence.number",
+   "bbox": [
+    1382,
+    948,
+    1544,
+    987
+   ]
+  },
+  {
+   "field_id": "15_complemento",
+   "bloco": "II",
+   "official_variable": null,
+   "label": "Logradouro - Complemento",
+   "description": "Logradouro - Complemento",
+   "data_type": "text",
+   "parent_field_id": "15",
+   "bbox": [
+    1553,
+    948,
+    1742,
+    987
+   ]
+  },
+  {
+   "field_id": "16",
+   "bloco": "II",
+   "official_variable": "16",
+   "label": "CEP",
+   "description": "CEP",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "cep_0",
+     "label": "CEP 1",
+     "bbox": [
+      1751,
+      945,
+      1794,
+      989
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "cep_1",
+     "label": "CEP 2",
+     "bbox": [
+      1798,
+      945,
+      1840,
+      989
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "cep_2",
+     "label": "CEP 3",
+     "bbox": [
+      1844,
+      945,
+      1887,
+      989
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "cep_3",
+     "label": "CEP 4",
+     "bbox": [
+      1891,
+      945,
+      1934,
+      989
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "cep_4",
+     "label": "CEP 5",
+     "bbox": [
+      1938,
+      945,
+      1980,
+      989
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "cep_5",
+     "label": "CEP 6",
+     "bbox": [
+      1984,
+      945,
+      2027,
+      989
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "cep_6",
+     "label": "CEP 7",
+     "bbox": [
+      2031,
+      945,
+      2073,
+      989
+     ],
+     "index": 6
+    },
+    {
+     "element_id": "cep_7",
+     "label": "CEP 8",
+     "bbox": [
+      2077,
+      945,
+      2120,
+      989
+     ],
+     "index": 7
+    }
+   ],
+   "validation": {
+    "digit_count": 8
+   },
+   "semantic": "deceased.residence.cep",
+   "rule_refs": [
+    "RULE_CEP"
+   ],
+   "bbox": [
+    1749,
+    945,
+    2122,
+    989
+   ]
+  },
+  {
+   "field_id": "17",
+   "bloco": "II",
+   "official_variable": "17",
+   "label": "Bairro/Distrito",
+   "description": "Bairro/Distrito",
+   "data_type": "text",
+   "semantic": "deceased.residence.neighborhood",
+   "bbox": [
+    469,
+    1020,
+    942,
+    1059
+   ]
+  },
+  {
+   "field_id": "17_codigo",
+   "bloco": "II",
+   "official_variable": null,
+   "label": "Bairro/Distrito - Código",
+   "description": "Bairro/Distrito - Código",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "bairro_codigo_0",
+     "label": "Bairro/Distrito - Código 1",
+     "bbox": [
+      948,
+      1020,
+      993,
+      1060
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "bairro_codigo_1",
+     "label": "Bairro/Distrito - Código 2",
+     "bbox": [
+      997,
+      1020,
+      1040,
+      1060
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "bairro_codigo_2",
+     "label": "Bairro/Distrito - Código 3",
+     "bbox": [
+      1044,
+      1020,
+      1082,
+      1060
+     ],
+     "index": 2
+    }
+   ],
+   "validation": {
+    "digit_count": 3
+   },
+   "parent_field_id": "17",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    946,
+    1020,
+    1084,
+    1060
+   ]
+  },
+  {
+   "field_id": "18",
+   "bloco": "II",
+   "official_variable": "18",
+   "label": "Município de residência",
+   "description": "Município de residência",
+   "data_type": "municipality",
+   "semantic": "deceased.residence.municipality",
+   "bbox": [
+    1109,
+    1020,
+    1680,
+    1059
+   ]
+  },
+  {
+   "field_id": "18_codigo",
+   "bloco": "II",
+   "official_variable": null,
+   "label": "Município de residência - Código (IBGE)",
+   "description": "Município de residência - Código (IBGE)",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "mun_res_codigo_0",
+     "label": "Município de residência - Código (IBGE) 1",
+     "bbox": [
+      1686,
+      1020,
+      1730,
+      1060
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "mun_res_codigo_1",
+     "label": "Município de residência - Código (IBGE) 2",
+     "bbox": [
+      1734,
+      1020,
+      1778,
+      1060
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "mun_res_codigo_2",
+     "label": "Município de residência - Código (IBGE) 3",
+     "bbox": [
+      1782,
+      1020,
+      1825,
+      1060
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "mun_res_codigo_3",
+     "label": "Município de residência - Código (IBGE) 4",
+     "bbox": [
+      1829,
+      1020,
+      1872,
+      1060
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "mun_res_codigo_4",
+     "label": "Município de residência - Código (IBGE) 5",
+     "bbox": [
+      1876,
+      1020,
+      1919,
+      1060
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "mun_res_codigo_5",
+     "label": "Município de residência - Código (IBGE) 6",
+     "bbox": [
+      1923,
+      1020,
+      1966,
+      1060
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "mun_res_codigo_6",
+     "label": "Município de residência - Código (IBGE) 7",
+     "bbox": [
+      1970,
+      1020,
+      2012,
+      1060
+     ],
+     "index": 6
+    }
+   ],
+   "validation": {
+    "digit_count": 7
+   },
+   "parent_field_id": "18",
+   "semantic": "deceased.residence.ibge",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    1684,
+    1020,
+    2014,
+    1060
+   ]
+  },
+  {
+   "field_id": "19",
+   "bloco": "II",
+   "official_variable": "19",
+   "label": "UF",
+   "description": "UF",
+   "data_type": "text_sequence",
+   "elements": [
+    {
+     "element_id": "uf_res_0",
+     "label": "UF 1",
+     "bbox": [
+      2034,
+      1020,
+      2078,
+      1060
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "uf_res_1",
+     "label": "UF 2",
+     "bbox": [
+      2082,
+      1020,
+      2120,
+      1060
+     ],
+     "index": 1
+    }
+   ],
+   "validation": {
+    "pattern": "^[A-Z]{2}$",
+    "digit_count": 2
+   },
+   "semantic": "deceased.residence.uf",
+   "rule_refs": [
+    "RULE_UF"
+   ],
+   "bbox": [
+    2032,
+    1020,
+    2122,
+    1060
+   ]
+  },
+  {
+   "field_id": "20",
+   "bloco": "III",
+   "official_variable": "20",
+   "label": "Local de ocorrência do óbito",
+   "description": "Local de ocorrência do óbito",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "local_ocorrencia_hospital",
+     "label": "Hospital",
+     "value": "1",
+     "bbox": [
+      488,
+      1111,
+      515,
+      1131
+     ]
+    },
+    {
+     "element_id": "local_ocorrencia_outros_estab",
+     "label": "Outros estab. saúde",
+     "value": "2",
+     "bbox": [
+      488,
+      1136,
+      515,
+      1156
+     ]
+    },
+    {
+     "element_id": "local_ocorrencia_domicilio",
+     "label": "Domicílio",
+     "value": "3",
+     "bbox": [
+      708,
+      1111,
+      735,
+      1131
+     ]
+    },
+    {
+     "element_id": "local_ocorrencia_via_publica",
+     "label": "Via pública",
+     "value": "4",
+     "bbox": [
+      708,
+      1136,
+      735,
+      1156
+     ]
+    },
+    {
+     "element_id": "local_ocorrencia_outros",
+     "label": "Outros",
+     "value": "5",
+     "bbox": [
+      845,
+      1111,
+      872,
+      1131
+     ]
+    },
+    {
+     "element_id": "local_ocorrencia_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      959,
+      1124,
+      986,
+      1144
+     ]
+    }
+   ],
+   "bbox": [
+    464,
+    1080,
+    1007,
+    1166
+   ]
+  },
+  {
+   "field_id": "21",
+   "bloco": "III",
+   "official_variable": "21",
+   "label": "Estabelecimento",
+   "description": "Estabelecimento",
+   "data_type": "text",
+   "semantic": "death.place.establishment.name",
+   "bbox": [
+    1022,
+    1110,
+    1792,
+    1163
+   ]
+  },
+  {
+   "field_id": "21_codigo_cnes",
+   "bloco": "III",
+   "official_variable": null,
+   "label": "Estabelecimento - Código CNES",
+   "description": "Estabelecimento - Código CNES",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "cnes_0",
+     "label": "Estabelecimento - Código CNES 1",
+     "bbox": [
+      1798,
+      1122,
+      1843,
+      1164
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "cnes_1",
+     "label": "Estabelecimento - Código CNES 2",
+     "bbox": [
+      1847,
+      1122,
+      1891,
+      1164
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "cnes_2",
+     "label": "Estabelecimento - Código CNES 3",
+     "bbox": [
+      1895,
+      1122,
+      1938,
+      1164
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "cnes_3",
+     "label": "Estabelecimento - Código CNES 4",
+     "bbox": [
+      1942,
+      1122,
+      1985,
+      1164
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "cnes_4",
+     "label": "Estabelecimento - Código CNES 5",
+     "bbox": [
+      1989,
+      1122,
+      2031,
+      1164
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "cnes_5",
+     "label": "Estabelecimento - Código CNES 6",
+     "bbox": [
+      2035,
+      1122,
+      2078,
+      1164
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "cnes_6",
+     "label": "Estabelecimento - Código CNES 7",
+     "bbox": [
+      2082,
+      1122,
+      2120,
+      1164
+     ],
+     "index": 6
+    }
+   ],
+   "validation": {
+    "digit_count": 7
+   },
+   "parent_field_id": "21",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    1796,
+    1122,
+    2122,
+    1164
+   ]
+  },
+  {
+   "field_id": "22",
+   "bloco": "III",
+   "official_variable": "22",
+   "label": "Endereço da ocorrência, se fora do estabelecimento ou da residência (rua, praça, avenida, etc)",
+   "description": "Endereço da ocorrência, se fora do estabelecimento ou da residência (rua, praça, avenida, etc)",
+   "data_type": "address",
+   "bbox": [
+    469,
+    1203,
+    1368,
+    1240
+   ]
+  },
+  {
+   "field_id": "22_numero",
+   "bloco": "III",
+   "official_variable": null,
+   "label": "Endereço da ocorrência - Número",
+   "description": "Endereço da ocorrência - Número",
+   "data_type": "integer",
+   "parent_field_id": "22",
+   "bbox": [
+    1377,
+    1203,
+    1543,
+    1240
+   ]
+  },
+  {
+   "field_id": "22_complemento",
+   "bloco": "III",
+   "official_variable": null,
+   "label": "Endereço da ocorrência - Complemento",
+   "description": "Endereço da ocorrência - Complemento",
+   "data_type": "text",
+   "parent_field_id": "22",
+   "bbox": [
+    1552,
+    1203,
+    1738,
+    1240
+   ]
+  },
+  {
+   "field_id": "23",
+   "bloco": "III",
+   "official_variable": "23",
+   "label": "CEP",
+   "description": "CEP",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "cep_ocor_0",
+     "label": "CEP 1",
+     "bbox": [
+      1747,
+      1199,
+      1790,
+      1242
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "cep_ocor_1",
+     "label": "CEP 2",
+     "bbox": [
+      1794,
+      1199,
+      1837,
+      1242
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "cep_ocor_2",
+     "label": "CEP 3",
+     "bbox": [
+      1841,
+      1199,
+      1884,
+      1242
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "cep_ocor_3",
+     "label": "CEP 4",
+     "bbox": [
+      1888,
+      1199,
+      1932,
+      1242
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "cep_ocor_4",
+     "label": "CEP 5",
+     "bbox": [
+      1936,
+      1199,
+      1979,
+      1242
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "cep_ocor_5",
+     "label": "CEP 6",
+     "bbox": [
+      1983,
+      1199,
+      2026,
+      1242
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "cep_ocor_6",
+     "label": "CEP 7",
+     "bbox": [
+      2030,
+      1199,
+      2073,
+      1242
+     ],
+     "index": 6
+    },
+    {
+     "element_id": "cep_ocor_7",
+     "label": "CEP 8",
+     "bbox": [
+      2077,
+      1199,
+      2120,
+      1242
+     ],
+     "index": 7
+    }
+   ],
+   "validation": {
+    "digit_count": 8
+   },
+   "rule_refs": [
+    "RULE_CEP"
+   ],
+   "bbox": [
+    1745,
+    1199,
+    2122,
+    1242
+   ]
+  },
+  {
+   "field_id": "24",
+   "bloco": "III",
+   "official_variable": "24",
+   "label": "Bairro/Distrito",
+   "description": "Bairro/Distrito",
+   "data_type": "text",
+   "bbox": [
+    469,
+    1275,
+    936,
+    1311
+   ]
+  },
+  {
+   "field_id": "24_codigo",
+   "bloco": "III",
+   "official_variable": null,
+   "label": "Bairro/Distrito - Código",
+   "description": "Bairro/Distrito - Código",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "bairro_ocor_codigo_0",
+     "label": "Bairro/Distrito - Código 1",
+     "bbox": [
+      942,
+      1273,
+      987,
+      1312
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "bairro_ocor_codigo_1",
+     "label": "Bairro/Distrito - Código 2",
+     "bbox": [
+      991,
+      1273,
+      1034,
+      1312
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "bairro_ocor_codigo_2",
+     "label": "Bairro/Distrito - Código 3",
+     "bbox": [
+      1038,
+      1273,
+      1082,
+      1312
+     ],
+     "index": 2
+    }
+   ],
+   "validation": {
+    "digit_count": 3
+   },
+   "parent_field_id": "24",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    940,
+    1273,
+    1084,
+    1312
+   ]
+  },
+  {
+   "field_id": "25",
+   "bloco": "III",
+   "official_variable": "25",
+   "label": "Município de ocorrência",
+   "description": "Município de ocorrência",
+   "data_type": "municipality",
+   "semantic": "death.place.municipality",
+   "bbox": [
+    1105,
+    1275,
+    1674,
+    1311
+   ]
+  },
+  {
+   "field_id": "25_codigo",
+   "bloco": "III",
+   "official_variable": null,
+   "label": "Município de ocorrência - Código (IBGE)",
+   "description": "Município de ocorrência - Código (IBGE)",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "mun_ocor_codigo_0",
+     "label": "Município de ocorrência - Código (IBGE) 1",
+     "bbox": [
+      1680,
+      1273,
+      1725,
+      1312
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "mun_ocor_codigo_1",
+     "label": "Município de ocorrência - Código (IBGE) 2",
+     "bbox": [
+      1729,
+      1273,
+      1773,
+      1312
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "mun_ocor_codigo_2",
+     "label": "Município de ocorrência - Código (IBGE) 3",
+     "bbox": [
+      1777,
+      1273,
+      1820,
+      1312
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "mun_ocor_codigo_3",
+     "label": "Município de ocorrência - Código (IBGE) 4",
+     "bbox": [
+      1824,
+      1273,
+      1866,
+      1312
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "mun_ocor_codigo_4",
+     "label": "Município de ocorrência - Código (IBGE) 5",
+     "bbox": [
+      1870,
+      1273,
+      1913,
+      1312
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "mun_ocor_codigo_5",
+     "label": "Município de ocorrência - Código (IBGE) 6",
+     "bbox": [
+      1917,
+      1273,
+      1960,
+      1312
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "mun_ocor_codigo_6",
+     "label": "Município de ocorrência - Código (IBGE) 7",
+     "bbox": [
+      1964,
+      1273,
+      2005,
+      1312
+     ],
+     "index": 6
+    }
+   ],
+   "validation": {
+    "digit_count": 7
+   },
+   "parent_field_id": "25",
+   "semantic": "death.place.ibge",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    1678,
+    1273,
+    2007,
+    1312
+   ]
+  },
+  {
+   "field_id": "26",
+   "bloco": "III",
+   "official_variable": "26",
+   "label": "UF",
+   "description": "UF",
+   "data_type": "text_sequence",
+   "elements": [
+    {
+     "element_id": "uf_ocor_0",
+     "label": "UF 1",
+     "bbox": [
+      2027,
+      1273,
+      2072,
+      1312
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "uf_ocor_1",
+     "label": "UF 2",
+     "bbox": [
+      2076,
+      1273,
+      2120,
+      1312
+     ],
+     "index": 1
+    }
+   ],
+   "validation": {
+    "digit_count": 2
+   },
+   "semantic": "death.place.uf",
+   "rule_refs": [
+    "RULE_UF"
+   ],
+   "bbox": [
+    2025,
+    1273,
+    2122,
+    1312
+   ]
+  },
+  {
+   "field_id": "27",
+   "bloco": "IV",
+   "official_variable": "27",
+   "label": "Idade (anos) da mãe",
+   "description": "Idade (anos) da mãe",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "idade_mae_0",
+     "label": "Idade (anos) da mãe 1",
+     "bbox": [
+      472,
+      1440,
+      515,
+      1486
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "idade_mae_1",
+     "label": "Idade (anos) da mãe 2",
+     "bbox": [
+      519,
+      1440,
+      564,
+      1486
+     ],
+     "index": 1
+    }
+   ],
+   "validation": {
+    "digit_count": 2
+   },
+   "bbox": [
+    470,
+    1440,
+    566,
+    1486
+   ]
+  },
+  {
+   "field_id": "28",
+   "bloco": "IV",
+   "official_variable": "28",
+   "label": "Escolaridade da mãe (última série concluída) - Nível",
+   "description": "Escolaridade da mãe (última série concluída) - Nível",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "escolaridade_mae_sem",
+     "label": "Sem escolaridade",
+     "value": "0",
+     "bbox": [
+      595,
+      1401,
+      622,
+      1421
+     ]
+    },
+    {
+     "element_id": "escolaridade_mae_fund1",
+     "label": "Fundamental I (1ª a 4ª Série)",
+     "value": "1",
+     "bbox": [
+      595,
+      1429,
+      622,
+      1449
+     ]
+    },
+    {
+     "element_id": "escolaridade_mae_fund2",
+     "label": "Fundamental II (5ª a 8ª Série)",
+     "value": "2",
+     "bbox": [
+      595,
+      1462,
+      622,
+      1482
+     ]
+    },
+    {
+     "element_id": "escolaridade_mae_medio",
+     "label": "Médio (antigo 2º grau)",
+     "value": "3",
+     "bbox": [
+      947,
+      1401,
+      974,
+      1421
+     ]
+    },
+    {
+     "element_id": "escolaridade_mae_sup_inc",
+     "label": "Superior incompleto",
+     "value": "4",
+     "bbox": [
+      947,
+      1429,
+      974,
+      1449
+     ]
+    },
+    {
+     "element_id": "escolaridade_mae_sup_comp",
+     "label": "Superior completo",
+     "value": "5",
+     "bbox": [
+      947,
+      1462,
+      974,
+      1482
+     ]
+    },
+    {
+     "element_id": "escolaridade_mae_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1226,
+      1436,
+      1253,
+      1456
+     ]
+    }
+   ],
+   "bbox": [
+    575,
+    1352,
+    1279,
+    1488
+   ]
+  },
+  {
+   "field_id": "28_serie",
+   "bloco": "IV",
+   "official_variable": "28",
+   "label": "Escolaridade da mãe - Série",
+   "description": "Escolaridade da mãe - Série",
+   "data_type": "integer",
+   "parent_field_id": "28",
+   "bbox": [
+    1284,
+    1420,
+    1373,
+    1485
+   ]
+  },
+  {
+   "field_id": "29",
+   "bloco": "IV",
+   "official_variable": "29",
+   "label": "Ocupação habitual da mãe",
+   "description": "Ocupação habitual da mãe",
+   "data_type": "occupation",
+   "bbox": [
+    1391,
+    1430,
+    1869,
+    1485
+   ]
+  },
+  {
+   "field_id": "29_codigo_cbo",
+   "bloco": "IV",
+   "official_variable": null,
+   "label": "Ocupação da mãe - Código CBO 2002",
+   "description": "Ocupação da mãe - Código CBO 2002",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "cbo_mae_0",
+     "label": "Ocupação da mãe - Código CBO 2002 1",
+     "bbox": [
+      1875,
+      1440,
+      1908,
+      1486
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "cbo_mae_1",
+     "label": "Ocupação da mãe - Código CBO 2002 2",
+     "bbox": [
+      1912,
+      1440,
+      1951,
+      1486
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "cbo_mae_2",
+     "label": "Ocupação da mãe - Código CBO 2002 3",
+     "bbox": [
+      1955,
+      1440,
+      1994,
+      1486
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "cbo_mae_3",
+     "label": "Ocupação da mãe - Código CBO 2002 4",
+     "bbox": [
+      1998,
+      1440,
+      2037,
+      1486
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "cbo_mae_4",
+     "label": "Ocupação da mãe - Código CBO 2002 5",
+     "bbox": [
+      2041,
+      1440,
+      2080,
+      1486
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "cbo_mae_5",
+     "label": "Ocupação da mãe - Código CBO 2002 6",
+     "bbox": [
+      2084,
+      1440,
+      2120,
+      1486
+     ],
+     "index": 5
+    }
+   ],
+   "validation": {
+    "digit_count": 6
+   },
+   "parent_field_id": "29",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    1873,
+    1440,
+    2122,
+    1486
+   ]
+  },
+  {
+   "field_id": "30_nascidos_vivos",
+   "bloco": "IV",
+   "official_variable": "30",
+   "label": "Número de filhos tidos - Nascidos vivos",
+   "description": "Número de filhos tidos - Nascidos vivos",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "30_nascidos_vivos_0",
+     "label": "Número de filhos tidos - Nascidos vivos 1",
+     "bbox": [
+      485,
+      1560,
+      531,
+      1600
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "30_nascidos_vivos_1",
+     "label": "Número de filhos tidos - Nascidos vivos 2",
+     "bbox": [
+      535,
+      1560,
+      581,
+      1600
+     ],
+     "index": 1
+    }
+   ],
+   "validation": {
+    "digit_count": 2
+   },
+   "parent_field_id": "30",
+   "bbox": [
+    483,
+    1560,
+    583,
+    1600
+   ]
+  },
+  {
+   "field_id": "30_nascidos_vivos_ignorado",
+   "bloco": "IV",
+   "official_variable": "30",
+   "label": "Número de filhos tidos - Nascidos vivos - Ignorado (99)",
+   "description": "Número de filhos tidos - Nascidos vivos - Ignorado (99)",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "30_nascidos_vivos_ign_ignorado",
+     "label": "99 Ignorado",
+     "value": "99",
+     "bbox": [
+      495,
+      1615,
+      522,
+      1635
+     ]
+    }
+   ],
+   "parent_field_id": "30_nascidos_vivos",
+   "bbox": [
+    464,
+    1605,
+    606,
+    1643
+   ]
+  },
+  {
+   "field_id": "30_perdas_fetais",
+   "bloco": "IV",
+   "official_variable": "30",
+   "label": "Número de filhos tidos - Perdas fetais/abortos",
+   "description": "Número de filhos tidos - Perdas fetais/abortos",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "30_perdas_fetais_0",
+     "label": "Número de filhos tidos - Perdas fetais/abortos 1",
+     "bbox": [
+      621,
+      1560,
+      667,
+      1600
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "30_perdas_fetais_1",
+     "label": "Número de filhos tidos - Perdas fetais/abortos 2",
+     "bbox": [
+      671,
+      1560,
+      717,
+      1600
+     ],
+     "index": 1
+    }
+   ],
+   "validation": {
+    "digit_count": 2
+   },
+   "parent_field_id": "30",
+   "bbox": [
+    619,
+    1560,
+    719,
+    1600
+   ]
+  },
+  {
+   "field_id": "30_perdas_fetais_ignorado",
+   "bloco": "IV",
+   "official_variable": "30",
+   "label": "Número de filhos tidos - Perdas fetais/abortos - Ignorado (99)",
+   "description": "Número de filhos tidos - Perdas fetais/abortos - Ignorado (99)",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "30_perdas_fetais_ign_ignorado",
+     "label": "99 Ignorado",
+     "value": "99",
+     "bbox": [
+      632,
+      1615,
+      659,
+      1635
+     ]
+    }
+   ],
+   "parent_field_id": "30_perdas_fetais",
+   "bbox": [
+    606,
+    1605,
+    741,
+    1643
+   ]
+  },
+  {
+   "field_id": "31",
+   "bloco": "IV",
+   "official_variable": "31",
+   "label": "Nº de semanas de gestação",
+   "description": "Nº de semanas de gestação",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "31_0",
+     "label": "Nº de semanas de gestação 1",
+     "bbox": [
+      778,
+      1560,
+      824,
+      1600
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "31_1",
+     "label": "Nº de semanas de gestação 2",
+     "bbox": [
+      828,
+      1560,
+      874,
+      1600
+     ],
+     "index": 1
+    }
+   ],
+   "validation": {
+    "digit_count": 2
+   },
+   "bbox": [
+    776,
+    1560,
+    876,
+    1600
+   ]
+  },
+  {
+   "field_id": "31_ignorado",
+   "bloco": "IV",
+   "official_variable": "31",
+   "label": "Nº de semanas de gestação - Ignorado (99)",
+   "description": "Nº de semanas de gestação - Ignorado (99)",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "31_ign_ignorado",
+     "label": "99 Ignorado",
+     "value": "99",
+     "bbox": [
+      789,
+      1615,
+      816,
+      1635
+     ]
+    }
+   ],
+   "parent_field_id": "31",
+   "bbox": [
+    741,
+    1605,
+    926,
+    1643
+   ]
+  },
+  {
+   "field_id": "32",
+   "bloco": "IV",
+   "official_variable": "32",
+   "label": "Tipo de gravidez",
+   "description": "Tipo de gravidez",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "tipo_gravidez_unica",
+     "label": "Única",
+     "value": "1",
+     "bbox": [
+      961,
+      1527,
+      988,
+      1547
+     ]
+    },
+    {
+     "element_id": "tipo_gravidez_dupla",
+     "label": "Dupla",
+     "value": "2",
+     "bbox": [
+      961,
+      1559,
+      988,
+      1579
+     ]
+    },
+    {
+     "element_id": "tipo_gravidez_tripla",
+     "label": "Tripla e mais",
+     "value": "3",
+     "bbox": [
+      961,
+      1590,
+      988,
+      1610
+     ]
+    },
+    {
+     "element_id": "tipo_gravidez_ignorada",
+     "label": "Ignorada",
+     "value": "9",
+     "bbox": [
+      961,
+      1621,
+      988,
+      1641
+     ]
+    }
+   ],
+   "bbox": [
+    933,
+    1498,
+    1128,
+    1650
+   ]
+  },
+  {
+   "field_id": "33",
+   "bloco": "IV",
+   "official_variable": "33",
+   "label": "Tipo de parto",
+   "description": "Tipo de parto",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "tipo_parto_vaginal",
+     "label": "Vaginal",
+     "value": "1",
+     "bbox": [
+      1166,
+      1531,
+      1193,
+      1551
+     ]
+    },
+    {
+     "element_id": "tipo_parto_cesareo",
+     "label": "Cesáreo",
+     "value": "2",
+     "bbox": [
+      1166,
+      1580,
+      1193,
+      1600
+     ]
+    },
+    {
+     "element_id": "tipo_parto_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1166,
+      1621,
+      1193,
+      1641
+     ]
+    }
+   ],
+   "bbox": [
+    1128,
+    1498,
+    1316,
+    1650
+   ]
+  },
+  {
+   "field_id": "34",
+   "bloco": "IV",
+   "official_variable": "34",
+   "label": "Morte em relação ao parto",
+   "description": "Morte em relação ao parto",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "morte_parto_antes",
+     "label": "Antes",
+     "value": "1",
+     "bbox": [
+      1395,
+      1538,
+      1422,
+      1558
+     ]
+    },
+    {
+     "element_id": "morte_parto_durante",
+     "label": "Durante",
+     "value": "2",
+     "bbox": [
+      1555,
+      1538,
+      1582,
+      1558
+     ]
+    },
+    {
+     "element_id": "morte_parto_depois",
+     "label": "Depois",
+     "value": "3",
+     "bbox": [
+      1740,
+      1538,
+      1767,
+      1558
+     ]
+    },
+    {
+     "element_id": "morte_parto_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1925,
+      1538,
+      1952,
+      1558
+     ]
+    }
+   ],
+   "bbox": [
+    1339,
+    1498,
+    2122,
+    1572
+   ]
+  },
+  {
+   "field_id": "35",
+   "bloco": "IV",
+   "official_variable": "35",
+   "label": "Peso ao nascer (gramas)",
+   "description": "Peso ao nascer (gramas)",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "peso_0",
+     "label": "Peso ao nascer (gramas) 1",
+     "bbox": [
+      1342,
+      1604,
+      1385,
+      1648
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "peso_1",
+     "label": "Peso ao nascer (gramas) 2",
+     "bbox": [
+      1389,
+      1604,
+      1432,
+      1648
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "peso_2",
+     "label": "Peso ao nascer (gramas) 3",
+     "bbox": [
+      1436,
+      1604,
+      1479,
+      1648
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "peso_3",
+     "label": "Peso ao nascer (gramas) 4",
+     "bbox": [
+      1483,
+      1604,
+      1526,
+      1648
+     ],
+     "index": 3
+    }
+   ],
+   "validation": {
+    "min": 100,
+    "max": 6000,
+    "digit_count": 4
+   },
+   "bbox": [
+    1340,
+    1604,
+    1528,
+    1648
+   ]
+  },
+  {
+   "field_id": "36",
+   "bloco": "IV",
+   "official_variable": "36",
+   "label": "Número da Declaração de Nascido Vivo",
+   "description": "Número da Declaração de Nascido Vivo",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "dnv_0",
+     "label": "Número da Declaração de Nascido Vivo 1",
+     "bbox": [
+      1598,
+      1604,
+      1641,
+      1648
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "dnv_1",
+     "label": "Número da Declaração de Nascido Vivo 2",
+     "bbox": [
+      1645,
+      1604,
+      1688,
+      1648
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "dnv_2",
+     "label": "Número da Declaração de Nascido Vivo 3",
+     "bbox": [
+      1692,
+      1604,
+      1734,
+      1648
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "dnv_3",
+     "label": "Número da Declaração de Nascido Vivo 4",
+     "bbox": [
+      1738,
+      1604,
+      1780,
+      1648
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "dnv_4",
+     "label": "Número da Declaração de Nascido Vivo 5",
+     "bbox": [
+      1784,
+      1604,
+      1826,
+      1648
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "dnv_5",
+     "label": "Número da Declaração de Nascido Vivo 6",
+     "bbox": [
+      1830,
+      1604,
+      1873,
+      1648
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "dnv_6",
+     "label": "Número da Declaração de Nascido Vivo 7",
+     "bbox": [
+      1877,
+      1604,
+      1919,
+      1648
+     ],
+     "index": 6
+    },
+    {
+     "element_id": "dnv_7",
+     "label": "Número da Declaração de Nascido Vivo 8",
+     "bbox": [
+      1923,
+      1604,
+      1965,
+      1648
+     ],
+     "index": 7
+    },
+    {
+     "element_id": "dnv_8",
+     "label": "Número da Declaração de Nascido Vivo 9",
+     "bbox": [
+      1969,
+      1604,
+      2011,
+      1648
+     ],
+     "index": 8
+    },
+    {
+     "element_id": "dnv_9",
+     "label": "Número da Declaração de Nascido Vivo 10",
+     "bbox": [
+      2015,
+      1604,
+      2058,
+      1648
+     ],
+     "index": 9
+    },
+    {
+     "element_id": "dnv_10",
+     "label": "Número da Declaração de Nascido Vivo 11",
+     "bbox": [
+      2062,
+      1604,
+      2120,
+      1648
+     ],
+     "index": 10
+    }
+   ],
+   "validation": {
+    "digit_count": 11
+   },
+   "bbox": [
+    1596,
+    1604,
+    2122,
+    1648
+   ]
+  },
+  {
+   "field_id": "37",
+   "bloco": "V",
+   "official_variable": "37",
+   "label": "A morte ocorreu (óbito de mulher em idade fértil)",
+   "description": "A morte ocorreu (óbito de mulher em idade fértil)",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "morte_ocorreu_gravidez",
+     "label": "Na gravidez",
+     "value": "1",
+     "bbox": [
+      486,
+      1721,
+      513,
+      1741
+     ]
+    },
+    {
+     "element_id": "morte_ocorreu_parto",
+     "label": "No parto",
+     "value": "2",
+     "bbox": [
+      486,
+      1762,
+      513,
+      1782
+     ]
+    },
+    {
+     "element_id": "morte_ocorreu_aborto",
+     "label": "No aborto",
+     "value": "3",
+     "bbox": [
+      645,
+      1721,
+      672,
+      1741
+     ]
+    },
+    {
+     "element_id": "morte_ocorreu_ate42",
+     "label": "Até 42 dias após o parto",
+     "value": "4",
+     "bbox": [
+      645,
+      1762,
+      672,
+      1782
+     ]
+    },
+    {
+     "element_id": "morte_ocorreu_43a1ano",
+     "label": "De 43 dias a 1 ano após o parto",
+     "value": "5",
+     "bbox": [
+      900,
+      1721,
+      927,
+      1741
+     ]
+    },
+    {
+     "element_id": "morte_ocorreu_nao_ocorreu",
+     "label": "Não ocorreu nestes períodos",
+     "value": "8",
+     "bbox": [
+      900,
+      1762,
+      927,
+      1782
+     ]
+    },
+    {
+     "element_id": "morte_ocorreu_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1225,
+      1745,
+      1252,
+      1765
+     ]
+    }
+   ],
+   "bbox": [
+    464,
+    1690,
+    1287,
+    1795
+   ]
+  },
+  {
+   "field_id": "38",
+   "bloco": "V",
+   "official_variable": "38",
+   "label": "Recebeu assist. médica durante a doença que ocasionou a morte?",
+   "description": "Recebeu assist. médica durante a doença que ocasionou a morte?",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "assist_medica_sim",
+     "label": "Sim",
+     "value": "1",
+     "bbox": [
+      1308,
+      1760,
+      1335,
+      1780
+     ]
+    },
+    {
+     "element_id": "assist_medica_nao",
+     "label": "Não",
+     "value": "2",
+     "bbox": [
+      1446,
+      1760,
+      1473,
+      1780
+     ]
+    },
+    {
+     "element_id": "assist_medica_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1572,
+      1760,
+      1599,
+      1780
+     ]
+    }
+   ],
+   "bbox": [
+    1287,
+    1690,
+    1702,
+    1795
+   ]
+  },
+  {
+   "field_id": "39",
+   "bloco": "V",
+   "official_variable": "39",
+   "label": "Diagnóstico confirmado por necrópsia?",
+   "description": "Diagnóstico confirmado por necrópsia?",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "necropsia_sim",
+     "label": "Sim",
+     "value": "1",
+     "bbox": [
+      1728,
+      1743,
+      1755,
+      1763
+     ]
+    },
+    {
+     "element_id": "necropsia_nao",
+     "label": "Não",
+     "value": "2",
+     "bbox": [
+      1866,
+      1743,
+      1893,
+      1763
+     ]
+    },
+    {
+     "element_id": "necropsia_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1992,
+      1743,
+      2019,
+      1763
+     ]
+    }
+   ],
+   "bbox": [
+    1702,
+    1690,
+    2122,
+    1795
+   ]
+  },
+  {
+   "field_id": "40_a_causa",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha a - diagnóstico",
+   "description": "Causas da morte - PARTE I - linha a - diagnóstico",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    911,
+    1845,
+    1816,
+    1885
+   ]
+  },
+  {
+   "field_id": "40_a_tempo",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha a - tempo aproximado entre o início da doença e a morte",
+   "description": "Causas da morte - PARTE I - linha a - tempo aproximado entre o início da doença e a morte",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    1825,
+    1845,
+    1983,
+    1885
+   ]
+  },
+  {
+   "field_id": "40_a_cid",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha a - CID",
+   "description": "Causas da morte - PARTE I - linha a - CID",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "validation": {
+    "pattern": "^[A-Z][0-9]{2}(\\.?[0-9X])?$"
+   },
+   "bbox": [
+    1992,
+    1845,
+    2119,
+    1885
+   ]
+  },
+  {
+   "field_id": "40_b_causa",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha b - diagnóstico",
+   "description": "Causas da morte - PARTE I - linha b - diagnóstico",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    911,
+    1915,
+    1816,
+    1955
+   ]
+  },
+  {
+   "field_id": "40_b_tempo",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha b - tempo aproximado entre o início da doença e a morte",
+   "description": "Causas da morte - PARTE I - linha b - tempo aproximado entre o início da doença e a morte",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    1825,
+    1915,
+    1983,
+    1955
+   ]
+  },
+  {
+   "field_id": "40_b_cid",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha b - CID",
+   "description": "Causas da morte - PARTE I - linha b - CID",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "validation": {
+    "pattern": "^[A-Z][0-9]{2}(\\.?[0-9X])?$"
+   },
+   "bbox": [
+    1992,
+    1915,
+    2119,
+    1955
+   ]
+  },
+  {
+   "field_id": "40_c_causa",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha c - diagnóstico",
+   "description": "Causas da morte - PARTE I - linha c - diagnóstico",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    911,
+    1985,
+    1816,
+    2025
+   ]
+  },
+  {
+   "field_id": "40_c_tempo",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha c - tempo aproximado entre o início da doença e a morte",
+   "description": "Causas da morte - PARTE I - linha c - tempo aproximado entre o início da doença e a morte",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    1825,
+    1985,
+    1983,
+    2025
+   ]
+  },
+  {
+   "field_id": "40_c_cid",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha c - CID",
+   "description": "Causas da morte - PARTE I - linha c - CID",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "validation": {
+    "pattern": "^[A-Z][0-9]{2}(\\.?[0-9X])?$"
+   },
+   "bbox": [
+    1992,
+    1985,
+    2119,
+    2025
+   ]
+  },
+  {
+   "field_id": "40_d_causa",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha d - diagnóstico",
+   "description": "Causas da morte - PARTE I - linha d - diagnóstico",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    911,
+    2058,
+    1816,
+    2099
+   ]
+  },
+  {
+   "field_id": "40_d_tempo",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha d - tempo aproximado entre o início da doença e a morte",
+   "description": "Causas da morte - PARTE I - linha d - tempo aproximado entre o início da doença e a morte",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    1825,
+    2058,
+    1983,
+    2099
+   ]
+  },
+  {
+   "field_id": "40_d_cid",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE I - linha d - CID",
+   "description": "Causas da morte - PARTE I - linha d - CID",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "validation": {
+    "pattern": "^[A-Z][0-9]{2}(\\.?[0-9X])?$"
+   },
+   "bbox": [
+    1992,
+    2058,
+    2119,
+    2099
+   ]
+  },
+  {
+   "field_id": "40_ii_1_causa",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE II - linha 1 - diagnóstico",
+   "description": "Causas da morte - PARTE II - linha 1 - diagnóstico",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    911,
+    2128,
+    1816,
+    2168
+   ]
+  },
+  {
+   "field_id": "40_ii_1_tempo",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE II - linha 1 - tempo aproximado entre o início da doença e a morte",
+   "description": "Causas da morte - PARTE II - linha 1 - tempo aproximado entre o início da doença e a morte",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    1825,
+    2128,
+    1983,
+    2168
+   ]
+  },
+  {
+   "field_id": "40_ii_1_cid",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE II - linha 1 - CID",
+   "description": "Causas da morte - PARTE II - linha 1 - CID",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "validation": {
+    "pattern": "^[A-Z][0-9]{2}(\\.?[0-9X])?$"
+   },
+   "bbox": [
+    1992,
+    2128,
+    2119,
+    2168
+   ]
+  },
+  {
+   "field_id": "40_ii_2_causa",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE II - linha 2 - diagnóstico",
+   "description": "Causas da morte - PARTE II - linha 2 - diagnóstico",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    911,
+    2185,
+    1816,
+    2223
+   ]
+  },
+  {
+   "field_id": "40_ii_2_tempo",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE II - linha 2 - tempo aproximado entre o início da doença e a morte",
+   "description": "Causas da morte - PARTE II - linha 2 - tempo aproximado entre o início da doença e a morte",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "bbox": [
+    1825,
+    2185,
+    1983,
+    2223
+   ]
+  },
+  {
+   "field_id": "40_ii_2_cid",
+   "bloco": "V",
+   "official_variable": "40",
+   "label": "Causas da morte - PARTE II - linha 2 - CID",
+   "description": "Causas da morte - PARTE II - linha 2 - CID",
+   "data_type": "text",
+   "parent_field_id": "40",
+   "validation": {
+    "pattern": "^[A-Z][0-9]{2}(\\.?[0-9X])?$"
+   },
+   "bbox": [
+    1992,
+    2185,
+    2119,
+    2223
+   ]
+  },
+  {
+   "field_id": "41",
+   "bloco": "VI",
+   "official_variable": "41",
+   "label": "Nome do Médico",
+   "description": "Nome do Médico",
+   "data_type": "person_name",
+   "semantic": "certifier.name",
+   "rule_refs": [
+    "RULE_PERSON_NAME"
+   ],
+   "bbox": [
+    469,
+    2275,
+    1193,
+    2319
+   ]
+  },
+  {
+   "field_id": "42",
+   "bloco": "VI",
+   "official_variable": "42",
+   "label": "CRM",
+   "description": "CRM",
+   "data_type": "text",
+   "semantic": "certifier.registration",
+   "bbox": [
+    1202,
+    2275,
+    1379,
+    2319
+   ]
+  },
+  {
+   "field_id": "43",
+   "bloco": "VI",
+   "official_variable": "43",
+   "label": "Óbito atestado por Médico",
+   "description": "Óbito atestado por Médico",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "atestante_assistente",
+     "label": "Assistente",
+     "value": "1",
+     "bbox": [
+      1405,
+      2260,
+      1432,
+      2280
+     ]
+    },
+    {
+     "element_id": "atestante_substituto",
+     "label": "Substituto",
+     "value": "2",
+     "bbox": [
+      1405,
+      2281,
+      1432,
+      2301
+     ]
+    },
+    {
+     "element_id": "atestante_iml",
+     "label": "IML",
+     "value": "3",
+     "bbox": [
+      1405,
+      2303,
+      1432,
+      2323
+     ]
+    },
+    {
+     "element_id": "atestante_svo",
+     "label": "SVO",
+     "value": "4",
+     "bbox": [
+      1563,
+      2260,
+      1590,
+      2280
+     ]
+    },
+    {
+     "element_id": "atestante_outro",
+     "label": "Outro",
+     "value": "5",
+     "bbox": [
+      1563,
+      2281,
+      1590,
+      2301
+     ]
+    }
+   ],
+   "bbox": [
+    1383,
+    2238,
+    1660,
+    2324
+   ]
+  },
+  {
+   "field_id": "44",
+   "bloco": "VI",
+   "official_variable": "44",
+   "label": "Município do SVO ou IML",
+   "description": "Município do SVO ou IML",
+   "data_type": "municipality",
+   "bbox": [
+    1665,
+    2275,
+    2041,
+    2319
+   ]
+  },
+  {
+   "field_id": "44_uf",
+   "bloco": "VI",
+   "official_variable": null,
+   "label": "UF do SVO ou IML",
+   "description": "UF do SVO ou IML",
+   "data_type": "text_sequence",
+   "elements": [
+    {
+     "element_id": "uf_svo_0",
+     "label": "UF do SVO ou IML 1",
+     "bbox": [
+      2054,
+      2280,
+      2088,
+      2322
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "uf_svo_1",
+     "label": "UF do SVO ou IML 2",
+     "bbox": [
+      2092,
+      2280,
+      2120,
+      2322
+     ],
+     "index": 1
+    }
+   ],
+   "validation": {
+    "digit_count": 2
+   },
+   "parent_field_id": "44",
+   "rule_refs": [
+    "RULE_UF"
+   ],
+   "bbox": [
+    2052,
+    2280,
+    2122,
+    2322
+   ]
+  },
+  {
+   "field_id": "45",
+   "bloco": "VI",
+   "official_variable": "45",
+   "label": "Meio de contato (telefone, fax, e-mail, etc.)",
+   "description": "Meio de contato (telefone, fax, e-mail, etc.)",
+   "data_type": "text",
+   "bbox": [
+    469,
+    2357,
+    926,
+    2403
+   ]
+  },
+  {
+   "field_id": "46",
+   "bloco": "VI",
+   "official_variable": "46",
+   "label": "Data do atestado",
+   "description": "Data do atestado",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "data_atestado_d0",
+     "label": "Data do atestado D0",
+     "bbox": [
+      947,
+      2357,
+      990,
+      2403
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "data_atestado_d1",
+     "label": "Data do atestado D1",
+     "bbox": [
+      994,
+      2357,
+      1038,
+      2403
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "data_atestado_m0",
+     "label": "Data do atestado M0",
+     "bbox": [
+      1042,
+      2357,
+      1086,
+      2403
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "data_atestado_m1",
+     "label": "Data do atestado M1",
+     "bbox": [
+      1090,
+      2357,
+      1133,
+      2403
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "data_atestado_y0",
+     "label": "Data do atestado Y0",
+     "bbox": [
+      1137,
+      2357,
+      1180,
+      2403
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "data_atestado_y1",
+     "label": "Data do atestado Y1",
+     "bbox": [
+      1184,
+      2357,
+      1228,
+      2403
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "data_atestado_y2",
+     "label": "Data do atestado Y2",
+     "bbox": [
+      1232,
+      2357,
+      1276,
+      2403
+     ],
+     "index": 6
+    },
+    {
+     "element_id": "data_atestado_y3",
+     "label": "Data do atestado Y3",
+     "bbox": [
+      1280,
+      2357,
+      1323,
+      2403
+     ],
+     "index": 7
+    }
+   ],
+   "validation": {
+    "digit_count": 8
+   },
+   "rule_refs": [
+    "RULE_DATE_DDMMYYYY"
+   ],
+   "bbox": [
+    945,
+    2357,
+    1325,
+    2403
+   ]
+  },
+  {
+   "field_id": "47",
+   "bloco": "VI",
+   "official_variable": "47",
+   "label": "Assinatura",
+   "description": "Assinatura",
+   "data_type": "signature",
+   "bbox": [
+    1330,
+    2357,
+    2118,
+    2403
+   ]
+  },
+  {
+   "field_id": "48",
+   "bloco": "VII",
+   "official_variable": "48",
+   "label": "Tipo (prováveis circunstâncias de morte não natural)",
+   "description": "Tipo (prováveis circunstâncias de morte não natural)",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "circunstancia_acidente",
+     "label": "Acidente",
+     "value": "1",
+     "bbox": [
+      570,
+      2468,
+      597,
+      2488
+     ]
+    },
+    {
+     "element_id": "circunstancia_suicidio",
+     "label": "Suicídio",
+     "value": "2",
+     "bbox": [
+      570,
+      2497,
+      597,
+      2517
+     ]
+    },
+    {
+     "element_id": "circunstancia_homicidio",
+     "label": "Homicídio",
+     "value": "3",
+     "bbox": [
+      922,
+      2468,
+      949,
+      2488
+     ]
+    },
+    {
+     "element_id": "circunstancia_outros",
+     "label": "Outros",
+     "value": "4",
+     "bbox": [
+      922,
+      2497,
+      949,
+      2517
+     ]
+    },
+    {
+     "element_id": "circunstancia_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1167,
+      2475,
+      1194,
+      2495
+     ]
+    }
+   ],
+   "bbox": [
+    464,
+    2444,
+    1222,
+    2526
+   ]
+  },
+  {
+   "field_id": "49",
+   "bloco": "VII",
+   "official_variable": "49",
+   "label": "Acidente do trabalho",
+   "description": "Acidente do trabalho",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "acidente_trabalho_sim",
+     "label": "Sim",
+     "value": "1",
+     "bbox": [
+      1276,
+      2468,
+      1303,
+      2488
+     ]
+    },
+    {
+     "element_id": "acidente_trabalho_nao",
+     "label": "Não",
+     "value": "2",
+     "bbox": [
+      1276,
+      2497,
+      1303,
+      2517
+     ]
+    },
+    {
+     "element_id": "acidente_trabalho_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      1504,
+      2475,
+      1531,
+      2495
+     ]
+    }
+   ],
+   "bbox": [
+    1222,
+    2444,
+    1559,
+    2526
+   ]
+  },
+  {
+   "field_id": "50",
+   "bloco": "VII",
+   "official_variable": "50",
+   "label": "Fonte da informação",
+   "description": "Fonte da informação",
+   "data_type": "checkbox",
+   "selection_mode": "single",
+   "elements": [
+    {
+     "element_id": "fonte_informacao_boletim",
+     "label": "Boletim de Ocorrência",
+     "value": "1",
+     "bbox": [
+      1595,
+      2468,
+      1622,
+      2488
+     ]
+    },
+    {
+     "element_id": "fonte_informacao_hospital",
+     "label": "Hospital",
+     "value": "2",
+     "bbox": [
+      1595,
+      2497,
+      1622,
+      2517
+     ]
+    },
+    {
+     "element_id": "fonte_informacao_familia",
+     "label": "Família",
+     "value": "3",
+     "bbox": [
+      1855,
+      2468,
+      1882,
+      2488
+     ]
+    },
+    {
+     "element_id": "fonte_informacao_outra",
+     "label": "Outra",
+     "value": "4",
+     "bbox": [
+      1855,
+      2497,
+      1882,
+      2517
+     ]
+    },
+    {
+     "element_id": "fonte_informacao_ignorado",
+     "label": "Ignorado",
+     "value": "9",
+     "bbox": [
+      2069,
+      2475,
+      2096,
+      2495
+     ]
+    }
+   ],
+   "bbox": [
+    1559,
+    2444,
+    2122,
+    2526
+   ]
+  },
+  {
+   "field_id": "51",
+   "bloco": "VII",
+   "official_variable": "51",
+   "label": "Descrição sumária do evento, incluindo o tipo de local de ocorrência",
+   "description": "Descrição sumária do evento, incluindo o tipo de local de ocorrência",
+   "data_type": "text",
+   "bbox": [
+    469,
+    2556,
+    2118,
+    2625
+   ]
+  },
+  {
+   "field_id": "52",
+   "bloco": "VII",
+   "official_variable": "52",
+   "label": "Se a ocorrência for em via pública, anotar o endereço - Logradouro (rua, praça, avenida, etc.)",
+   "description": "Se a ocorrência for em via pública, anotar o endereço - Logradouro (rua, praça, avenida, etc.)",
+   "data_type": "address",
+   "bbox": [
+    469,
+    2675,
+    1794,
+    2711
+   ]
+  },
+  {
+   "field_id": "52_codigo",
+   "bloco": "VII",
+   "official_variable": null,
+   "label": "Logradouro - Código",
+   "description": "Logradouro - Código",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "logr_codigo_0",
+     "label": "Logradouro - Código 1",
+     "bbox": [
+      1800,
+      2672,
+      1844,
+      2714
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "logr_codigo_1",
+     "label": "Logradouro - Código 2",
+     "bbox": [
+      1848,
+      2672,
+      1892,
+      2714
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "logr_codigo_2",
+     "label": "Logradouro - Código 3",
+     "bbox": [
+      1896,
+      2672,
+      1939,
+      2714
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "logr_codigo_3",
+     "label": "Logradouro - Código 4",
+     "bbox": [
+      1943,
+      2672,
+      1985,
+      2714
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "logr_codigo_4",
+     "label": "Logradouro - Código 5",
+     "bbox": [
+      1989,
+      2672,
+      2032,
+      2714
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "logr_codigo_5",
+     "label": "Logradouro - Código 6",
+     "bbox": [
+      2036,
+      2672,
+      2079,
+      2714
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "logr_codigo_6",
+     "label": "Logradouro - Código 7",
+     "bbox": [
+      2083,
+      2672,
+      2120,
+      2714
+     ],
+     "index": 6
+    }
+   ],
+   "validation": {
+    "digit_count": 7
+   },
+   "parent_field_id": "52",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    1798,
+    2672,
+    2122,
+    2714
+   ]
+  },
+  {
+   "field_id": "53",
+   "bloco": "VIII",
+   "official_variable": "53",
+   "label": "Cartório",
+   "description": "Cartório",
+   "data_type": "text",
+   "semantic": "death_registration.office.name",
+   "bbox": [
+    469,
+    2752,
+    1244,
+    2793
+   ]
+  },
+  {
+   "field_id": "53_codigo",
+   "bloco": "VIII",
+   "official_variable": null,
+   "label": "Cartório - Código",
+   "description": "Cartório - Código",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "cartorio_codigo_0",
+     "label": "Cartório - Código 1",
+     "bbox": [
+      1250,
+      2752,
+      1294,
+      2794
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "cartorio_codigo_1",
+     "label": "Cartório - Código 2",
+     "bbox": [
+      1298,
+      2752,
+      1340,
+      2794
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "cartorio_codigo_2",
+     "label": "Cartório - Código 3",
+     "bbox": [
+      1344,
+      2752,
+      1387,
+      2794
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "cartorio_codigo_3",
+     "label": "Cartório - Código 4",
+     "bbox": [
+      1391,
+      2752,
+      1428,
+      2794
+     ],
+     "index": 3
+    }
+   ],
+   "validation": {
+    "digit_count": 4
+   },
+   "parent_field_id": "53",
+   "rule_refs": [
+    "RULE_CODIGO_OPCIONAL"
+   ],
+   "bbox": [
+    1248,
+    2752,
+    1430,
+    2794
+   ]
+  },
+  {
+   "field_id": "54",
+   "bloco": "VIII",
+   "official_variable": "54",
+   "label": "Registro",
+   "description": "Registro",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "registro_0",
+     "label": "Registro 1",
+     "bbox": [
+      1461,
+      2752,
+      1504,
+      2794
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "registro_1",
+     "label": "Registro 2",
+     "bbox": [
+      1508,
+      2752,
+      1551,
+      2794
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "registro_2",
+     "label": "Registro 3",
+     "bbox": [
+      1555,
+      2752,
+      1598,
+      2794
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "registro_3",
+     "label": "Registro 4",
+     "bbox": [
+      1602,
+      2752,
+      1646,
+      2794
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "registro_4",
+     "label": "Registro 5",
+     "bbox": [
+      1650,
+      2752,
+      1693,
+      2794
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "registro_5",
+     "label": "Registro 6",
+     "bbox": [
+      1697,
+      2752,
+      1740,
+      2794
+     ],
+     "index": 5
+    }
+   ],
+   "validation": {
+    "digit_count": 6
+   },
+   "semantic": "death_registration.number",
+   "bbox": [
+    1459,
+    2752,
+    1742,
+    2794
+   ]
+  },
+  {
+   "field_id": "55",
+   "bloco": "VIII",
+   "official_variable": "55",
+   "label": "Data (do registro)",
+   "description": "Data (do registro)",
+   "data_type": "digit_sequence",
+   "elements": [
+    {
+     "element_id": "data_registro_d0",
+     "label": "Data (do registro) D0",
+     "bbox": [
+      1744,
+      2752,
+      1789,
+      2794
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "data_registro_d1",
+     "label": "Data (do registro) D1",
+     "bbox": [
+      1793,
+      2752,
+      1838,
+      2794
+     ],
+     "index": 1
+    },
+    {
+     "element_id": "data_registro_m0",
+     "label": "Data (do registro) M0",
+     "bbox": [
+      1842,
+      2752,
+      1882,
+      2794
+     ],
+     "index": 2
+    },
+    {
+     "element_id": "data_registro_m1",
+     "label": "Data (do registro) M1",
+     "bbox": [
+      1886,
+      2752,
+      1931,
+      2794
+     ],
+     "index": 3
+    },
+    {
+     "element_id": "data_registro_y0",
+     "label": "Data (do registro) Y0",
+     "bbox": [
+      1935,
+      2752,
+      1977,
+      2794
+     ],
+     "index": 4
+    },
+    {
+     "element_id": "data_registro_y1",
+     "label": "Data (do registro) Y1",
+     "bbox": [
+      1981,
+      2752,
+      2024,
+      2794
+     ],
+     "index": 5
+    },
+    {
+     "element_id": "data_registro_y2",
+     "label": "Data (do registro) Y2",
+     "bbox": [
+      2028,
+      2752,
+      2071,
+      2794
+     ],
+     "index": 6
+    },
+    {
+     "element_id": "data_registro_y3",
+     "label": "Data (do registro) Y3",
+     "bbox": [
+      2075,
+      2752,
+      2120,
+      2794
+     ],
+     "index": 7
+    }
+   ],
+   "validation": {
+    "digit_count": 8
+   },
+   "rule_refs": [
+    "RULE_DATE_DDMMYYYY"
+   ],
+   "semantic": "death_registration.date",
+   "bbox": [
+    1742,
+    2752,
+    2122,
+    2794
+   ]
+  },
+  {
+   "field_id": "56",
+   "bloco": "VIII",
+   "official_variable": "56",
+   "label": "Município (do cartório)",
+   "description": "Município (do cartório)",
+   "data_type": "municipality",
+   "semantic": "death_registration.office.municipality",
+   "bbox": [
+    469,
+    2826,
+    2012,
+    2865
+   ]
+  },
+  {
+   "field_id": "57",
+   "bloco": "VIII",
+   "official_variable": "57",
+   "label": "UF (do cartório)",
+   "description": "UF (do cartório)",
+   "data_type": "text_sequence",
+   "elements": [
+    {
+     "element_id": "uf_cartorio_0",
+     "label": "UF (do cartório) 1",
+     "bbox": [
+      2031,
+      2826,
+      2074,
+      2866
+     ],
+     "index": 0
+    },
+    {
+     "element_id": "uf_cartorio_1",
+     "label": "UF (do cartório) 2",
+     "bbox": [
+      2078,
+      2826,
+      2120,
+      2866
+     ],
+     "index": 1
+    }
+   ],
+   "validation": {
+    "digit_count": 2
+   },
+   "semantic": "death_registration.office.uf",
+   "rule_refs": [
+    "RULE_UF"
+   ],
+   "bbox": [
+    2029,
+    2826,
+    2122,
+    2866
+   ]
+  },
+  {
+   "field_id": "58",
+   "bloco": "IX",
+   "official_variable": "58",
+   "label": "Declarante",
+   "description": "Declarante",
+   "data_type": "person_name",
+   "bbox": [
+    469,
+    2906,
+    1232,
+    3022
+   ]
+  },
+  {
+   "field_id": "59_a",
+   "bloco": "IX",
+   "official_variable": "59",
+   "label": "Testemunhas - A",
+   "description": "Testemunhas - A",
+   "data_type": "person_name",
+   "parent_field_id": "59",
+   "bbox": [
+    1285,
+    2900,
+    2118,
+    2958
+   ]
+  },
+  {
+   "field_id": "59_b",
+   "bloco": "IX",
+   "official_variable": "59",
+   "label": "Testemunhas - B",
+   "description": "Testemunhas - B",
+   "data_type": "person_name",
+   "parent_field_id": "59",
+   "bbox": [
+    1285,
+    2964,
+    2118,
+    3022
+   ]
+  }
+ ]
+}

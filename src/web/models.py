@@ -40,6 +40,7 @@ class GenerationOptions(StrictModel):
     seed: int | None = Field(default=None, ge=0, le=2**32 - 1, strict=True)
     writing: Writing = Field(default_factory=Writing)
     filter_preset: Literal["none", "light", "medium", "strong"] = "none"
+    generation_mode: Literal["traditional", "ai"] = "traditional"
 
 
 class Resource(BaseModel):
@@ -107,6 +108,37 @@ class JobResponse(BaseModel):
 class JobDetail(JobResponse):
     name: str
     options: GenerationOptions | None
+
+
+class AnalysisCreate(StrictModel):
+    page: Annotated[int, Field(ge=1, le=500)] = 1
+
+
+class AnalysisApply(StrictModel):
+    accepted: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(max_length=500)]
+
+
+class AnalysisResponse(BaseModel):
+    id: str
+    model_id: str
+    page: int
+    status: Literal["queued", "running", "succeeded", "failed"]
+    progress: int
+    stage: str
+    error: str | None
+    provenance: dict[str, Any] | None
+    proposal: dict[str, Any] | None
+    created_at: float
+    updated_at: float
+    started_at: float | None
+    finished_at: float | None
+
+
+class AssistantStatus(BaseModel):
+    available: bool
+    provider: str
+    model: str | None
+    detail: str
 
 
 class WorkspaceResponse(BaseModel):

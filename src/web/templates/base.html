@@ -7,10 +7,16 @@
   <meta name="color-scheme" content="light">
   <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyCacheSize":0,"attributesToSettle":["class","width","height"],"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true}]}'>
   <title>{% block title %}{% endblock %} · OCRSD | LabREC</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css?v={{ VERSION }}">
-  <script src="/static/htmx.min.js?v=2.0.11" defer></script>
-  <script src="/static/app.js?v={{ VERSION }}" defer></script>
+  <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="16x16 32x32 48x48">
+  <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ asset('favicon-32.png') }}" type="image/png" sizes="32x32">
+  <link rel="icon" href="{{ asset('favicon-16.png') }}" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}" sizes="180x180">
+  <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+  <link rel="stylesheet" href="{{ asset('styles.css') }}">
+  <script src="{{ asset('htmx.min.js') }}" defer></script>
+  <script src="{{ asset('app.js') }}" defer></script>
+  <script src="{{ asset('tooltips.js') }}" defer></script>
   {% block scripts %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}" {% if request.state.workspace_token %}data-sessao-nova{% endif %}>
@@ -18,8 +24,9 @@
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand" href="{% block home %}/modelos{% endblock %}" title="Galeria de Modelos">
-        <img class="brand-logo" src="/static/labrec-logo.svg?v={{ VERSION }}" alt="LabREC" width="367" height="106">
-        <span class="brand-product"><b>OCRSD</b><small>Only Civil Registry Synthetic Dataset</small></span>
+        <img class="brand-logo brand-labrec" src="{{ asset('labrec-logo.svg') }}" alt="LabREC" width="367" height="106">
+        <span class="brand-divider" aria-hidden="true"></span>
+        <img class="brand-logo brand-ocrsd" src="{{ asset('ocrsd-logo.svg') }}" alt="OCRSD · Only Civil Registry Synthetic Dataset" width="1566" height="419">
       </a>
       {% block nav %}
       <nav class="nav" aria-label="Navegação principal">
@@ -56,7 +63,7 @@
         <span><b>LabREC</b> · Laboratório de pesquisa e desenvolvimento do Registro Civil do Brasil</span>
         <span>OCRSD · Only Civil Registry Synthetic Dataset</span>
       </div>
-      <img class="footer-logo" src="/static/registro-civil-logo.svg?v={{ VERSION }}" alt="Registro Civil" width="213" height="76" loading="lazy">
+      <img class="footer-logo" src="{{ asset('registro-civil-logo.svg') }}" alt="Registro Civil" width="213" height="76" loading="lazy">
     </div>
   </footer>
   {% endblock %}

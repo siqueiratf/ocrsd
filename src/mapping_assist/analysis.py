@@ -20,6 +20,7 @@ from src.mapping_assist.geometry import Box
 
 DPI = 300
 SCALE = DPI / 72
+MAX_DPI = 450
 OCR_ERRORS = (OSError, RuntimeError, subprocess.SubprocessError)
 NUMBER = re.compile(r"\d{1,3}|[a-c]")
 ROMAN = ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"), (40, "XL"), (10, "X"),
@@ -62,6 +63,7 @@ class _Work:
     source: str
     words: list[dict]
     vector: bool = False
+    upscale: tuple[int, float] | None = None
 
 
 @dataclass(eq=False)
@@ -148,8 +150,8 @@ def _render(pg: pymupdf.Page) -> np.ndarray:
 
 
 def _text_words(pg: pymupdf.Page) -> list[dict]:
-    spans = [(span["bbox"], span["size"], line["dir"][0] > 0.9) for block in pg.get_text("dict")["blocks"]
-             for line in block.get("lines", []) for span in line["spans"]]
+    blocks = pg.get_text("dict", flags=pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_IMAGES)["blocks"]
+    spans = [(span["bbox"], span["size"], line["dir"][0] > 0.9) for block in blocks for line in block.get("lines", []) for span in line["spans"]]
     words = []
     for x0, y0, x1, y1, text, *_ in pg.get_text("words"):
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -243,11 +245,13 @@ def _load(doc: pymupdf.Document, pg: pymupdf.Page, size: tuple[int, int], warnin
                 gray = None
             if gray is not None and gray.shape == (height, width):
                 factor = 1 if low >= DPI else 3 if low < 100 else 2
-                if factor > 1:
+                if low > MAX_DPI:
+                    gray = cv2.resize(gray, (round(width * DPI / dpi_x), round(height * DPI / dpi_y)), interpolation=cv2.INTER_AREA)
+                    dpi_x = dpi_y = DPI
+                elif factor > 1:
                     gray = cv2.resize(gray, None, fx=factor, fy=factor, interpolation=cv2.INTER_CUBIC)
-                    warnings.append(f"Imagem de baixa resolução (~{low:.0f} DPI): o OCR usou ampliação {factor}×; rótulos podem conter erros.")
                 transform = (box.x0 * SCALE, box.y0 * SCALE, box.width * SCALE / gray.shape[1], box.height * SCALE / gray.shape[0])
-                return _Work(gray, (dpi_x + dpi_y) / 2 * factor, transform, "raster", [])
+                return _Work(gray, (dpi_x + dpi_y) / 2 * factor, transform, "raster", [], upscale=(factor, low) if factor > 1 else None)
     return _Work(_render(pg), DPI, (0.0, 0.0, 1.0, 1.0), "raster", [])
 
 
@@ -256,7 +260,7 @@ def _read_numbers(gray: np.ndarray, boxes: list[Box]) -> dict[int, str]:
     tiles = []
     for x1, y1, x2, y2 in boxes:
         mx, my = 0.14 * (x2 - x1), 0.14 * (y2 - y1)
-        crop = gray[int(y1 + my):int(y2 - my), int(x1 + mx):int(x2 - mx)]
+        crop = gray[int(y1 + my):math.ceil(y2 - my), int(x1 + mx):math.ceil(x2 - mx)]
         crop = crop if crop.size else np.full((height, height), 255, np.uint8)
         tiles.append(cv2.resize(crop, (max(8, int(crop.shape[1] * height / crop.shape[0])), height), interpolation=cv2.INTER_CUBIC))
     canvas = np.full((len(tiles) * (height + gap) + gap, max(t.shape[1] for t in tiles) + 2 * gap), 255, np.uint8)
@@ -309,6 +313,9 @@ class _Analyzer:
         try:
             words = ocr.run_tesseract(self.gray, psm=6, dpi=self.dpi)
             self.ocr_ok = True
+            if self.work.upscale:
+                factor, low = self.work.upscale
+                self.warnings.append(f"Imagem de baixa resolução (~{low:.0f} DPI): o OCR usou ampliação {factor}×; rótulos podem conter erros.")
             return words
         except FileNotFoundError:
             self.warnings.append("Tesseract não encontrado: candidatos gerados apenas pela geometria, sem rótulos.")
@@ -326,15 +333,16 @@ class _Analyzer:
         self.unit = unit = ocr.unit(words, 0.62 if self.work.source == "text_layer" else 1.0) or self._hole_unit() or 0.05 * dpi
         bridge = 0.02 * dpi
         h0, v0 = geo.line_masks(self.bw, 0.03 * dpi if self.work.vector else min(0.25 * dpi, 2.5 * unit), bridge, max(bridge, 1.2 * unit))
-        self.h, self.v = geo.complete_lines(h0, v0, min(0.3 * dpi, 2 * unit), min(0.9 * dpi, 6 * unit), min(0.15 * dpi, unit), max(2, int(0.15 * unit)),
+        self.v0 = v0
+        self.h, self.v = geo.complete_lines(h0, v0, min(0.3 * dpi, 3 * unit), min(0.9 * dpi, 6 * unit), min(0.15 * dpi, unit), max(2, int(0.15 * unit)),
                                            self.bw)
         xs, ys = np.flatnonzero(((self.h > 0) | (self.v > 0)).any(axis=0)), np.flatnonzero(((self.h > 0) | (self.v > 0)).any(axis=1))
-        form = (xs[0] - unit, ys[0] - unit, xs[-1] + unit, ys[-1] + unit) if xs.size else (0, 0, gray.shape[1], gray.shape[0])
+        self.form = form = (xs[0] - unit, ys[0] - unit, xs[-1] + unit, ys[-1] + unit) if xs.size else (0, 0, gray.shape[1], gray.shape[0])
         self.squares = [s for s in self._squares(words) if geo.holds(form, geo.center(s.box))]
         self.cells = [c for c in geo.cells(self.h, self.v, 0.015 * dpi, unit) if geo.area(c) >= (1.5 * unit) ** 2
-                      and not any(geo.iou(c, s.box) >= 0.3 for s in self.squares) and geo.ring_ink(self.bw, c, 0.2 * unit, 0.6 * unit) < 0.5]
-        self.runs = [elements for run in geo.comb_runs(self.bw, h0, dpi, unit)
-                     if (elements := geo.run_elements(run, dpi))
+                      and not any(geo.iou(c, s.box) >= 0.3 for s in self.squares) and self._clear_ring(c)]
+        self.runs = [elements for whole in geo.comb_runs(self.bw, h0, dpi, unit) for run in geo.split_run(whole, self.v, unit)
+                     if (elements := geo.run_elements(run, dpi)) and max(geo.ink(self.dark, e, 0.6) for e in elements) < 0.15
                      and not any(geo.contained(element, square.box) >= 0.3
                                  for element in elements for square in self.squares if square.kind == "checkbox")]
         self.bars = geo.bars(gray, unit, xs[0] + 0.12 * (xs[-1] - xs[0]) if xs.size else 0.15 * gray.shape[1])
@@ -353,7 +361,9 @@ class _Analyzer:
             for name, job in jobs.items():
                 try:
                     result = job.result()
-                except OCR_ERRORS:
+                except OCR_ERRORS as error:
+                    what = "dos números dos campos" if name == "numbers" else "dos títulos das seções"
+                    self.warnings.append(f"Falha no OCR {what} ({type(error).__name__}): essas informações ficaram sem leitura.")
                     continue
                 if name == "numbers":
                     for index, text in result.items():
@@ -363,6 +373,11 @@ class _Analyzer:
         drafts = self._layout(words)
         self.timings["layout"] = round(time.perf_counter() - started, 3)
         return drafts, unit
+
+    def _clear_ring(self, cell: Box) -> bool:
+        grow = max(3, int(0.015 * self.dpi))
+        line = grow + geo.line_width(self.h, self.v, cell, grow + int(0.6 * self.unit))
+        return geo.ring_ink(self.bw, cell, 0.2 * self.unit + line, 0.6 * self.unit + line) < 0.5
 
     def _hole_unit(self) -> float | None:
         heights = [b[3] - b[1] for b in geo.rect_holes(self.bw, 0.03 * self.dpi, 0.4 * self.dpi) if 0.5 <= (b[2] - b[0]) / (b[3] - b[1]) <= 2.3]
@@ -377,7 +392,10 @@ class _Analyzer:
         unit, out = self.unit, []
         for box in geo.rect_holes(self.bw, 0.6 * unit, 2.2 * unit):
             width, height = box[2] - box[0], box[3] - box[1]
-            if not 0.5 <= width / height <= 2.3 or max(width, height) < unit or geo.ring_ink(self.bw, box, 0.25 * unit, 0.6 * unit) > 0.35 or geo.frame(self.bw, box) < 0.8:
+            if not 0.5 <= width / height <= 2.3 or max(width, height) < unit or geo.frame(self.bw, box) < 0.8:
+                continue
+            line = geo.stroke(self.bw, box, int(unit))
+            if geo.ring_ink(self.bw, box, 0.25 * unit + line, 0.6 * unit + line) > 0.35:
                 continue
             inside = [w for w in words if geo.contained(w["box"], box) >= 0.5] if self.work.source == "text_layer" else []
             if geo.ink(self.dark, box, 0.5) < 0.05 and not inside:
@@ -390,10 +408,26 @@ class _Analyzer:
     def _blocked(self, a: Box, b: Box) -> bool:
         x1, x2 = int(min(a[2], b[2])), int(max(a[0], b[0]))
         y1, y2 = int(max(a[1], b[1])), int(min(a[3], b[3]))
-        if x2 > x1 and y2 > y1 and self.v[y1:y2, x1:x2].any():
+        if x2 > x1 and y2 > y1 and self.v0[y1:y2, x1:x2].any():
             return True
         gap = (min(a[2], b[2]), min(a[1], b[1]), max(a[0], b[0]), max(a[3], b[3]))
         return any(geo.intersection(s.box, gap) > 0 for s in self.squares)
+
+    def _wall(self, a: Box, b: Box) -> bool:
+        x1, x2, y1, y2 = min(a[2], b[2]), max(a[0], b[0]), min(a[1], b[1]), max(a[3], b[3])
+        if x2 - x1 >= 1:
+            crop = self.v[int(y1):math.ceil(y2), int(x1):math.ceil(x2)]
+            if crop.size and (crop > 0).mean(axis=0).max() >= 0.9:
+                return True
+        x1, x2, y1, y2 = min(a[0], b[0]), max(a[2], b[2]), min(a[3], b[3]), max(a[1], b[1])
+        crop = self.h[int(y1):math.ceil(y2), int(x1):math.ceil(x2)] if y2 - y1 >= 1 else np.zeros((0, 0))
+        return bool(crop.size) and (crop > 0).mean(axis=1).max() >= 0.9
+
+    def _anchor_between(self, a: Box, b: Box) -> bool:
+        left, right = (a, b) if a[0] <= b[0] else (b, a)
+        top, bottom = min(a[1], b[1]), max(a[3], b[3])
+        return any(s.kind == "number" and left[2] - 0.2 * self.unit < geo.center(s.box)[0] < right[0] + 0.2 * self.unit
+                   and top - 5 * self.unit <= s.box[1] and s.box[3] <= bottom for s in self.squares)
 
     def _rule_between(self, upper: Box, lower: Box) -> bool:
         x1, x2 = int(max(upper[0], lower[0])), int(min(upper[2], lower[2]))
@@ -406,9 +440,11 @@ class _Analyzer:
         for word in words:
             text = ocr.clean_text(word["text"])
             weak = word.get("conf") is not None and word["conf"] < 30
-            if not text or (weak and (word["conf"] < 10 or len(text) < 3 or not text.isalpha())):
+            box = self._trim(word["box"]) if word["box"][3] - word["box"][1] > 2 * unit else word["box"]
+            point = geo.center(box)
+            if not text or (weak and (word["conf"] < 10 or len(text) < 3 or not text.isalpha())
+                            and not (len(text) >= 2 and text.isalpha() and self._anchored(box))):
                 continue
-            box, point = word["box"], geo.center(word["box"])
             bar = next((i for i, b in enumerate(self.bars) if geo.holds(b, point)), None)
             if bar is not None:
                 self.bar_words[bar].append({**word, "text": text})
@@ -433,6 +469,16 @@ class _Analyzer:
                         square.code = code.group(1)
             out.append({**word, "text": text, "box": box, "weak": weak})
         return out
+
+    def _trim(self, box: Box) -> Box:
+        x1, y1, x2, y2 = (int(v) for v in box)
+        rows = ((self.dark[y1:y2, x1:x2] > 0) & (self.h[y1:y2, x1:x2] == 0) & (self.v[y1:y2, x1:x2] == 0)).any(axis=1)
+        ink = np.flatnonzero(rows)
+        if not ink.size:
+            return box
+        gaps = np.flatnonzero(np.diff(ink) > max(2, 0.3 * self.unit))
+        end = ink[gaps[0]] if gaps.size else ink[-1]
+        return box[0], float(y1 + ink[0]), box[2], float(y1 + end + 1)
 
     def _options(self, words: list[dict]) -> set[int]:
         unit, used = self.unit, set()
@@ -557,39 +603,44 @@ class _Analyzer:
             return min(anchored, key=lambda b: (b.box[1], b.box[0]))
         return min(pool, key=lambda b: (round(b.box[1] / self.unit), b.box[0])) if pool else None
 
-    def _subtract(self, region: Box, obstacles: list[Box]) -> Box | None:
-        unit = self.unit
+    def _subtract(self, region: Box, obstacles: list[Box], under: Box | None = None, depth: int = 6) -> Box | None:
+        unit, pad = self.unit, 0.2 * self.unit
         x1, y1, x2, y2 = region
-        for o in sorted(obstacles, key=geo.area, reverse=True):
-            if x2 - x1 < 2.5 * unit or y2 - y1 < 0.7 * unit:
-                return None
-            if geo.intersection(o, (x1, y1, x2, y2)) <= 0:
-                continue
-            if geo.y_overlap(o, (x1, y1, x2, y2)) >= 0.5 * (y2 - y1):
-                if o[0] - x1 >= x2 - o[2]:
-                    x2 = o[0] - 0.2 * unit
-                else:
-                    x1 = o[2] + 0.2 * unit
-            elif o[1] - y1 >= y2 - o[3]:
-                y2 = o[1] - 0.2 * unit
-            else:
-                y1 = o[3] + 0.2 * unit
-        return (x1, y1, x2, y2) if x2 - x1 >= 2.5 * unit and y2 - y1 >= 0.7 * unit else None
+        if x2 - x1 < 2.5 * unit or y2 - y1 < 0.7 * unit or (under and geo.x_overlap(region, under) <= 0):
+            return None
+        hits = [o for o in obstacles if geo.intersection(o, region) > 0]
+        if not hits:
+            return region
+        o = max(hits, key=geo.area)
+        options = ((x1, y1, o[0] - pad, y2), (o[2] + pad, y1, x2, y2), (x1, y1, x2, o[1] - pad), (x1, o[3] + pad, x2, y2))
+        if depth <= 0:
+            return self._subtract(max(options, key=geo.area), hits, under, 0)
+        found = [r for option in options if (r := self._subtract(option, hits, under, depth - 1))]
+        return max(found, key=geo.area, default=None)
 
-    def _below(self, block: _Block) -> Box:
+    def _below(self, block: _Block) -> Box | None:
         unit, box = self.unit, block.box
         height, width = self.h.shape
         top = int(box[3] + 0.5 * unit)
         rows = np.flatnonzero(self.h[top:min(height, top + int(8 * unit)), int(box[0]):int(box[2])].any(axis=1))
         bottom = top + rows[0] if rows.size else box[3] + 2 * unit
-        cols = np.flatnonzero(self.v[int(box[1]):int(bottom), int(box[2]):min(width, int(box[2] + 20 * unit))].any(axis=0))
-        right = box[2] + cols[0] if cols.size else box[2] + 6 * unit
-        return block.left, box[3] + 0.2 * unit, right - 0.2 * unit, bottom - 0.2 * unit
+        band = self.v[int(box[1]):int(bottom), int(box[2]):min(width, int(self.form[2]))]
+        cols = np.flatnonzero((band > 0).mean(axis=0) >= 0.5) if band.size else np.zeros(0)
+        right = box[2] + cols[0] if cols.size else min(width, self.form[2] - unit)
+        span = (box[2], box[1], right, bottom)
+        stops = [b.left for b in self.blocks if b is not block and b.role != "noise" and b.box[0] > box[2] and geo.y_overlap(b.box, span) > 0]
+        stops += [s.box[0] for s in self.squares if s.box[0] > box[2] and geo.y_overlap(s.box, span) > 0]
+        stops += [e[0][0] for e in self.runs if e[0][0] > box[2] and geo.y_overlap(geo.union(e), span) > 0]
+        right = min([right] + [x - 0.3 * unit for x in stops])
+        region = (block.left, box[3] + 0.2 * unit, right - 0.2 * unit, bottom - 0.2 * unit)
+        if any(b is not block and b.role != "noise" and geo.intersection(b.box, region) >= 0.3 * geo.area(b.box) for b in self.blocks):
+            return None
+        return region
 
     def _layout(self, words: list[dict]) -> list[_Draft]:
         unit = self.unit
         used = self._options(words)
-        blocks = self._blocks([w for i, w in enumerate(words) if i not in used and not w["weak"]])
+        blocks = self._blocks([w for i, w in enumerate(words) if i not in used and (not w["weak"] or self._anchored(w["box"]))])
         self.blocks = blocks
         labels = [b for b in blocks if b.role == "label"]
         by_cell: dict[Box, list[_Block]] = defaultdict(list)
@@ -602,7 +653,8 @@ class _Analyzer:
             box = geo.union(elements)
             cell = self.cell_of(box)
             block = self._run_label(box, cell, by_cell.get(cell, [])) if cell else None
-            block = block or self._run_label(box, None, [b for b in labels if geo.distance(b.box, box) <= 3 * unit])
+            block = block or self._run_label(box, None, [b for b in labels if geo.distance(b.box, box) <= 3 * unit
+                                                         or (b.anchor and 0 <= box[1] - b.box[3] <= 5 * unit and geo.x_overlap(b.box, box) > 0)])
             if block:
                 block.used = True
             obstacles[cell].append(box)
@@ -627,9 +679,17 @@ class _Analyzer:
                 block.owner.used = True
                 drafts.append(_Draft("text", geo.inset(block.box, -0.2 * unit), block.owner))
         for block in labels:
-            if block.anchor and not block.used:
+            if block.anchor and not block.used and (region := self._below(block)):
                 block.used = True
-                drafts.append(_Draft("text", self._below(block), block))
+                drafts.append(_Draft("text", region, block))
+        for block in labels:
+            heads = [o for o in labels if o.anchor and abs(o.box[1] - block.box[1]) <= 0.5 * unit and o.box[2] + unit <= block.box[0]]
+            if block.used or block.cell or block.anchor or not any(not self._anchor_between(o.box, block.box) for o in heads):
+                continue
+            region = self._below(block)
+            if region and not any(geo.intersection(region, d.region) > 0.3 * geo.area(region) for d in drafts):
+                block.used = True
+                drafts.append(_Draft("text", region, block))
         return drafts
 
     def _run_label(self, box: Box, cell: Box | None, pool: list[_Block]) -> _Block | None:
@@ -651,27 +711,31 @@ class _Analyzer:
         def extent(squares: list[_Square]) -> Box:
             return geo.union([s.box for s in squares] + [s.label_box for s in squares if s.label_box])
 
-        grouped: dict[Box, list[_Square]] = defaultdict(list)
+        grouped: dict[tuple, list[_Square]] = defaultdict(list)
         loose: list[list[_Square]] = []
         for s in (s for s in self.squares if s.kind == "checkbox"):
             cell = self.cell_of(s.box)
             if cell:
-                grouped[cell].append(s)
+                owners = [b for b in by_cell.get(cell, []) if b.anchor and b.left <= s.box[0] + 0.5 * unit and b.box[1] <= s.box[1]]
+                owner = max(owners, key=lambda b: (b.box[1] // (2 * unit), b.left)) if owners else None
+                grouped[cell, owner].append(s)
                 continue
-            near = [g for g in loose if any(geo.distance(s.box, t.box) <= (8 if geo.y_overlap(s.box, t.box) > 0 else 2.5) * unit for t in g)]
+            near = [g for g in loose if any(geo.distance(s.box, t.box) <= (8 if geo.y_overlap(s.box, t.box) > 0 else 2.5) * unit
+                                            and not self._wall(s.box, t.box) and not self._anchor_between(s.box, t.box) for t in g)]
             merged = [s] + [t for g in near for t in g]
             loose = [g for g in loose if g not in near] + [merged]
-        groups = [[cell, squares, self._main(by_cell.get(cell, []), min(s.box[1] for s in squares) + unit)] for cell, squares in grouped.items()]
+        groups = [[cell, squares, owner or self._main(by_cell.get(cell, []), min(s.box[1] for s in squares) + unit)]
+                  for (cell, owner), squares in grouped.items()]
         groups += [[None, squares, None] for squares in loose]
 
         def hosts(group: list, box: Box) -> list:
             return [g for g in groups if g is not group and g[2] is not None and g[1] and geo.y_overlap(extent(g[1]), box) > 0
-                    and 0 <= box[0] - extent(g[1])[2] <= 10 * unit]
+                    and 0 <= box[0] - extent(g[1])[2] <= 10 * unit and not self._anchor_between(extent(g[1]), box)]
 
         for group in groups:
             if group[2] is None:
                 box = extent(group[1])
-                above = [b for b in labels if 0 <= box[1] - b.box[3] <= 3 * unit and geo.x_overlap(b.box, box) > 0 and b.cell != group[0]]
+                above = [b for b in labels if 0 <= box[1] - b.box[3] <= 3 * unit and geo.x_overlap(b.box, box) > 0 and (group[0] is None or b.cell != group[0])]
                 anchored = [b for b in labels if b.anchor and b.box[3] <= box[1] + unit and box[1] - b.box[3] <= 4 * unit and b.left <= box[0]]
                 if not hosts(group, box) and (above or anchored):
                     group[2] = max(above, key=lambda b: b.box[3]) if above else max(anchored, key=lambda b: b.left)
@@ -704,7 +768,7 @@ class _Analyzer:
             right = min([b.left for b in row if b.left > block.left], default=cell[2] + 0.1 * unit) - 0.3 * unit
             below = [b.box[1] for b in fields if b.box[1] > block.box[3] and geo.x_overlap(b.box, (left, 0, right, 0)) > 0]
             region = (left, block.box[3] + 0.2 * unit, right, min(below, default=cell[3]) - 0.2 * unit)
-            free = self._subtract(region, obstacles + [o for o in others if geo.intersection(o, region) > 0])
+            free = self._subtract(region, obstacles + [o for o in others if geo.intersection(o, region) > 0], block.box)
             if free is None and block.anchor:
                 free = region if region[3] - region[1] >= 0.5 * unit else self._below(block)
             if free is not None:
@@ -791,8 +855,8 @@ def analyze_document(pdf: Path | bytes, page: int = 0, ocr: bool = True) -> Page
     ox, oy, sx, sy = work.transform
 
     def box(b: Box) -> tuple[int, int, int, int]:
-        x1, x2 = sorted((min(max(round(ox + b[0] * sx), 0), size[0]), min(max(round(ox + b[2] * sx), 0), size[0])))
-        y1, y2 = sorted((min(max(round(oy + b[1] * sy), 0), size[1]), min(max(round(oy + b[3] * sy), 0), size[1])))
+        x1, x2 = sorted(min(max(round(ox + v * sx), 0), size[0] - 1) for v in (b[0], b[2]))
+        y1, y2 = sorted(min(max(round(oy + v * sy), 0), size[1] - 1) for v in (b[1], b[3]))
         return x1, y1, x2, y2
 
     titles = analyzer.titles if work.source == "raster" else [" ".join(w["text"] for w in sorted(words, key=lambda w: -w["box"][1]))

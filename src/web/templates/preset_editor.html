@@ -3,7 +3,7 @@
 {% set title = entry.title if entry else "Novo preset" %}
 {% set suffix = '?retorno=' ~ retorno if retorno else '' %}
 {% block title %}{{ title }} · Presets de Escrita{% endblock %}
-{% block scripts %}<script src="/static/presets.js?v={{ VERSION }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ asset('presets.js') }}" defer></script>{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="Trilha"><span>Presets</span><span aria-hidden="true">/</span><a href="/presets/escrita{{ suffix }}" data-sair>Presets de Escrita</a><span aria-hidden="true">/</span><span>{{ title }}</span></nav>
 <form id="form-preset" class="preset-page" hx-post="/presets/escrita/salvar" hx-swap="none" hx-disinherit="*" data-preset-form data-modo="{{ mode }}">

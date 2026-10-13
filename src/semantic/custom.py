@@ -5,11 +5,11 @@ import re
 from datetime import date, time
 
 from src.semantic.registry import REGISTRY
+from src.semantic.resolve import medical_term
 
 
 CUSTOM_KEY = re.compile(r"custom(?:\.[a-z][a-z0-9_]*){1,5}\Z")
 DATA_TYPES = frozenset({"text", "integer", "boolean", "date", "time"})
-MEDICAL_TERMS = re.compile(r"causa|diagn[oó]stic|doen[cç]a|cid(?:-|\b)|patolog|anomalia", re.IGNORECASE)
 
 
 class CustomGenerationUnavailable(ValueError):
@@ -58,7 +58,7 @@ def validate_custom_definition(key: object, label: object, description: object, 
     if not isinstance(generator, dict) or generator.get("type") not in {"choices", "integer_range", "unavailable"}:
         raise ValueError("Gerador deve ser choices, integer_range ou unavailable")
     method = generator["type"]
-    if MEDICAL_TERMS.search(f"{key} {label} {description}") and method != "unavailable":
+    if medical_term(f"{key} {label} {description}") and method != "unavailable":
         raise ValueError("Campos médicos exigem uma fonte e regras de validação documentadas antes da geração")
     if method == "unavailable":
         if set(generator) != {"type"}:
@@ -82,6 +82,20 @@ def validate_custom_definition(key: object, label: object, description: object, 
             raise ValueError("choices não aceita valores repetidos")
         normalized = {"type": method, "values": normalized_values}
     return {"key": key, "label": label, "description": description, "data_type": data_type, "generator": normalized}
+
+
+def approved_definitions(definitions: object) -> dict[str, dict]:
+    entries = definitions.values() if isinstance(definitions, dict) else definitions or ()
+    approved = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("status", "approved") != "approved":
+            continue
+        try:
+            definition = validate_custom_definition(*(entry[name] for name in ("key", "label", "description", "data_type", "generator")))
+        except (KeyError, TypeError, ValueError):
+            continue
+        approved[definition["key"]] = definition
+    return approved
 
 
 def generate_custom_value(definition: dict, rng: random.Random) -> str | int | bool | date | time:

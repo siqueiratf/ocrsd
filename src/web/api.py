@@ -1,16 +1,18 @@
 import base64
 import logging
+from dataclasses import asdict
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.exceptions import HTTPException
 
 from src.web.jobs import JobStore
-from src.web.models import Artifact, Capabilities, DocumentModelResponse, DocumentTypeResponse, ErrorResponse, GenerationConfigCreate, GenerationConfigResponse, GenerationOptions, HandwritingPreviewRequest, HandwritingPreviewResponse, Health, Identifier, JobDetail, JobResponse, MappingResponse, MappingUpdate, ModelCreate, ModelUpdate, PresetResponse, RealismPreviewRequest, RealismPreviewResponse, Results, SemanticDefinitionCreate, ShareCreate, ShareCreated, ShareResponse, SharedResult, SubmittedJob, WorkspaceResponse, WritingPresetCreate, WritingPresetStored
-from src.web.services import Catalog, ServiceError, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, mapping_issues, realism_previews, render_preview, save_mapping
+from src.web.models import AnalysisApply, AnalysisCreate, AnalysisResponse, Artifact, AssistantStatus, Capabilities, DocumentModelResponse, DocumentTypeResponse, ErrorResponse, GenerationConfigCreate, GenerationConfigResponse, GenerationOptions, HandwritingPreviewRequest, HandwritingPreviewResponse, Health, Identifier, JobDetail, JobResponse, MappingResponse, MappingUpdate, ModelCreate, ModelUpdate, PresetResponse, RealismPreviewRequest, RealismPreviewResponse, Results, SemanticDefinitionCreate, ShareCreate, ShareCreated, ShareResponse, SharedResult, SubmittedJob, WorkspaceResponse, WritingPresetCreate, WritingPresetStored
+from src.web.services import BUILTIN_PROTECTED, AssistantProbe, Catalog, ServiceError, apply_proposal, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, mapping_issues, realism_previews, render_preview, save_mapping
 from src.web.settings import Settings
 from src.web.ui import file_response, mount_ui
 
@@ -38,7 +40,10 @@ class GuardMiddleware:
         if scope["method"] in {"POST", "PUT", "PATCH"}:
             content_type = headers.get("content-type", "").split(";")[0]
             empty = not api and not content_type and headers.get("content-length") == "0"
-            if not empty and content_type not in ({"application/json"} if api else FORM_TYPES):
+            ui_json = (path.startswith("/modelos/") and
+                       (path.endswith("/mapear-ia") or path.endswith("/definicoes-semanticas")))
+            accepted_types = {"application/json"} if api or ui_json else FORM_TYPES
+            if not empty and content_type not in accepted_types:
                 await JSONResponse(status_code=415, content={"error": {"code": "content_type", "message": "Use application/json" if api else "Tipo de conteúdo não suportado"}})(scope, receive, send)
                 return
             length = headers.get("content-length")
@@ -86,7 +91,11 @@ class GuardMiddleware:
                     (b"x-frame-options", b"SAMEORIGIN"),
                 ])
                 if b"cache-control" not in names:
-                    response_headers.append((b"cache-control", b"no-store"))
+                    if path.startswith("/static/"):
+                        versioned = b"v=" in scope.get("query_string", b"")
+                        response_headers.append((b"cache-control", b"public, max-age=31536000, immutable" if versioned else b"no-cache"))
+                    else:
+                        response_headers.append((b"cache-control", b"no-store"))
                 content_type = dict(response_headers).get(b"content-type", b"")
                 if not api and content_type.startswith(b"text/html"):
                     response_headers.append((b"content-security-policy", CONTENT_SECURITY_POLICY))
@@ -99,13 +108,14 @@ class GuardMiddleware:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     store = JobStore(settings)
-    catalog = Catalog(settings)
+    probe = AssistantProbe(settings, store.ai_cache)
+    catalog = Catalog(settings, probe.status)
     errors = {code: {"model": ErrorResponse} for code in (401, 404, 405, 409, 410, 411, 413, 415, 422, 429, 500, 503)}
     app = FastAPI(title="OCRSD — documentos sintéticos", version="1.2.0", docs_url="/api/docs", redoc_url=None,
                   openapi_url="/api/openapi.json", responses=errors)
     app.add_middleware(GuardMiddleware, settings=settings)
     app.state.store = store
-    interface_error = mount_ui(app, settings, store, catalog)
+    interface_error = mount_ui(app, settings, store, catalog, probe)
     security = HTTPBearer(auto_error=False, description="Chave privada do job ou do compartilhamento.")
 
     def error(request: Request, status: int, code: str, message: str) -> Response:
@@ -231,6 +241,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def update_mapping(model_id: Identifier, payload: MappingUpdate, owner_id: Annotated[str, Depends(workspace_required)]):
         mapping_id = save_mapping(catalog, store, model_id, owner_id, payload.definition)
         return mapping_response(model_id, mapping_id, None if model_id in catalog.types else owner_id)
+
+    @app.post("/api/v1/models/{model_id}/analyses", response_model=AnalysisResponse, status_code=202, tags=["Mapeamento assistido"])
+    async def submit_analysis(model_id: Identifier, payload: AnalysisCreate, request: Request,
+                              owner_id: Annotated[str, Depends(workspace_required)]):
+        if model_id in catalog.types:
+            raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
+        store.model(model_id, owner_id)
+        if store.layout(model_id) is not None:
+            raise ServiceError(422, "mapping_assist_unavailable", "Use um modelo PDF editável em rascunho")
+        if payload.page != 1:
+            raise ServiceError(422, "invalid_page", "Modelos têm uma única página; analise a página 1")
+        return store.submit_analysis(model_id, owner_id, payload.page, request.client.host if request.client else "unknown")
+
+    @app.post("/api/v1/models/{model_id}/analyses/{analysis_id}/apply", response_model=MappingResponse, tags=["Mapeamento assistido"])
+    async def apply_analysis(model_id: Identifier, analysis_id: Identifier, payload: AnalysisApply,
+                             owner_id: Annotated[str, Depends(workspace_required)]):
+        if model_id in catalog.types:
+            raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
+        model = store.model(model_id, owner_id)
+        if model["status"] != "draft" or store.layout(model_id) is not None:
+            raise ServiceError(409, "model_not_draft", "Aplique sugestões somente em um modelo PDF editável em rascunho")
+        result = store.analysis(analysis_id, owner_id)
+        if result["model_id"] != model_id:
+            raise ServiceError(404, "not_found", "Análise não encontrada para este modelo")
+        if result["status"] != "succeeded" or not result["proposal"]:
+            raise ServiceError(409, "analysis_not_ready", "A análise ainda não terminou com uma proposta")
+        apply_proposal(store, catalog, model_id, owner_id, result["proposal"], payload.accepted)
+        return mapping_response(model_id, model["mapping_id"], owner_id)
+
+    @app.get("/api/v1/analyses/{analysis_id}", response_model=AnalysisResponse, tags=["Mapeamento assistido"])
+    async def analysis(analysis_id: Identifier, owner_id: Annotated[str, Depends(workspace_required)]):
+        return store.analysis(analysis_id, owner_id)
+
+    @app.get("/api/v1/assistant", response_model=AssistantStatus, tags=["Mapeamento assistido"])
+    async def assistant(owner_id: Annotated[str, Depends(workspace_required)]):
+        status = await run_in_threadpool(probe.status)
+        return AssistantStatus(**asdict(status))
 
     @app.get("/api/v1/capabilities", response_model=Capabilities, tags=["Catálogo"])
     async def capabilities():
