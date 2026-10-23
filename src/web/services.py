@@ -7,16 +7,20 @@ import hashlib
 import io
 import json
 import math
+import os
 from pathlib import Path
 import random
+import re
+import shutil
 import sqlite3
 import tempfile
 import threading
 import time
 from typing import Any, Callable, Iterable
+from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from src.document_types import discover_document_types
+from src.document_types import discover_document_types, safe_document_type_key
 from src.field_rules import COMPOSITE_TYPES, DATE_PARTS, SEPARATED_DATE, apply_shared_rules, rule_errors
 from src.semantic.plan import semantic_plan
 from src.semantic.custom import validate_custom_definition
@@ -89,6 +93,31 @@ class Catalog:
         self.settings = settings
         self.types = discover_document_types(settings.documents)
         self.ai_status = ai_status
+
+    def reload(self) -> None:
+        self.types = discover_document_types(self.settings.documents)
+
+    def save_standard_mapping(self, key: str, definition: dict) -> str:
+        document = self.types[key]
+        base = re.sub(r"_v\d+$", "", document.active_mapping.stem)
+        versions = {int(match.group(1)) for stem in (path.stem for path in document.mappings)
+                   if (match := re.fullmatch(rf"{re.escape(base)}_v(\d+)", stem))}
+        if not versions:
+            versions = {1}
+        mappings_dir = document.root / "mappings"
+        mappings_dir.mkdir(exist_ok=True)
+        next_version = max(versions) + 1
+        while True:
+            target = mappings_dir / f"{base}_v{next_version}.json"
+            try:
+                with target.open("x", encoding="utf-8") as handle:
+                    handle.write(json.dumps(definition, ensure_ascii=False, indent=2) + "\n")
+                break
+            except FileExistsError:
+                next_version += 1
+        update_standard_metadata(document.root, active_mapping=target.stem, label=document.label)
+        self.reload()
+        return target.stem
 
     def custom(self, key: str, owner_id: str | None = None) -> dict:
         database = self.settings.storage.resolve() / "jobs.sqlite3"
@@ -197,7 +226,8 @@ class Catalog:
                 fields = []
             builtins.append(DocumentModelResponse(id=item.key, label=item.label, description=item.description or "Modelo padrão do OCRSD",
                                                   status="published", version=1, field_count=len(fields),
-                                                  mapping_id=item.active_mapping.stem, builtin=True, editable=False))
+                                                  mapping_id=item.active_mapping.stem, builtin=True,
+                                                  editable=self.settings.standard_edits))
         return builtins + [custom_model(row) for row in custom]
 
     def validate(self, options: GenerationOptions, owner_id: str | None = None, definition: dict | None = None,
@@ -354,17 +384,81 @@ def duplicate_model(catalog: Catalog, store, model_id: str, owner_id: str) -> di
 
 
 BUILTIN_PROTECTED = "Modelos padrão são protegidos. Use “Duplicar e editar” para criar uma cópia editável."
+STANDARD_EDITS_DISABLED = "A edição de modelos padrão está desativada neste ambiente (OCRSD_STANDARD_EDITS=false)."
+RESERVED_DOCUMENT_KEYS = {"mappings", "presets", "dataset", "static", "writing_presets"}
 
 
 def save_mapping(catalog: Catalog, store, model_id: str, owner_id: str, definition: dict) -> str:
     if model_id in catalog.types:
-        raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
+        if not catalog.settings.standard_edits:
+            raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
+        validated = validate_mapping(with_approved_semantics(store, owner_id, definition))
+        issues = mapping_issues(validated)
+        if issues:
+            raise ServiceError(422, "invalid_mapping", issues[0])
+        return catalog.save_standard_mapping(model_id, validated)
     model = store.model(model_id, owner_id)
     validated = validate_mapping(with_approved_semantics(store, owner_id, definition))
     store.update_mapping(model_id, owner_id, validated)
     if model["status"] == "published" and mapping_issues(validated):
         store.set_status(model_id, owner_id, "draft")
     return model["mapping_id"]
+
+
+def update_standard_metadata(root: Path, **updates: Any) -> None:
+    path = root / "modelo.json"
+    try:
+        current = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, ValueError):
+        current = {}
+    if not isinstance(current, dict):
+        current = {}
+    merged = {**current, **updates}
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def promote_model(catalog: Catalog, store, model_id: str, owner_id: str, key: str, label: str, description: str):
+    if not catalog.settings.standard_edits:
+        raise ServiceError(403, "standard_edits_disabled", STANDARD_EDITS_DISABLED)
+    if model_id in catalog.types:
+        raise ServiceError(404, "not_found", "Tipo de documento não encontrado")
+    model = store.model(model_id, owner_id)
+    key = safe_document_type_key(key)
+    if not key or key in RESERVED_DOCUMENT_KEYS or key.startswith("."):
+        raise ServiceError(422, "invalid_key", "Escolha uma chave de documento válida")
+    documents_root = catalog.settings.documents.resolve()
+    target = documents_root / key
+    if target.resolve().parent != documents_root:
+        raise ServiceError(422, "invalid_key", "Escolha uma chave de documento válida")
+    if key in catalog.types or target.exists():
+        raise ServiceError(409, "standard_exists", f"Já existe um modelo padrão com a chave “{key}”")
+    definition = catalog.definition(model_id, model["mapping_id"], owner_id)
+    issues = mapping_issues(definition)
+    if issues:
+        raise ServiceError(422, "invalid_mapping", issues[0])
+    template_bytes = store.model_directory(model_id).joinpath("template.pdf").read_bytes()
+    staging = documents_root / f".tmp-{uuid4().hex}"
+    try:
+        staging.mkdir(mode=0o700)
+        (staging / "template.pdf").write_bytes(template_bytes)
+        (staging / "mappings").mkdir()
+        payload = {**{name: value for name, value in definition.items() if name != "source_template"},
+                  "template_id": key, "source_template": f"documents/{key}/template.pdf"}
+        (staging / "mappings" / f"{key}_v1.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        (staging / "dataset").mkdir()
+        (staging / "dataset" / ".gitkeep").write_text("", encoding="utf-8")
+        metadata = {"active_mapping": f"{key}_v1", "label": label, "description": description,
+                   "source": f"promovido de modelo personalizado {model_id} em "
+                             f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}"}
+        (staging / "modelo.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.rename(staging, target)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    catalog.reload()
+    return catalog.types[key]
 
 
 def fit_box(box: object, source: tuple[int, int], target: tuple[int, int]) -> object:

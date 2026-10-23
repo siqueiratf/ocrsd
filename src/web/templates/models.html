@@ -30,9 +30,10 @@
         <div><dt>Modificado</dt><dd>{{ model.updated_at|data if model.updated_at else "Modelo padrão" }}</dd></div>
       </dl>
       <div class="model-actions">
-        {% if model.builtin and not model.editable %}
+        {% if model.builtin %}
         <button type="button" class="btn" hx-post="/modelos/{{ model.id }}/copia" hx-disabled-elt="this" data-tooltip="O modelo padrão fica protegido; a cópia é editável no seu espaço de trabalho">{{ icon('copy') }}Duplicar e editar<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
-        {% else %}
+        {% endif %}
+        {% if not model.builtin or model.editable %}
         <a class="btn" href="/modelos/{{ model.id }}/editor">{{ icon('pen') }}Abrir editor</a>
         {% endif %}
         {% if model.status == 'published' %}

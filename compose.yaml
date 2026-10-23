@@ -6,6 +6,7 @@ services:
     env_file: deploy/.env
     environment:
       OCRSD_STORAGE: /data
+      OCRSD_STANDARD_EDITS: "false"
     volumes:
       - jobs:/data
       - ${OCRSD_HANDWRITING_ASSETS:-./assets/handwriting}:/app/assets/handwriting:ro
@@ -44,6 +45,7 @@ services:
     env_file: deploy/.env
     environment:
       OCRSD_STORAGE: /data
+      OCRSD_STANDARD_EDITS: "false"
     volumes:
       - jobs:/data
       - ${OCRSD_HANDWRITING_ASSETS:-./assets/handwriting}:/app/assets/handwriting:ro

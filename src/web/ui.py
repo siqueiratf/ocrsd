@@ -22,14 +22,15 @@ from starlette.background import BackgroundTask
 from pydantic import BaseModel, ValidationError
 from starlette.datastructures import FormData, UploadFile
 
-from src.web.models import GenerationOptions, Identifier, ModelUpdate, SemanticDefinitionCreate, ShareCreate, Writing
+from src.document_types import safe_document_type_key
+from src.web.models import GenerationOptions, Identifier, ModelPromote, ModelUpdate, SemanticDefinitionCreate, ShareCreate, Writing
 from src.web.palette import (CUSTOM_BASES, EDITOR_OPTIONS, GENERATION_RULES, ICON_NAMES, LAYOUT_PALETTE, PALETTE, TYPE_LABELS,
                              custom_field_config, custom_palette)
-from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, Catalog, ServiceError, create_blank_model, create_model,
-                              duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key, preview_strip, render_writing_samples,
-                              realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count, render_preview, revision, save_mapping, validate_layout,
-                              semantic_inferred, unavailable_custom_fields, validate_mapping, with_approved_semantics, writing_issues,
-                              writing_message)
+from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, STANDARD_EDITS_DISABLED, Catalog, ServiceError,
+                              create_blank_model, create_model, duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key, preview_strip,
+                              promote_model, render_writing_samples, realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count, render_preview,
+                              revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping, with_approved_semantics,
+                              writing_issues, writing_message)
 from src.web.settings import Settings
 from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model_defaults, preset_title, writing_summary
 
@@ -53,7 +54,7 @@ LABELS = {"name": "Nome", "count": "Quantidade de documentos", "seed": "Seed ale
           "model": "Modelo de escrita", "intensity": "Variação da escrita", "writer": "Identidade do escritor",
           "bias": "Regularidade", "color": "Cor", "width": "Espessura", "pressure": "Pressão", "dropout": "Falhas",
           "text_policy": "Caracteres não suportados", "label": "Nome do modelo", "description": "Descrição",
-          "expires_in_hours": "Validade do link", "generation_mode": "Modo de geração"}
+          "expires_in_hours": "Validade do link", "generation_mode": "Modo de geração", "key": "Chave do documento"}
 BLOCKED_FIELD = "Sem gerador validado"
 AI_FAILURE = "A geração assistida por IA falhou:"
 try:
@@ -148,7 +149,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
     templates = Jinja2Templates(directory=ROOT / "templates")
     templates.env.filters.update(data=format_date, tamanho=format_size)
     templates.env.globals.update(FILTERS=FILTERS, STATUS=STATUS, ACTIVE=ACTIVE, TYPE_LABELS=TYPE_LABELS,
-                                 PAGE_SIZES=PAGE_SIZES, ORIENTATIONS=ORIENTATIONS, GENERATION_MODES=GENERATION_MODES)
+                                 PAGE_SIZES=PAGE_SIZES, ORIENTATIONS=ORIENTATIONS, GENERATION_MODES=GENERATION_MODES,
+                                 STANDARD_EDITS=settings.standard_edits)
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
     @functools.lru_cache(maxsize=128)
@@ -555,7 +557,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 "semantic_options": [*EDITOR_OPTIONS["semantic_options"], *custom],
                 "analysis": latest and {name: latest[name] for name in ("id", "status", "progress", "stage", "error")},
                 "model": {"id": model.id, "label": model.label, "builtin": model.builtin, "status": model.status,
-                          "version": model.version}}
+                          "version": model.version, "editable": model.editable}}
 
     def assist_model(owner_id: str, model_id: str):
         model = model_entry(owner_id, model_id)
@@ -616,6 +618,24 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
     async def duplicate(model_id: Identifier, owner_id: Owner):
         row = duplicate_model(catalog, store, model_id, owner_id)
         return Response(headers={"HX-Redirect": f'/modelos/{row["id"]}/editor'})
+
+    @router.get("/modelos/{model_id}/salvar-padrao")
+    async def promote_dialog(request: Request, model_id: Identifier, owner_id: Owner):
+        if not settings.standard_edits:
+            raise ServiceError(403, "standard_edits_disabled", STANDARD_EDITS_DISABLED)
+        model = model_entry(owner_id, model_id)
+        if model.builtin:
+            raise ServiceError(404, "not_found", "Modelo não encontrado")
+        return render(request, "partials/promote_dialog.html", model_id=model.id,
+                      key=safe_document_type_key(model.label), label=model.label, description=model.description)
+
+    @router.post("/modelos/{model_id}/salvar-padrao")
+    async def promote(request: Request, model_id: Identifier, owner_id: Owner):
+        form = await request.form()
+        payload = validated(ModelPromote, {"key": text(form, "key"), "label": text(form, "label"),
+                                           "description": text(form, "description")})
+        promote_model(catalog, store, model_id, owner_id, payload.key, payload.label, payload.description)
+        return Response(headers={"HX-Redirect": "/modelos"})
 
     @router.get("/modelos/{model_id}/previa.png")
     async def model_preview(model_id: Identifier, owner_id: Owner, largura: int = 1200):
@@ -706,7 +726,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
     async def save(request: Request, model_id: Identifier, owner_id: Owner):
         form = await request.form()
         model = model_entry(owner_id, model_id)
-        if model.builtin:
+        if model.builtin and not settings.standard_edits:
             raise ServiceError(403, "builtin_protected", BUILTIN_PROTECTED)
         if text(form, "revision") and text(form, "revision") != revision(*editor_paths(owner_id, model)):
             raise ServiceError(409, "revision_conflict", "O mapeamento foi alterado em outra janela. Recarregue a versão salva antes de continuar.")

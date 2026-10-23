@@ -7,7 +7,7 @@ User=ocrsd
 Group=ocrsd
 WorkingDirectory=/opt/ocrsd
 EnvironmentFile=/etc/ocrsd.env
-Environment=OCRSD_STORAGE=/var/lib/ocrsd PYTHONDONTWRITEBYTECODE=1
+Environment=OCRSD_STORAGE=/var/lib/ocrsd PYTHONDONTWRITEBYTECODE=1 OCRSD_STANDARD_EDITS=false
 ExecStart=/opt/ocrsd/.venv/bin/uvicorn src.web.api:create_app --factory --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=on-failure
 RestartSec=5

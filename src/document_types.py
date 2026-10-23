@@ -48,15 +48,13 @@ def discover_document_types(root: Path = DOCUMENTS_ROOT) -> dict[str, DocumentTy
     if not root.is_dir():
         return {}
     discovered: dict[str, DocumentType] = {}
-    for folder in sorted(path for path in root.iterdir() if path.is_dir()):
+    for folder in sorted(path for path in root.iterdir() if path.is_dir() and not path.name.startswith(".")):
         template = _template_for_folder(folder)
         if not template.is_file():
             continue
         mappings_dir = folder / "mappings"
         presets_dir = folder / "presets"
-        mappings = tuple(sorted(mappings_dir.glob("*.json")))
-        if not mappings:
-            mappings = tuple(sorted(folder.glob("*_fields.json")))
+        mappings = tuple(sorted({*mappings_dir.glob("*.json"), *folder.glob("*_fields.json")}))
         if not mappings:
             continue
         discovered[folder.name] = DocumentType(

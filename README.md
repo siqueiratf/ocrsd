@@ -50,7 +50,13 @@ make web
 
 No modo local, esse alvo habilita automaticamente todos os modelos neurais cujos
 pesos estejam presentes em `assets/handwriting`. Abra **http://127.0.0.1:8000**.
-Se a porta 8000 estiver ocupada, use `make web PORT=8001`.
+Se a porta 8000 estiver ocupada, use `make web PORT=8001`. `make web` também
+habilita `OCRSD_STANDARD_EDITS`, que adiciona ao editor as ações “Salvar como
+modelo padrão” e “Salvar nova versão do padrão”; ambas gravam em
+`documents/<chave>/` do repositório, então confira o diff e rode
+`git add documents/<chave>` para versionar. Mantenha a variável desativada
+(`OCRSD_STANDARD_EDITS=false`, o padrão em Compose e systemd) fora do
+desenvolvimento local.
 Para iniciar cada processo separadamente:
 
 ```bash

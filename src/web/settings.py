@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     ai_api_key: SecretStr | None = None
     mapping_min_score: float = Field(default=0.5, ge=0, le=1)
     mapping_min_margin: float = Field(default=0.2, ge=0, le=1)
+    standard_edits: bool = False
 
     @model_validator(mode="after")
     def check_budget(self) -> "Settings":

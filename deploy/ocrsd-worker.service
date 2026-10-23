@@ -7,7 +7,7 @@ User=ocrsd
 Group=ocrsd
 WorkingDirectory=/opt/ocrsd
 EnvironmentFile=/etc/ocrsd.env
-Environment=OCRSD_STORAGE=/var/lib/ocrsd PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+Environment=OCRSD_STORAGE=/var/lib/ocrsd PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 OCRSD_STANDARD_EDITS=false
 ExecStart=/opt/ocrsd/.venv/bin/python -m src.web.worker
 Restart=on-failure
 RestartSec=5

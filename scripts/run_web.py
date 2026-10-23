@@ -49,6 +49,7 @@ def stop(processes: list[tuple[str, subprocess.Popen]]) -> None:
 
 
 def main() -> int:
+    os.environ.setdefault("OCRSD_STANDARD_EDITS", "true")
     api_port = configured_port("OCRSD_API_PORT", 8000)
     ensure_port(api_port)
     environment = {**os.environ, "PYTHONUNBUFFERED": "1"}

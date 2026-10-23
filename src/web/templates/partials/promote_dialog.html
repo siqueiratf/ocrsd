@@ -1,0 +1,14 @@
+{% from "macros.html" import dialog_head, icon %}
+<form class="dialog-panel" hx-post="/modelos/{{ model_id }}/salvar-padrao" hx-target="#modal" hx-disabled-elt="find button[type=submit]" hx-disinherit="*">
+  {{ dialog_head("Salvar como modelo padrão") }}
+  <div class="dialog-body form-stack">
+    <p class="hint">Grava em documents/&lt;chave&gt;/ do repositório; faça commit para versionar.</p>
+    <label class="field">Chave<input name="key" required maxlength="100" pattern="[a-zA-Z0-9_-]+" value="{{ key }}" spellcheck="false"></label>
+    <label class="field">Nome<input name="label" required maxlength="120" value="{{ label }}"></label>
+    <label class="field">Descrição <span class="optional">opcional</span><textarea name="description" maxlength="500">{{ description }}</textarea></label>
+  </div>
+  <footer class="dialog-foot">
+    <button type="button" class="btn" data-fechar>Cancelar</button>
+    <button type="submit" class="btn btn-primary">{{ icon('upload') }}Salvar como padrão<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
+  </footer>
+</form>

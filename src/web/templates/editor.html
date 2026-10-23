@@ -26,6 +26,9 @@
         <div class="menu-list">
           <button type="button" data-acao="exportar">{{ icon('download') }}<span>Exportar JSON<small>Estado atual do mapeamento</small></span></button>
           <button type="button" data-acao="recarregar">{{ icon('reload') }}<span>Recarregar versão salva<small>Descarta alterações locais</small></span></button>
+          {% if not model.builtin and STANDARD_EDITS %}
+          <button type="button" hx-get="/modelos/{{ model.id }}/salvar-padrao" hx-target="#modal">{{ icon('upload') }}<span>Salvar como modelo padrão<small>Grava em documents/&lt;chave&gt;/; faça commit para versionar</small></span></button>
+          {% endif %}
           {% if not model.builtin %}
           <button type="button" class="menu-danger" hx-post="/modelos/{{ model.id }}/excluir" hx-confirm="Excluir este modelo? Esta ação não pode ser desfeita." data-saida>{{ icon('trash') }}<span>Excluir modelo<small>Remove template e mapeamento</small></span></button>
           {% endif %}
@@ -34,7 +37,11 @@
       <form class="inline-form" hx-post="/modelos/{{ model.id }}/previa" hx-target="#modal" hx-disabled-elt="find button" data-previa hx-disinherit="*">
         <button type="submit" class="btn" data-tooltip="Gera um documento sintético com o estado atual">{{ icon('eye') }}Pré-visualizar<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
       </form>
+      {% if model.builtin and model.editable %}
+      <button type="submit" class="btn btn-save" form="form-salvar" data-salvar data-tooltip="Cria mappings/&lt;nome&gt;_vN.json e define como ativo.">{{ icon('save') }}<span data-salvar-rotulo>Salvar nova versão do padrão</span></button>
+      {% else %}
       <button type="submit" class="btn btn-save" form="form-salvar" data-salvar data-tooltip="Salvar (Ctrl+S)">{{ icon('save') }}<span data-salvar-rotulo>Salvar</span></button>
+      {% endif %}
       {% include "partials/publication.html" %}
     </div>
   </header>

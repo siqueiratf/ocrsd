@@ -109,6 +109,7 @@ def build_collection() -> dict:
     names = {
         "health": "Saúde dos serviços", "create_workspace": "Criar espaço privado", "document_types": "Tipos de documento",
         "models": "Listar modelos", "create_model": "Cadastrar template PDF", "duplicate_model": "Criar cópia editável",
+        "promote_model": "Promover a modelo padrão",
         "update_model": "Atualizar metadados", "delete_model": "Excluir modelo", "template": "Template PDF",
         "model_preview": "Prévia PNG do template", "mapping": "Mapeamento e campos", "update_mapping": "Salvar mapeamento",
         "submit_analysis": "Analisar template do modelo", "analysis": "Acompanhar análise", "apply_analysis": "Aplicar sugestões aceitas",
@@ -126,7 +127,8 @@ def build_collection() -> dict:
     bodies = {
         "create_workspace": {},
         "create_model": {"label": "Meu modelo", "description": "Template de pesquisa", "filename": "template.pdf", "pdf_base64": "{{pdfBase64}}", "mapping_id": "default", "mapping": None},
-        "duplicate_model": {}, "update_model": {"label": "Meu modelo", "description": "Versão revisada", "status": "draft"},
+        "duplicate_model": {}, "promote_model": {"key": "meu_documento", "label": "Meu Documento", "description": "Promovido do espaço de trabalho"},
+        "update_model": {"label": "Meu modelo", "description": "Versão revisada", "status": "draft"},
         "update_mapping": {"definition": "__MAPPING__"}, "submit_analysis": {"page": 1}, "apply_analysis": {"accepted": ["newborn_name"]},
         "create_semantic_definition": {"key": "custom.referencia_local", "label": "Referência local", "description": "Código fictício",
                                        "data_type": "text", "generator": {"type": "choices", "values": ["A1", "B2"]}},

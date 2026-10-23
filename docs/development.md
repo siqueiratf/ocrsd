@@ -54,6 +54,22 @@ fragmento, que não chega ao proxy e é removido da barra após a leitura. Quem 
 link acessa o resultado até revogação ou expiração. O catálogo é administrado por
 arquivos locais, nunca por caminhos recebidos da API.
 
+## Modelos padrão editáveis
+
+Com `OCRSD_STANDARD_EDITS=true` (padrão em `make web`; `false` em Compose e systemd), o
+editor passa a oferecer duas ações que gravam diretamente em `documents/` do
+repositório: “Salvar como modelo padrão”, que promove um modelo personalizado do
+espaço de trabalho a um novo `documents/<chave>/` (template, `modelo.json` e
+`mappings/<chave>_v1.json`), e “Salvar nova versão do padrão”, que grava
+`mappings/<base>_vN.json` para um modelo padrão existente e atualiza o
+`active_mapping` do `modelo.json`. As duas exigem um mapeamento sem pendências e
+nunca sobrescrevem arquivos existentes. Depois de usar essas ações em
+desenvolvimento, confira o diff e rode `git add documents/<chave>` (e
+`git commit`) para versionar o resultado; a aplicação não grava fora de
+`settings.documents` nem faz commits sozinha. Mantenha a variável desligada em
+qualquer ambiente com o sistema de arquivos somente leitura ou sem revisão humana
+do que é promovido a padrão.
+
 ## Jobs e limites
 
 A API grava opções e hash da chave em SQLite/WAL e retorna `202`; não executa geração.
@@ -103,6 +119,7 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 | `OCRSD_AI_MODEL` | `qwen3:1.7b` | Modelo instalado manualmente pelo administrador; nenhum peso é baixado automaticamente |
 | `OCRSD_AI_TIMEOUT` / `OCRSD_AI_BUDGET` | 60 / 90 | Tempo por requisição e orçamento total da IA por análise, em segundos |
 | `OCRSD_MAPPING_MIN_SCORE` / `OCRSD_MAPPING_MIN_MARGIN` | 0.5 / 0.2 | Similaridade mínima e margem para associar um rótulo a uma chave semântica |
+| `OCRSD_STANDARD_EDITS` | false (true em `make web`) | Habilita promover um modelo personalizado a padrão e substituir o mapeamento de um modelo padrão pelo editor; grava em `documents/`. Mantenha `false` em implantações. |
 
 O worker verifica tempo/disco a cada 0,5 s e limita CPU, memória virtual e tamanho
 individual de arquivo. A medição de volume pode ultrapassar brevemente o teto entre

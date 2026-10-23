@@ -179,6 +179,12 @@ class MappingUpdate(StrictModel):
     definition: dict[str, Any]
 
 
+class ModelPromote(StrictModel):
+    key: Annotated[str, Field(min_length=1, max_length=100)]
+    label: Annotated[str, Field(min_length=1, max_length=120)]
+    description: Annotated[str, Field(max_length=500)] = ""
+
+
 class SemanticDefinitionCreate(StrictModel):
     key: Annotated[str, Field(pattern=r"^custom(?:\.[a-z][a-z0-9_]*){1,5}$", max_length=100)]
     label: Annotated[str, Field(min_length=1, max_length=100)]

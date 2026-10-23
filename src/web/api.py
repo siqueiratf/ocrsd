@@ -11,8 +11,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.exceptions import HTTPException
 
 from src.web.jobs import JobStore
-from src.web.models import AnalysisApply, AnalysisCreate, AnalysisResponse, Artifact, AssistantStatus, Capabilities, DocumentModelResponse, DocumentTypeResponse, ErrorResponse, GenerationConfigCreate, GenerationConfigResponse, GenerationOptions, HandwritingPreviewRequest, HandwritingPreviewResponse, Health, Identifier, JobDetail, JobResponse, MappingResponse, MappingUpdate, ModelCreate, ModelUpdate, PresetResponse, RealismPreviewRequest, RealismPreviewResponse, Results, SemanticDefinitionCreate, ShareCreate, ShareCreated, ShareResponse, SharedResult, SubmittedJob, WorkspaceResponse, WritingPresetCreate, WritingPresetStored
-from src.web.services import BUILTIN_PROTECTED, AssistantProbe, Catalog, ServiceError, apply_proposal, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, mapping_issues, realism_previews, render_preview, save_mapping
+from src.web.models import AnalysisApply, AnalysisCreate, AnalysisResponse, Artifact, AssistantStatus, Capabilities, DocumentModelResponse, DocumentTypeResponse, ErrorResponse, GenerationConfigCreate, GenerationConfigResponse, GenerationOptions, HandwritingPreviewRequest, HandwritingPreviewResponse, Health, Identifier, JobDetail, JobResponse, MappingResponse, MappingUpdate, ModelCreate, ModelPromote, ModelUpdate, PresetResponse, RealismPreviewRequest, RealismPreviewResponse, Results, SemanticDefinitionCreate, ShareCreate, ShareCreated, ShareResponse, SharedResult, SubmittedJob, WorkspaceResponse, WritingPresetCreate, WritingPresetStored
+from src.web.services import BUILTIN_PROTECTED, AssistantProbe, Catalog, ServiceError, apply_proposal, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, mapping_issues, promote_model as promote_document_model, realism_previews, render_preview, save_mapping
 from src.web.settings import Settings
 from src.web.ui import file_response, mount_ui
 
@@ -207,6 +207,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/v1/models/{model_id}/duplicate", response_model=DocumentModelResponse, status_code=201, tags=["Modelos"])
     async def duplicate_model(model_id: Identifier, owner_id: Annotated[str, Depends(workspace_required)]):
         return custom_model(duplicate_document_model(catalog, store, model_id, owner_id))
+
+    @app.post("/api/v1/models/{model_id}/standard", response_model=DocumentModelResponse, status_code=201, tags=["Modelos"],
+             summary="Promove um modelo personalizado a modelo padrão",
+             description="Grava o template e o mapeamento do modelo personalizado em documents/<chave>/, tornando-o um modelo padrão "
+                         "versionável no repositório. Requer OCRSD_STANDARD_EDITS=true e um mapeamento sem pendências.")
+    async def promote_model(model_id: Identifier, payload: ModelPromote, owner_id: Annotated[str, Depends(workspace_required)]):
+        document = promote_document_model(catalog, store, model_id, owner_id, payload.key, payload.label, payload.description)
+        return next(item for item in catalog.document_models([]) if item.id == document.key)
 
     @app.put("/api/v1/models/{model_id}", response_model=DocumentModelResponse, tags=["Modelos"])
     async def update_model(model_id: Identifier, payload: ModelUpdate, owner_id: Annotated[str, Depends(workspace_required)]):
