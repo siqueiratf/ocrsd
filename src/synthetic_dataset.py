@@ -568,6 +568,10 @@ def _random_value(field: dict, rng: random.Random, context: dict) -> str:
         return f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}"
     if data_type == "uf":
         return rng.choice(UF_VALUES)
+    if data_type == "integer":
+        return str(_bounded_integer(field, rng, context))
+    if data_type == "time":
+        return f"{rng.randrange(0, 24):02d}:{rng.randrange(0, 60):02d}"
     if data_type == "person_name" or "nome" in label:
         return f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)} {rng.choice(LAST_NAMES)}"
     if data_type == "date" or "data" in label:
