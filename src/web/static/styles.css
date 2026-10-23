@@ -339,6 +339,8 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 .model-meta dd { margin: 0; font-weight: 650; color: var(--ink-2); }
 .model-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: auto; }
 .model-actions .btn { white-space: normal; text-align: center; }
+.model-actions form { grid-column: 1 / -1; }
+.model-actions form .btn { width: 100%; }
 .model-new {
   min-height: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   padding: 24px; border: 1.5px dashed var(--line-strong); border-radius: var(--radius-lg);
@@ -449,6 +451,7 @@ body:has(.wizard-fields-page) .page { padding-bottom: 12px; }
 .wizard-model-detail { display: flex; flex-direction: column; gap: 3px; padding: 10px; }
 .wizard-model-detail b { font-size: .84rem; line-height: 1.35; }
 .wizard-model-detail small, .wizard-choice small, .wizard-style-copy small { color: #64748b; }
+.wizard-model-description { margin: 14px 0 0; color: var(--muted); line-height: 1.5; }
 .wizard-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .wizard-model-summary { margin: 18px 0 0; color: var(--muted); }
 .wizard-model-summary b { color: var(--ink); }

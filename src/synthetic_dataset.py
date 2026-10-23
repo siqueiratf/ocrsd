@@ -618,6 +618,9 @@ def _bound_values(field: dict, binding: Binding, value) -> tuple[str, list[tuple
         typed = {"sex": value}
     elif data_type == "dnv_number" and value_kind(binding, value) == "dnv":
         typed = {"identifier": dnv_metadata(value)}
+    if isinstance(value, int) and isinstance(field.get("measurement"), dict):
+        measurement = field["measurement"]
+        typed["measurement"] = {"value": round(value * measurement["scale"], 1), "unit": measurement["unit"]}
     parts = present_elements(field, binding, value, _ordered(field)) if _composite(field) else None
     return present_text(field, binding, value), parts, typed
 
@@ -735,6 +738,9 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
     semantic_seed = rng.getrandbits(64)
     generation_context = {"record": None, "document": document_context(field_map.get("template_id") or infer_document_type_key(template_path))}
     selected = [field for field in field_map.get("fields", []) if str(field["field_id"]) in selected_ids]
+    unsupported = next((field for field in selected if field.get("unsupported_reason")), None)
+    if unsupported:
+        raise ValueError(f"{unsupported.get('label') or unsupported['field_id']}: {unsupported['unsupported_reason']}")
     custom_definitions = field_map.get("semantic_definitions") or {}
     custom_fields = [field for field in selected if isinstance(field.get("semantic"), str)
                      and field["semantic"].startswith("custom.")]
@@ -828,6 +834,12 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             continue
         binding = bindings.get(field_id)
         meaning = _semantic_entry(binding, snapshot) if binding else {}
+        render_when = field.get("render_when")
+        if render_when and snapshot.get(render_when["key"]) not in render_when["values"]:
+            values[field_id] = ""
+            entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"],
+                            "blank": True, "render_condition": render_when})
+            continue
         if binding and snapshot[binding.key] is None:
             values[field_id] = ""
             entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"], "blank": True,
@@ -837,7 +849,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             if binding:
                 selected_elements = checkbox_choice(field, binding, semantic_value(binding))
             else:
-                count = 1 if field.get("selection_mode", "single") == "single" else rng.randint(1, len(elements))
+                count = rng.randint(0, 1) if len(elements) == 1 else (1 if field.get("selection_mode", "single") == "single" else rng.randint(1, len(elements)))
                 selected_elements = rng.sample(elements, count)
             element_entries = []
             for element in elements:
@@ -958,6 +970,10 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
         output_dir = build_dataset_run_dir(document_type, count)
     field_map = json.loads(mapping_path.read_text(encoding="utf-8"))
     field_map = apply_shared_rules(field_map)
+    unsupported = next((field for field in field_map.get("fields", [])
+                        if str(field["field_id"]) in selected_ids and field.get("unsupported_reason")), None)
+    if unsupported:
+        raise ValueError(f"{unsupported.get('label') or unsupported['field_id']}: {unsupported['unsupported_reason']}")
     requested_seed = seed
     seed = secrets.randbits(32) if seed is None else seed
     rng = random.Random(seed)

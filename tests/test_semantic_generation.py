@@ -29,7 +29,8 @@ COUNT = 8
 
 
 def all_ids(mapping: Path) -> set[str]:
-    return {str(field["field_id"]) for field in json.loads(mapping.read_text(encoding="utf-8"))["fields"]}
+    return {str(field["field_id"]) for field in json.loads(mapping.read_text(encoding="utf-8"))["fields"]
+            if not field.get("unsupported_reason")}
 
 
 def generate(template: Path, mapping: Path, output: Path, count: int = COUNT, seed: int = 21, ids: set[str] | None = None) -> list[dict]:
@@ -91,6 +92,52 @@ class SemanticGenerationTests(unittest.TestCase):
             self.assertTrue(by_id["41"]["blank"])
             self.assertEqual(by_id["17_codigo_cbo"]["value"], record["mother.occupation_cbo"] or "")
 
+    def test_dnv_date_boxes_and_rule_match_the_form(self):
+        mapping = json.loads(DNV_MAPPING.read_text(encoding="utf-8"))
+        by_id = {field["field_id"]: field for field in mapping["fields"]}
+        self.assertEqual(by_id["2"]["validation"]["pattern"], "^[0-9]{8}$")
+        for field_id in ("2", "2_hora", "42"):
+            field = by_id[field_id]
+            x0, y0, x1, y1 = field["bbox"]
+            self.assertTrue(all(x0 <= box[0] < box[2] <= x1 and y0 <= box[1] < box[3] <= y1
+                                for box in (element["bbox"] for element in field["elements"])))
+
+    def test_dnv_occurrence_and_gestation_follow_the_record(self):
+        scenarios = set()
+        for truth in self.dnv:
+            record, by_id = truth["semantic_record"], fields(truth)
+            scenarios.add(record["pregnancy.dum_known"])
+            self.assertEqual(by_id["7"]["semantic"]["value"], "Hospital")
+            self.assertEqual([item["label"] for item in by_id["7"]["elements"] if item["checked"]], ["Hospital"])
+            if record["pregnancy.dum_known"]:
+                self.assertTrue(by_id["31"]["value"])
+                self.assertTrue(by_id["32"]["blank"])
+                self.assertTrue(by_id["32_metodo"]["blank"])
+            else:
+                self.assertTrue(by_id["31"]["blank"])
+                self.assertEqual(int(by_id["32"]["value"]), record["pregnancy.weeks"])
+                self.assertEqual(len([item for item in by_id["32_metodo"]["elements"] if item["checked"]]), 1)
+        self.assertEqual(scenarios, {True, False})
+
+    def test_dnv_birth_measurements_and_professional_identity(self):
+        for truth in self.dnv:
+            record, by_id = truth["semantic_record"], fields(truth)
+            self.assertTrue(0 <= int(by_id["5_1"]["value"]) <= int(by_id["5_5"]["value"]) <= 10)
+            self.assertTrue(300 <= int(by_id["4"]["value"]) <= 6000)
+            self.assertTrue(350 <= int(by_id["b"]["value"]) <= 600)
+            self.assertEqual(by_id["b"]["semantic"]["value"], record["newborn.length_tenths_cm"])
+            self.assertEqual(by_id["b"]["measurement"], {"value": int(by_id["b"]["value"]) / 10, "unit": "cm"})
+            for field_id, expected in (("40", "Médico"), ("44", "Médico"), ("45", "CRM")):
+                self.assertEqual([item["label"] for item in by_id[field_id]["elements"] if item["checked"]], [expected])
+            self.assertRegex(by_id["46"]["value"], r"^[0-9]{6}$")
+            self.assertEqual(by_id["47"]["value"], "CRM")
+
+    def test_unsupported_perimeter_cannot_be_rendered_as_valid_measurement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "perímetro cefálico|perimetro cefalico"):
+                generate_dataset(DNV_TEMPLATE, DNV_MAPPING, all_ids(DNV_MAPPING) | {"c"}, Path(directory), 1,
+                                 seed=3, handwriting=False, text_handwriting=False)
+
     def test_dnv_values_come_from_one_coherent_record(self):
         self.assertEqual(self.manifest["semantic_version"], VERSION)
         for truth in self.dnv:
@@ -106,10 +153,11 @@ class SemanticGenerationTests(unittest.TestCase):
                 filled = date.fromisoformat(record["filling.date"])
                 self.assertEqual(by_id["42"]["value"], filled.strftime("%d%m%y"))
                 self.assertTrue(0 <= (filled - born).days <= 60)
-                occurrence = profile(city=by_id["12"]["value"], uf=by_id["13"]["value"], ibge=by_id["12_codigo"]["value"],
-                                     cep=by_id["10"]["value"])
+                occurrence = profile(city=by_id["12"]["value"], uf=by_id["13"]["value"], ibge=by_id["12_codigo"]["value"])
                 self.assertIsNotNone(occurrence, "local da ocorrência incoerente")
-                self.assertEqual(by_id["11"]["value"], occurrence["neighborhood"])
+                for field_id in ("9", "9_numero", "10", "11"):
+                    self.assertEqual(by_id[field_id]["value"], "")
+                    self.assertTrue(by_id[field_id]["blank"])
                 residence = profile(city=by_id["26"]["value"], uf=by_id["27"]["value"], cep=by_id["24"]["value"])
                 self.assertIsNotNone(residence, "residência incoerente")
                 self.assertIsNotNone(profile(city=by_id["51"]["value"], uf=by_id["52"]["value"]))
@@ -117,8 +165,6 @@ class SemanticGenerationTests(unittest.TestCase):
                     "gestacoes_anteriores", "partos_vaginais", "cesareas", "nascidos_vivos", "perdas_fetais_abortos")}
                 self.assertEqual(counts["partos_vaginais"] + counts["cesareas"], counts["gestacoes_anteriores"] - counts["perdas_fetais_abortos"])
                 self.assertLessEqual(counts["nascidos_vivos"], counts["partos_vaginais"] + counts["cesareas"])
-                self.assertRegex(by_id["9_numero"]["value"], r"^\d{3}$")
-                self.assertEqual(int(by_id["9_numero"]["value"]), int(record["birth.place.number"]))
                 self.assertEqual(by_id["15_cpf"]["value"], record["mother.cpf"])
                 checked = [element for element in by_id["3"]["elements"] if element["checked"]]
                 self.assertEqual(len(checked), 1)
@@ -126,7 +172,7 @@ class SemanticGenerationTests(unittest.TestCase):
                 self.assertEqual(checked[0]["label"], {"M": "Masculino", "F": "Feminino"}[record["newborn.sex"]])
                 self.assertEqual(by_id["14"]["semantic"], {"key": "mother.name", "value": record["mother.name"], "source": "inferred"})
                 self.assertEqual(by_id["14"]["value"], record["mother.name"])
-                self.assertNotIn("semantic", by_id["a"])
+                self.assertEqual(by_id["a"]["semantic"]["value"], record["newborn.race"])
                 surnames = set(record["newborn.name"].split()[1:]) & set(record["mother.name"].split()[1:])
                 self.assertTrue(surnames)
                 if record["guardian.name"] is None:

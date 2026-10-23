@@ -26,9 +26,14 @@ registration.place.summary deceased.name deceased.sex deceased.birth_date deceas
 deceased.father_name deceased.occupation deceased.residence.street deceased.residence.number deceased.residence.neighborhood
 deceased.residence.cep deceased.residence.municipality deceased.residence.uf deceased.residence.ibge death.date death.time
 death.place.establishment.name death.place.municipality death.place.uf death.place.ibge certifier.name certifier.registration
+deceased.naturalidade deceased.occupation_cbo death.type death.place.category death.medical_assistance death.autopsy certifier.role
 birth.pregnancy_type birth.delivery_type birth.cesarean_before_labor newborn.anomaly_status newborn.anomaly_description mother.occupation_cbo
 birth.twins twin.name_matricula death_registration.date death_registration.number death_registration.office.name
 death_registration.office.municipality death_registration.office.uf death_registration.place.summary
+pregnancy.dum_known pregnancy.reported_weeks pregnancy.estimation_method birth.occurrence_type
+newborn.race newborn.weight_g newborn.apgar_1min newborn.apgar_5min newborn.length_tenths_cm newborn.head_circumference_cm
+mother.schooling mother.marital_status mother.race birth.presentation birth.labor_induced birth.attendant_role
+filling.responsible.role filling.responsible.document_type
 """.split()
 ADDRESS_PREFIXES = ("birth.place", "mother.residence", "deceased.residence", "death.place", "registration.office")
 PROFILE_FIELDS = {"municipality": "city", "uf": "uf", "ibge": "ibge", "cep": "cep", "street": "street", "neighborhood": "neighborhood"}
@@ -107,6 +112,21 @@ class RegistryTests(unittest.TestCase):
 
 
 class SemanticRecordTests(unittest.TestCase):
+    def test_legacy_replay_keeps_saved_values_when_registry_gains_keys(self):
+        original = SemanticRecord(19, "dnv")
+        original.resolve(["birth.date", "pregnancy.weeks"])
+        saved = original.snapshot()
+        saved.pop("birth.occurrence_type")
+        saved.pop("pregnancy.dum_known")
+        saved.pop("pregnancy.reported_weeks")
+        saved.pop("pregnancy.estimation_method")
+        with self.assertRaises(SemanticConstraintError):
+            SemanticRecord.from_values(saved, "dnv", 19)
+        replay = SemanticRecord.from_values(saved, "dnv", 19, allow_partial=True)
+        self.assertEqual(replay.resolve(["birth.date", "pregnancy.weeks"]),
+                         {"birth.date": original.value("birth.date"), "pregnancy.weeks": original.value("pregnancy.weeks")})
+        self.assertEqual(replay.snapshot(), saved)
+
     def test_every_key_generates_declared_kind(self):
         for seed in range(25):
             _, values = resolved(seed)
@@ -139,7 +159,14 @@ class SemanticRecordTests(unittest.TestCase):
             self.assertLessEqual(values["filling.date"], values["registration.date"])
             weeks = values["pregnancy.weeks"]
             self.assertTrue(22 <= weeks <= 42)
-            self.assertLessEqual(abs((birth_day - timedelta(days=7 * weeks) - values["pregnancy.last_menstrual_period"]).days), 6)
+            if values["pregnancy.dum_known"]:
+                self.assertLessEqual(abs((birth_day - timedelta(days=7 * weeks) - values["pregnancy.last_menstrual_period"]).days), 6)
+                self.assertIsNone(values["pregnancy.reported_weeks"])
+                self.assertIsNone(values["pregnancy.estimation_method"])
+            else:
+                self.assertIsNone(values["pregnancy.last_menstrual_period"])
+                self.assertEqual(values["pregnancy.reported_weeks"], weeks)
+                self.assertIn(values["pregnancy.estimation_method"], {"Exame físico", "Outro método"})
             self.assertTrue(1 <= values["pregnancy.prenatal_start_month"] <= 9)
             self.assertTrue(0 <= values["pregnancy.prenatal_visits"] <= 20)
             history = {key.rsplit(".", 1)[1]: value for key, value in values.items() if key.startswith("mother.obstetric.")}

@@ -6,7 +6,7 @@
   3300
  ],
  "source_template": "documents/do/do.pdf",
- "reference_manual": "Declaração de Óbito: manual de instruções para preenchimento (Ministério da Saúde, 2022), Anexo A - modelo DO versão 01/10, 2ª impressão 11/2010",
+ "reference_manual": "Declaração de Óbito: manual de instruções para preenchimento (Ministério da Saúde, 2022), Apêndice A - modelo DO versão 01/10, 2ª impressão 11/2010",
  "shared_rules": {
   "RULE_UF": {
    "description": "Sigla da Unidade da Federacao. Duas letras. Uma das 27 siglas oficiais.",
@@ -100,7 +100,8 @@
     444,
     645,
     536
-   ]
+   ],
+   "semantic": "death.type"
   },
   {
    "field_id": "2",
@@ -415,7 +416,8 @@
     478,
     1632,
     533
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "4",
@@ -429,7 +431,8 @@
     462,
     2118,
     514
-   ]
+   ],
+   "semantic": "deceased.naturalidade"
   },
   {
    "field_id": "5",
@@ -634,7 +637,8 @@
     1071,
     792
    ],
-   "semantic": null
+   "semantic": null,
+   "unsupported_reason": "A idade de menores de um ano exige seleção exclusiva da unidade e coerência com a data e hora do nascimento; o cenário atual da DO é não fetal adulto."
   },
   {
    "field_id": "9_dias",
@@ -654,7 +658,8 @@
     1138,
     792
    ],
-   "semantic": null
+   "semantic": null,
+   "unsupported_reason": "A idade de menores de um ano exige seleção exclusiva da unidade e coerência com a data e hora do nascimento; o cenário atual da DO é não fetal adulto."
   },
   {
    "field_id": "9_horas",
@@ -674,7 +679,8 @@
     1212,
     792
    ],
-   "semantic": null
+   "semantic": null,
+   "unsupported_reason": "A idade de menores de um ano exige seleção exclusiva da unidade e coerência com a data e hora do nascimento; o cenário atual da DO é não fetal adulto."
   },
   {
    "field_id": "9_minutos",
@@ -694,7 +700,8 @@
     1283,
     792
    ],
-   "semantic": null
+   "semantic": null,
+   "unsupported_reason": "A idade de menores de um ano exige seleção exclusiva da unidade e coerência com a data e hora do nascimento; o cenário atual da DO é não fetal adulto."
   },
   {
    "field_id": "9_ignorado",
@@ -723,7 +730,8 @@
     694,
     1368,
     795
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "10",
@@ -846,7 +854,8 @@
     694,
     1766,
     795
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "12",
@@ -929,7 +938,8 @@
     694,
     2122,
     795
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "13",
@@ -1023,7 +1033,8 @@
     799,
     1132,
     916
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "13_serie",
@@ -1042,7 +1053,8 @@
     850,
     1225,
     913
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "14",
@@ -1146,7 +1158,8 @@
     868,
     2122,
     912
-   ]
+   ],
+   "semantic": "deceased.occupation_cbo"
   },
   {
    "field_id": "15",
@@ -1192,7 +1205,8 @@
     948,
     1742,
     987
-   ]
+   ],
+   "unsupported_reason": "O complemento do endereço ainda não é armazenado no registro semântico da residência do falecido."
   },
   {
    "field_id": "16",
@@ -1374,7 +1388,8 @@
     1020,
     1084,
     1060
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "18",
@@ -1619,7 +1634,8 @@
     1080,
     1007,
     1166
-   ]
+   ],
+   "semantic": "death.place.category"
   },
   {
    "field_id": "21",
@@ -1734,7 +1750,8 @@
     1122,
     2122,
     1164
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "22",
@@ -1748,7 +1765,8 @@
     1203,
     1368,
     1240
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "22_numero",
@@ -1763,7 +1781,8 @@
     1203,
     1543,
     1240
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "22_complemento",
@@ -1778,7 +1797,8 @@
     1203,
     1738,
     1240
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "23",
@@ -1888,7 +1908,8 @@
     1199,
     2122,
     1242
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "24",
@@ -1902,7 +1923,8 @@
     1275,
     936,
     1311
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "24_codigo",
@@ -1958,7 +1980,8 @@
     1273,
     1084,
     1312
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "25",
@@ -2160,7 +2183,8 @@
     1440,
     566,
     1486
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "28",
@@ -2254,7 +2278,8 @@
     1352,
     1279,
     1488
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "28_serie",
@@ -2269,7 +2294,8 @@
     1420,
     1373,
     1485
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "29",
@@ -2283,7 +2309,8 @@
     1430,
     1869,
     1485
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "29_codigo_cbo",
@@ -2372,7 +2399,8 @@
     1440,
     2122,
     1486
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "30_nascidos_vivos",
@@ -2414,7 +2442,8 @@
     1560,
     583,
     1600
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "30_nascidos_vivos_ignorado",
@@ -2443,7 +2472,8 @@
     1605,
     606,
     1643
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "30_perdas_fetais",
@@ -2485,7 +2515,8 @@
     1560,
     719,
     1600
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "30_perdas_fetais_ignorado",
@@ -2514,7 +2545,8 @@
     1605,
     741,
     1643
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "31",
@@ -2555,7 +2587,8 @@
     1560,
     876,
     1600
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "31_ignorado",
@@ -2584,7 +2617,8 @@
     1605,
     926,
     1643
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "32",
@@ -2645,7 +2679,8 @@
     1498,
     1128,
     1650
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "33",
@@ -2695,7 +2730,8 @@
     1498,
     1316,
     1650
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "34",
@@ -2756,7 +2792,8 @@
     1498,
     2122,
     1572
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "35",
@@ -2821,7 +2858,8 @@
     1604,
     1528,
     1648
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "36",
@@ -2961,7 +2999,8 @@
     1604,
     2122,
     1648
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "37",
@@ -3055,7 +3094,8 @@
     1690,
     1287,
     1795
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de regras condicionais de óbito fetal, idade, gestação ou histórico materno ainda não implementadas para a DO."
   },
   {
    "field_id": "38",
@@ -3105,7 +3145,8 @@
     1690,
     1702,
     1795
-   ]
+   ],
+   "semantic": "death.medical_assistance"
   },
   {
    "field_id": "39",
@@ -3155,7 +3196,8 @@
     1690,
     2122,
     1795
-   ]
+   ],
+   "semantic": "death.autopsy"
   },
   {
    "field_id": "40_a_causa",
@@ -3170,7 +3212,8 @@
     1845,
     1816,
     1885
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_a_tempo",
@@ -3185,7 +3228,8 @@
     1845,
     1983,
     1885
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_a_cid",
@@ -3203,7 +3247,8 @@
     1845,
     2119,
     1885
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_b_causa",
@@ -3218,7 +3263,8 @@
     1915,
     1816,
     1955
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_b_tempo",
@@ -3233,7 +3279,8 @@
     1915,
     1983,
     1955
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_b_cid",
@@ -3251,7 +3298,8 @@
     1915,
     2119,
     1955
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_c_causa",
@@ -3266,7 +3314,8 @@
     1985,
     1816,
     2025
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_c_tempo",
@@ -3281,7 +3330,8 @@
     1985,
     1983,
     2025
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_c_cid",
@@ -3299,7 +3349,8 @@
     1985,
     2119,
     2025
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_d_causa",
@@ -3314,7 +3365,8 @@
     2058,
     1816,
     2099
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_d_tempo",
@@ -3329,7 +3381,8 @@
     2058,
     1983,
     2099
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_d_cid",
@@ -3347,7 +3400,8 @@
     2058,
     2119,
     2099
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_ii_1_causa",
@@ -3362,7 +3416,8 @@
     2128,
     1816,
     2168
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_ii_1_tempo",
@@ -3377,7 +3432,8 @@
     2128,
     1983,
     2168
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_ii_1_cid",
@@ -3395,7 +3451,8 @@
     2128,
     2119,
     2168
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_ii_2_causa",
@@ -3410,7 +3467,8 @@
     2185,
     1816,
     2223
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_ii_2_tempo",
@@ -3425,7 +3483,8 @@
     2185,
     1983,
     2223
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "40_ii_2_cid",
@@ -3443,7 +3502,8 @@
     2185,
     2119,
     2223
-   ]
+   ],
+   "unsupported_reason": "As causas, os intervalos e os códigos CID exigem uma cadeia causal clínica validada. O gerador da DO ainda não dispõe dessa referência; os códigos CID são reservados à codificação especializada."
   },
   {
    "field_id": "41",
@@ -3548,7 +3608,8 @@
     2238,
     1660,
     2324
-   ]
+   ],
+   "semantic": "certifier.role"
   },
   {
    "field_id": "44",
@@ -3562,7 +3623,8 @@
     2275,
     2041,
     2319
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "44_uf",
@@ -3607,7 +3669,8 @@
     2280,
     2122,
     2322
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "45",
@@ -3621,14 +3684,15 @@
     2357,
     926,
     2403
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "46",
    "bloco": "VI",
    "official_variable": "46",
    "label": "Data do atestado",
-   "description": "Data do atestado",
+   "description": "Data do atestado (simulação restrita a atestado no mesmo dia do óbito)",
    "data_type": "digit_sequence",
    "elements": [
     {
@@ -3731,7 +3795,8 @@
     2357,
     1325,
     2403
-   ]
+   ],
+   "semantic": "death.date"
   },
   {
    "field_id": "47",
@@ -3745,7 +3810,8 @@
     2357,
     2118,
     2403
-   ]
+   ],
+   "unsupported_reason": "A data e a assinatura do atestado ainda não são vinculadas ao óbito e ao médico atestante no registro sintético."
   },
   {
    "field_id": "48",
@@ -3817,7 +3883,8 @@
     2444,
     1222,
     2526
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "49",
@@ -3867,7 +3934,8 @@
     2444,
     1559,
     2526
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "50",
@@ -3939,7 +4007,8 @@
     2444,
     2122,
     2526
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "51",
@@ -3953,7 +4022,8 @@
     2556,
     2118,
     2625
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "52",
@@ -3967,7 +4037,8 @@
     2675,
     1794,
     2711
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "52_codigo",
@@ -4067,7 +4138,8 @@
     2672,
     2122,
     2714
-   ]
+   ],
+   "unsupported_reason": "Este campo depende de condições de ocorrência, assistência, atestante ou causa externa ainda não validadas para a DO."
   },
   {
    "field_id": "53",
@@ -4149,7 +4221,8 @@
     2752,
     1430,
     2794
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "54",
@@ -4420,7 +4493,8 @@
     2906,
     1232,
     3022
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "59_a",
@@ -4435,7 +4509,8 @@
     2900,
     2118,
     2958
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   },
   {
    "field_id": "59_b",
@@ -4450,7 +4525,9 @@
     2964,
     2118,
     3022
-   ]
+   ],
+   "unsupported_reason": "O valor deste campo ainda não é gerado e validado a partir do registro semântico da DO."
   }
- ]
+ ],
+ "template_provenance": "Reprodução do modelo da Declaração de Óbito publicada no Apêndice A do manual do Ministério da Saúde (2022); PDF de referência para dados sintéticos, não formulário emitido pelo SIM."
 }

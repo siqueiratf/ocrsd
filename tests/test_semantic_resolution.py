@@ -15,6 +15,12 @@ DNV_MAPPINGS = ROOT / "documents" / "dnv" / "mappings"
 CERTIDAO = ROOT / "documents" / "certidao_nascimento" / "certidao_nascimento_fields.json"
 LEAP_DAY = date(2024, 2, 29)
 DNV_EXPECTED = {
+    "a": "newborn.race", "4": "newborn.weight_g", "5_1": "newborn.apgar_1min", "5_5": "newborn.apgar_5min",
+    "b": "newborn.length_tenths_cm", "c": "newborn.head_circumference_cm",
+    "16": "mother.schooling", "21": "mother.marital_status", "22": "mother.race",
+    "36": "birth.presentation", "37": "birth.labor_induced", "40": "birth.attendant_role",
+    "44": "filling.responsible.role", "45": "filling.responsible.document_type",
+    "7": "birth.occurrence_type", "32": "pregnancy.reported_weeks", "32_metodo": "pregnancy.estimation_method",
     "6": "newborn.anomaly_status", "17_codigo_cbo": "mother.occupation_cbo",
     "35": "birth.pregnancy_type", "38": "birth.delivery_type", "39": "birth.cesarean_before_labor",
     "41": "newborn.anomaly_description",
@@ -28,7 +34,7 @@ DNV_EXPECTED = {
     "28": "guardian.name", "29": "guardian.age", "30_gestacoes_anteriores": "mother.obstetric.previous_pregnancies",
     "30_partos_vaginais": "mother.obstetric.vaginal_births", "30_cesareas": "mother.obstetric.cesareans",
     "30_nascidos_vivos": "mother.obstetric.live_births", "30_perdas_fetais_abortos": "mother.obstetric.fetal_losses",
-    "31": "pregnancy.last_menstrual_period", "32": "pregnancy.weeks", "33": "pregnancy.prenatal_visits",
+    "31": "pregnancy.last_menstrual_period", "33": "pregnancy.prenatal_visits",
     "34": "pregnancy.prenatal_start_month", "42": "filling.date", "43": "filling.responsible.name",
     "46": "filling.responsible.document_number", "47": "filling.responsible.issuer", "48": "registration.office.name",
     "49": "registration.number", "50": "registration.date", "51": "registration.office.municipality",
@@ -50,7 +56,13 @@ CERTIDAO_EXPECTED = {
 CLINICAL_TERMS = ("apgar", "peso", "comprimento", "perimetro", "raca", "escolaridade", "situacao conjugal", "funcao",
                   "tipo de documento", "apresentacao", "induzido", "metodo")
 SAMPLE = {
+    "newborn.race": "Parda", "newborn.weight_g": 3200, "newborn.apgar_1min": 8, "newborn.apgar_5min": 9,
+    "newborn.length_tenths_cm": 504, "newborn.head_circumference_cm": 34,
+    "mother.schooling": "Médio (antigo 2º grau)", "mother.marital_status": "Casada(o)", "mother.race": "Parda",
+    "birth.presentation": "Cefálica", "birth.labor_induced": "Não", "birth.attendant_role": "Médico",
+    "filling.responsible.role": "Médico", "filling.responsible.document_type": "CRM",
     "birth.pregnancy_type": "Única", "birth.delivery_type": "Vaginal", "birth.cesarean_before_labor": "Não se aplica",
+    "birth.occurrence_type": "Hospital", "pregnancy.reported_weeks": 39, "pregnancy.estimation_method": "Exame físico",
     "newborn.anomaly_status": "Ignorado", "newborn.anomaly_description": None, "mother.occupation_cbo": "411010",
     "newborn.name": "Ana Souza Lima", "newborn.sex": "F", "newborn.cpf": "52998224725",
     "newborn.naturalidade": "Recife/PE", "birth.date": LEAP_DAY, "birth.time": time(7, 5),
@@ -67,7 +79,7 @@ SAMPLE = {
     "mother.obstetric.live_births": 2, "mother.obstetric.fetal_losses": 0, "pregnancy.last_menstrual_period": date(2023, 5, 24),
     "pregnancy.weeks": 39, "pregnancy.prenatal_visits": 8, "pregnancy.prenatal_start_month": 2,
     "filling.date": date(2024, 3, 1), "filling.responsible.name": "Carla Ribeiro",
-    "filling.responsible.document_number": "123456", "filling.responsible.issuer": "COREN",
+    "filling.responsible.document_number": "123456", "filling.responsible.issuer": "CRM",
     "registration.office.name": "Cartório do 1º Ofício", "registration.number": "4321",
     "registration.date": date(2024, 3, 5), "registration.office.municipality": "Recife", "registration.office.uf": "PE",
     "registration.matricula": "12345601552024100001001000000110", "registration.dnv_number": "12345678901",
@@ -88,7 +100,8 @@ class ResolutionTests(unittest.TestCase):
         for field_id, field in fields.items():
             with self.subTest(field_id=field_id):
                 expected = DNV_EXPECTED.get(field_id)
-                self.assertEqual(resolve_field(field, "dnv"), Binding(expected) if expected else None)
+                self.assertEqual(resolve_field(field, "dnv"),
+                                 Binding(expected, source="explicit" if field.get("semantic") else "inferred") if expected else None)
 
     def test_certidao_bindings(self):
         fields = _fields(CERTIDAO)
@@ -107,6 +120,9 @@ class ResolutionTests(unittest.TestCase):
                             continue
                         text = f' {normalize(" ".join(str(field.get(key) or "") for key in ("field_id", "label", "description")))} '
                         self.assertIn(binding.key, KEYS)
+                        if field.get("semantic"):
+                            self.assertEqual(binding.key, field["semantic"] if isinstance(field["semantic"], str) else field["semantic"]["key"])
+                            continue
                         self.assertFalse(any(f" {term} " in text for term in CLINICAL_TERMS), binding)
                         if field.get("data_type") == "checkbox":
                             self.assertTrue(binding.key.endswith(".sex") or binding.key in {"birth.pregnancy_type", "birth.delivery_type", "birth.cesarean_before_labor", "newborn.anomaly_status"})
@@ -154,6 +170,11 @@ class ResolutionTests(unittest.TestCase):
         self.assertEqual(present_text({"data_type": "text"}, Binding("birth.twins"), False), "Não")
         boxes = {"data_type": "checkbox", "elements": [{"label": "Sim"}, {"label": "Não"}]}
         self.assertEqual(checkbox_choice(boxes, Binding("birth.twins"), False), [{"label": "Não"}])
+
+    def test_single_checkbox_represents_boolean_without_forcing_a_mark(self):
+        box = {"data_type": "checkbox", "elements": [{"label": "Ignorado", "value": "9"}]}
+        self.assertEqual(checkbox_choice(box, Binding("birth.twins"), True), box["elements"])
+        self.assertEqual(checkbox_choice(box, Binding("birth.twins"), False), [])
 
     def test_explicit_binding_precedence_and_validation(self):
         field = {"field_id": "1", "description": "Nome do Recem-nascido (RN)", "data_type": "person_name"}

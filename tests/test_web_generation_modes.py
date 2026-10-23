@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import date
 from pathlib import Path
 import re
 import shutil
@@ -24,6 +25,7 @@ from tests.test_web import ASGITestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = ["1", "3", "14", "19", "38"]
+DO_FIELDS = ["2", "5", "8", "9_anos", "10", "14", "18"]
 NAMES = {"mother.name": "Maria Clara Souza", "father.name": "Paulo Henrique Souza", "newborn.name": "Ana Beatriz Souza"}
 NUMBERS = {"mother.age": 28, "father.age": 31, "pregnancy.weeks": 39}
 
@@ -59,12 +61,16 @@ class FakeRecordModel(BaseHTTPRequestHandler):
             if key == "newborn.sex":
                 values[key] = "F"
             elif "opcoes" in slot:
-                values[key] = slot["opcoes"][0]
+                values[key] = slot["opcoes"][1] if key == "deceased.occupation" else slot["opcoes"][0]
             elif "intervalo" in slot:
                 values[key] = NUMBERS.get(key, sum(slot["intervalo"]) // 2)
             else:
                 values[key] = NAMES.get(key, "Clara Souza")
-        content = json.dumps({"valores": values}) if type(self).mode == "valid" else "não sei responder"
+        if type(self).mode == "partial":
+            values = {key: value for index, (key, value) in enumerate(values.items()) if index % 2 == 0}
+        if type(self).mode == "contradictory":
+            values["deceased.age"] = 2
+        content = json.dumps({"valores": values}) if type(self).mode != "invalid" else "não sei responder"
         self.send({"model": "fake", "choices": [{"message": {"content": content}}], "usage": {"prompt_tokens": 10, "completion_tokens": 20}})
 
 
@@ -96,10 +102,10 @@ class GenerationModeTests(unittest.TestCase):
     def hx(self, method, path, **kwargs):
         return self.client.request(method, path, headers={"Cookie": f"ocrsd_workspace={self.cookie}", "HX-Request": "true"}, **kwargs)
 
-    def wizard(self, generation_mode="traditional", count="2"):
-        page = self.hx("GET", "/geracao?modelo=dnv")
+    def wizard(self, generation_mode="traditional", count="2", document_type="dnv", fields=None):
+        page = self.hx("GET", f"/geracao?modelo={document_type}")
         draft = re.search(r'name="draft_id" value="([0-9a-f]+)"', page.text).group(1)
-        for step, data in ((1, {"document_type": "dnv"}), (2, {"fields": FIELDS}), (3, {"count": count, "generation_mode": generation_mode}),
+        for step, data in ((1, {"document_type": document_type}), (2, {"fields": fields or FIELDS}), (3, {"count": count, "generation_mode": generation_mode}),
                            (4, {"preset": "padrao_fonte_natural"}), (5, {"filter_preset": "none"})):
             response = self.hx("POST", f"/geracao/etapa/{step}", data={"draft_id": draft, **data})
             self.assertEqual(response.status_code, 200, response.text)
@@ -178,7 +184,7 @@ class GenerationModeTests(unittest.TestCase):
         details = self.hx("GET", f'/resultados/{job["id"]}/detalhes')
         self.assertIn("Modo de geração</dt><dd>Assistida por IA", details.text)
         self.assertIn("0123456789ab", details.text)
-        self.assertIn("2 documento(s) aceito(s)", details.text)
+        self.assertIn("2 documento(s) validado(s)", details.text)
         self.assertNotIn("Você cria cenários", details.text)
         contacted = FakeRecordModel.requests
         replayed = self.hx("POST", f'/resultados/{job["id"]}/reproduzir')
@@ -210,6 +216,48 @@ class GenerationModeTests(unittest.TestCase):
         self.assertTrue(row["error"].startswith("A geração assistida por IA falhou: A IA não produziu um registro válido"), row["error"])
         self.assertIn("A geração assistida por IA falhou", self.hx("GET", f'/resultados/{job["id"]}').text)
         self.assertEqual(self.hx("POST", f'/resultados/{job["id"]}/reproduzir').status_code, 422)
+
+    def test_partial_ai_response_records_which_values_were_generated_by_ai(self):
+        self.start_ai()
+        FakeRecordModel.mode = "partial"
+        draft = self.wizard("ai", count="1")
+        self.assertEqual(self.hx("POST", "/geracao/gerar", data={"draft_id": draft}).status_code, 200)
+        job = self.app.state.store.list_jobs(self.owner)[0]
+        self.run_worker()
+        self.assertEqual(self.app.state.store.get(job["id"])["status"], "succeeded")
+        manifest, truths = self.outputs(job["id"])
+        provenance = truths[0]["semantic_provenance"]
+        self.assertTrue(provenance["ai_keys"])
+        self.assertEqual(provenance["ai_keys"], sorted(provenance["accepted"]))
+        self.assertGreater(provenance["validation"]["rejected_values"], 0)
+        self.assertNotIn("father.age", provenance["ai_keys"])
+        self.assertIn("father.age", truths[0]["semantic_record"])
+        self.assertTrue(all(truths[0]["semantic_record"][key] == value for key, value in provenance["accepted"].items()))
+        self.assertEqual(manifest["generation"]["documents"][0]["status"], "accepted")
+
+    def test_do_ai_generation_preserves_age_chronology_and_rejects_impossible_occupation(self):
+        self.start_ai()
+        draft = self.wizard("ai", count="1", document_type="do", fields=DO_FIELDS)
+        self.assertEqual(self.hx("POST", "/geracao/gerar", data={"draft_id": draft}).status_code, 200)
+        job = self.app.state.store.list_jobs(self.owner)[0]
+        self.run_worker()
+        row = self.app.state.store.get(job["id"])
+        self.assertEqual(row["status"], "succeeded", row["error"])
+        _, truths = self.outputs(job["id"])
+        record = truths[0]["semantic_record"]
+        born, died = date.fromisoformat(record["deceased.birth_date"]), date.fromisoformat(record["death.date"])
+        self.assertLessEqual(born, died)
+        self.assertEqual(record["deceased.age"], died.year - born.year - ((died.month, died.day) < (born.month, born.day)))
+        self.assertEqual(truths[0]["semantic_provenance"]["mode"], "ai")
+
+        FakeRecordModel.mode = "contradictory"
+        draft = self.wizard("ai", count="1", document_type="do", fields=DO_FIELDS)
+        self.assertEqual(self.hx("POST", "/geracao/gerar", data={"draft_id": draft}).status_code, 200)
+        rejected_job = self.app.state.store.list_jobs(self.owner)[0]
+        self.run_worker()
+        rejected = self.app.state.store.get(rejected_job["id"])
+        self.assertEqual(rejected["status"], "failed")
+        self.assertIn("A IA não produziu um registro válido", rejected["error"])
 
 
 class BuiltinMetadataTests(unittest.TestCase):

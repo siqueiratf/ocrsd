@@ -166,6 +166,7 @@ def birth(record, rng: random.Random) -> dict[str, Any]:
     establishment = record.pick(rng, "birth.establishment.name", ESTABLISHMENT_NAMES)
     values = {
         "birth.date": day, "birth.time": moment, "birth.establishment.name": establishment,
+        "birth.occurrence_type": "Hospital",
         "birth.establishment.cnes": stable_digits(7, "cnes", establishment, profile["ibge"]),
         **address("birth.place", profile, house_number(record, rng, "birth.place.number"),
                   ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge")),
@@ -174,7 +175,8 @@ def birth(record, rng: random.Random) -> dict[str, Any]:
     twins = record.pick(rng, "birth.twins", (False, True), (98, 2))
     delivery = record.pick(rng, "birth.delivery_type", ("Vaginal", "Cesáreo"))
     return {**values, "birth.twins": twins, "birth.pregnancy_type": "Dupla" if twins else "Única",
-            "birth.delivery_type": delivery, "birth.cesarean_before_labor": "Não se aplica" if delivery == "Vaginal" else "Ignorado"}
+            "birth.delivery_type": delivery, "birth.cesarean_before_labor": "Não se aplica" if delivery == "Vaginal" else "Ignorado",
+            "birth.presentation": "Cefálica", "birth.labor_induced": "Não", "birth.attendant_role": "Médico"}
 
 
 def mother(record, rng: random.Random) -> dict[str, Any]:
@@ -187,8 +189,15 @@ def mother(record, rng: random.Random) -> dict[str, Any]:
                                [0.55 if city == residence["city"] else 0.45 / (len(cities) - 1) for city in cities])
     occupation = record.pick(rng, lambda value: {"mother.occupation": value, "mother.occupation_cbo": OCCUPATION_CODES.get(value)},
                              (*OCCUPATIONS, *OCCUPATION_CODES))
+    schooling = ("Fundamental I (1ª a 4ª série)" if age < 12 else
+                 record.pick(rng, "mother.schooling", ("Fundamental II (5ª a 8ª série)", "Médio (antigo 2º grau)",
+                                                         "Superior incompleto", "Superior completo")) if age >= 18 else
+                 record.pick(rng, "mother.schooling", ("Fundamental I (1ª a 4ª série)", "Fundamental II (5ª a 8ª série)")))
+    marital_status = "Solteira(o)" if age < 18 else record.pick(rng, "mother.marital_status", ("Solteira(o)", "Casada(o)", "União estável"))
     return {
         "mother.name": name, "mother.birth_date": born, "mother.age": age,
+        "mother.schooling": schooling, "mother.marital_status": marital_status,
+        "mother.race": record.pick(rng, "mother.race", ("Branca", "Preta", "Amarela", "Parda", "Indígena"), (38, 10, 1, 49, 2)),
         "mother.cpf": record.draw("mother.cpf", rng, lambda: cpf_digits(rng)),
         "mother.cns": record.draw("mother.cns", rng, lambda: cns_digits(rng)),
         "mother.occupation": occupation, "mother.occupation_cbo": OCCUPATION_CODES.get(occupation),
@@ -211,8 +220,16 @@ def newborn(record, rng: random.Random) -> dict[str, Any]:
     sex = record.pick(rng, "newborn.sex", ("M", "F"), (51, 49))
     family = rng.choices(([maternal, paternal], [maternal]), (85, 15))[0]
     cities = (record.value("birth.place.municipality"), record.value("mother.residence.municipality"))
+    weeks = record.value("pregnancy.weeks")
+    weight = max(300, min(6000, int(rng.gauss(3150 + (weeks - 39) * 170, 360))))
+    length = max(350, min(600, int(rng.gauss(500 + (weeks - 39) * 9, 15))))
+    head = max(25, min(40, round(rng.gauss(34 + (weeks - 39) * 0.4, 1.4))))
+    apgar_1 = record.pick(rng, "newborn.apgar_1min", range(5, 11), (1, 2, 4, 13, 35, 45))
     return {
         "newborn.anomaly_status": "Ignorado", "newborn.anomaly_description": None,
+        "newborn.race": record.pick(rng, "newborn.race", ("Branca", "Preta", "Amarela", "Parda", "Indígena"), (38, 10, 1, 49, 2)),
+        "newborn.weight_g": weight, "newborn.length_tenths_cm": length, "newborn.head_circumference_cm": head,
+        "newborn.apgar_1min": apgar_1, "newborn.apgar_5min": record.pick(rng, "newborn.apgar_5min", range(apgar_1, 11)),
         "newborn.name": record.draw("newborn.name", rng, lambda: person_name(record, rng, sex, list(dict.fromkeys(family)))),
         "newborn.sex": sex, "newborn.cpf": record.draw("newborn.cpf", rng, lambda: cpf_digits(rng)),
         "newborn.naturalidade": record.pick(rng, "newborn.naturalidade", cities, (60, 40)),
@@ -267,15 +284,19 @@ def grandparents(record, rng: random.Random) -> dict[str, Any]:
 def pregnancy(record, rng: random.Random) -> dict[str, Any]:
     on = record.value("birth.date")
     weeks = record.pick(rng, "pregnancy.weeks", WEEKS, WEEK_WEIGHTS)
-    period = record.pick(rng, "pregnancy.last_menstrual_period",
-                         DateSpan(on - timedelta(days=weeks * 7 + 6), on - timedelta(days=weeks * 7)))
+    known = record.pick(rng, "pregnancy.dum_known", (True, False), (70, 30))
+    period = (record.pick(rng, "pregnancy.last_menstrual_period",
+                          DateSpan(on - timedelta(days=weeks * 7 + 6), on - timedelta(days=weeks * 7))) if known else None)
     start = record.pick(rng, "pregnancy.prenatal_start_month", PRENATAL_MONTHS,
                         [weight if (month - 1) * 4.3 < weeks else weight * 0.001
                          for month, weight in zip(PRENATAL_MONTHS, PRENATAL_MONTH_WEIGHTS)])
     expected = max(0.0, (weeks - (start - 1) * 4.3) / 4.3) * 1.6
     visits = record.pick(rng, "pregnancy.prenatal_visits", range(0, 21),
                          [math.exp(-((count - expected) / 2.5) ** 2) + 0.002 for count in range(0, 21)])
-    return {"pregnancy.weeks": weeks, "pregnancy.last_menstrual_period": period,
+    return {"pregnancy.weeks": weeks, "pregnancy.dum_known": known,
+            "pregnancy.reported_weeks": None if known else weeks,
+            "pregnancy.estimation_method": None if known else record.pick(rng, "pregnancy.estimation_method", ("Exame físico", "Outro método")),
+            "pregnancy.last_menstrual_period": period,
             "pregnancy.prenatal_start_month": start, "pregnancy.prenatal_visits": visits}
 
 
@@ -287,9 +308,10 @@ def filling(record, rng: random.Random) -> dict[str, Any]:
     return {
         "filling.date": day, "filling.responsible.name": record.draw("filling.responsible.name", rng,
                                                                      lambda: person_name(record, rng, sex)),
+        "filling.responsible.role": "Médico", "filling.responsible.document_type": "CRM",
         "filling.responsible.document_number": record.draw("filling.responsible.document_number", rng,
-                                                           lambda: str(rng.randint(10 ** 4, 10 ** 9 - 1) % 10 ** rng.choice((5, 6, 6, 7, 8, 9))).zfill(5)),
-        "filling.responsible.issuer": record.pick(rng, "filling.responsible.issuer", ISSUERS),
+                                                           lambda: f"{rng.randint(100000, 999999):06d}"),
+        "filling.responsible.issuer": "CRM",
     }
 
 
@@ -320,6 +342,7 @@ def death(record, rng: random.Random) -> dict[str, Any]:
     return {
         "death.date": record.pick(rng, "death.date", DateSpan(EVENT_START, EVENT_END)),
         "death.time": record.pick(rng, "death.time", MINUTES),
+        "death.type": "2", "death.place.category": "1", "death.medical_assistance": "1", "death.autopsy": "2",
         "death.place.establishment.name": record.pick(rng, "death.place.establishment.name", ESTABLISHMENT_NAMES),
         **address("death.place", profile, "", ("municipality", "uf", "ibge")),
     }
@@ -331,12 +354,15 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     name = record.draw("deceased.name", rng, lambda: person_name(record, rng, sex))
     mother_name, father_name = parent_names(record, rng, name)
     residence = pick_profile(record, rng, "deceased.residence", favoring(profile_of(record, "death.place"), 0.7))
+    birthplace = rng.choice(LOCATION_PROFILES)
+    occupation = "Não se aplica" if age < 14 else record.pick(rng, "deceased.occupation", OCCUPATIONS)
     return {
         "deceased.name": name, "deceased.sex": sex, "deceased.birth_date": born, "deceased.age": age,
         "deceased.cpf": record.draw("deceased.cpf", rng, lambda: cpf_digits(rng)),
+        "deceased.naturalidade": f"{birthplace['city']} - {birthplace['uf']}",
         "deceased.mother_name": record.draw("deceased.mother_name", rng, lambda: mother_name),
         "deceased.father_name": record.draw("deceased.father_name", rng, lambda: father_name),
-        "deceased.occupation": "Não se aplica" if age < 14 else record.pick(rng, "deceased.occupation", OCCUPATIONS),
+        "deceased.occupation": occupation, "deceased.occupation_cbo": OCCUPATION_CODES.get(occupation),
         **address("deceased.residence", residence, house_number(record, rng, "deceased.residence.number"),
                   ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge")),
     }
@@ -361,7 +387,8 @@ def death_registration(record, rng: random.Random) -> dict[str, Any]:
 def certifier(record, rng: random.Random) -> dict[str, Any]:
     sex = rng.choice(("F", "M"))
     return {"certifier.name": record.draw("certifier.name", rng, lambda: person_name(record, rng, sex)),
-            "certifier.registration": record.draw("certifier.registration", rng, lambda: str(rng.randint(1000, 999999)))}
+            "certifier.registration": record.draw("certifier.registration", rng, lambda: str(rng.randint(1000, 999999))),
+            "certifier.role": "1"}
 
 
 GENERATORS: dict[str, Callable[[Any, random.Random], dict[str, Any]]] = {

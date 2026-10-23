@@ -156,7 +156,7 @@
       if (rules[low] != null && rules[high] != null && rules[low] > rules[high]) issues.push({ path: `validation.${low}`, message: 'O mínimo é maior que o máximo', blocking: true })
     }
     if (rules.mask != null && !/[#Aa*]/.test(rules.mask)) issues.push({ path: 'validation.mask', message: 'A máscara precisa usar #, A, a ou *', blocking: true })
-    if (item.data_type === 'checkbox' && (item.elements || []).length < 2) issues.push({ path: 'elements', message: 'O checkbox precisa de ao menos duas opções' })
+    if (item.data_type === 'checkbox' && !(item.elements || []).length) issues.push({ path: 'elements', message: 'O checkbox precisa de ao menos uma caixa' })
     if (['digit_sequence', 'text_sequence'].includes(item.data_type) && !(item.elements || []).length && !rules.digit_count) issues.push({ path: 'elements', message: 'A sequência precisa de caixas de caracteres' })
     if (item.data_type === 'enum' && !(rules.allowed_values || []).length) issues.push({ path: 'validation.allowed_values', message: 'Informe os valores permitidos' })
     if (splitDate(item) && (item.elements || []).map(child => child.part).sort().join() !== data.date_parts.map(([part]) => part).sort().join()) issues.push({ path: 'elements', message: 'A data separada precisa de uma área para o dia, uma para o mês e uma para o ano' })
@@ -506,7 +506,7 @@
         : h('input', { type: 'number', 'data-element': position, 'data-element-key': 'index', value: child.index ?? '', 'aria-label': `Posição do subelemento ${position + 1}` }),
       h('button', { type: 'button', class: 'icon-btn', 'data-acao': 'selecionar-subelemento', 'data-indice': position, 'aria-label': 'Selecionar no documento', title: 'Selecionar no documento', text: '◎' })))
     return section(isCheckbox ? 'Opções do checkbox' : isDate ? 'Dia, mês e ano' : 'Caixas de caracteres', [
-      rows.length ? h('div', { class: 'element-list' }, rows) : h('p', { class: 'hint', text: isCheckbox ? 'Desenhe ao menos duas opções marcáveis.' : isDate ? 'Divida a área em dia, mês e ano ou desenhe cada parte.' : 'Divida a área em caixas ou desenhe cada caixa.' }),
+      rows.length ? h('div', { class: 'element-list' }, rows) : h('p', { class: 'hint', text: isCheckbox ? 'Desenhe ao menos uma caixa marcável.' : isDate ? 'Divida a área em dia, mês e ano ou desenhe cada parte.' : 'Divida a área em caixas ou desenhe cada caixa.' }),
       h('div', { class: 'element-tools' },
         h('button', { type: 'button', class: 'btn btn-sm', 'data-acao': 'desenhar-subelemento', title: 'Desenhe a nova área no documento', text: isCheckbox ? 'Desenhar opção' : isDate ? 'Desenhar parte' : 'Desenhar caixa' }),
         isDate || dnvBoxes(item) ? null : h('label', { class: 'inline-number', title: 'Substitui os subelementos por áreas iguais' }, h('input', { type: 'number', min: 1, max: 60, value: (item.elements || []).length || (isCheckbox ? 2 : 8), 'data-divisoes': true, 'aria-label': 'Quantidade de divisões' })),

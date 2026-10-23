@@ -213,6 +213,10 @@ class Catalog:
         if not any(m["id"] == options.writing.model and m["available"] for m in self.models()):
             raise ServiceError(422, "model_unavailable", "Modelo não habilitado ou pesos ausentes")
         selected = [field for field in definition["fields"] if field["field_id"] in options.fields]
+        unsupported = [field for field in selected if field.get("unsupported_reason")]
+        if unsupported:
+            field = unsupported[0]
+            raise ServiceError(422, "unsupported_field", f"{field.get('label') or field['field_id']}: {field['unsupported_reason']}")
         issues = mapping_issues({**definition, "fields": selected})
         if issues:
             raise ServiceError(422, "invalid_mapping", issues[0])
@@ -675,8 +679,8 @@ def mapping_issues(definition: dict) -> list[str]:
     for field in fields:
         name, data_type = field.get("label") or field["field_id"], field.get("data_type", "text")
         validation = field.get("validation") or {}
-        if data_type == "checkbox" and len(field.get("elements") or []) < 2:
-            issues.append(f"{name}: o checkbox precisa de ao menos duas opções desenhadas")
+        if data_type == "checkbox" and not field.get("elements"):
+            issues.append(f"{name}: o checkbox precisa de ao menos uma caixa desenhada")
         if data_type in COMPOSITE_TYPES - {"checkbox"} and not field.get("elements") and not validation.get("digit_count"):
             issues.append(f"{name}: a sequência precisa de caixas de caracteres")
         if data_type == "enum" and not validation.get("allowed_values"):
@@ -888,7 +892,7 @@ class ReplayRecords:
         stored = self.documents.get(index)
         if stored is None or int(stored["semantic_seed"]) != seed or stored.get("semantic_context") != context:
             raise ValueError(f"Os registros armazenados não correspondem ao documento {index} desta geração")
-        record = SemanticRecord.from_values(stored["semantic_record"], context, seed)
+        record = SemanticRecord.from_values(stored["semantic_record"], context, seed, allow_partial=True)
         plan.apply(record, legacy_keys)
         record.provenance = {"mode": "ai_replay", "source_job": self.source_job, **({"source": stored["provenance"]} if stored.get("provenance") else {})}
         return record

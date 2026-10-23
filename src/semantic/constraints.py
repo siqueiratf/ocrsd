@@ -65,9 +65,43 @@ def _filling_window(values: Mapping[str, Any]) -> str | None:
 
 
 def _last_menstrual_period(values: Mapping[str, Any]) -> str | None:
+    if values["pregnancy.last_menstrual_period"] is None:
+        return None
     expected = values["birth.date"] - timedelta(days=7 * values["pregnancy.weeks"])
     difference = (values["pregnancy.last_menstrual_period"] - expected).days
     return None if abs(difference) <= 6 else f"a DUM difere {difference} dias do esperado para {values['pregnancy.weeks']} semanas"
+
+
+def _pregnancy_method(values: Mapping[str, Any]) -> str | None:
+    known = values["pregnancy.dum_known"]
+    period = values["pregnancy.last_menstrual_period"]
+    reported = values["pregnancy.reported_weeks"]
+    method = values["pregnancy.estimation_method"]
+    if known:
+        return None if period is not None and reported is None and method is None else "DUM conhecida exige semanas e método em branco"
+    return None if period is None and reported == values["pregnancy.weeks"] and method in {"Exame físico", "Outro método"} else "DUM ignorada exige semanas e método válido"
+
+
+def _birth_measurements(values: Mapping[str, Any]) -> str | None:
+    first, fifth = values["newborn.apgar_1min"], values["newborn.apgar_5min"]
+    if not 0 <= first <= fifth <= 10:
+        return "Apgar deve estar entre 0 e 10 e evoluir sem queda no cenário sintético"
+    if not 300 <= values["newborn.weight_g"] <= 6000:
+        return "peso ao nascer fora do intervalo do cenário sintético"
+    if not 350 <= values["newborn.length_tenths_cm"] <= 600:
+        return "comprimento ao nascer fora do intervalo do cenário sintético"
+    if not 25 <= values["newborn.head_circumference_cm"] <= 40:
+        return "perímetro cefálico fora do intervalo do cenário sintético"
+    return None
+
+
+def _filling_professional(values: Mapping[str, Any]) -> str | None:
+    if values["filling.responsible.role"] != "Médico" or values["filling.responsible.document_type"] != "CRM":
+        return "função e tipo de documento diferem do cenário médico"
+    number = values["filling.responsible.document_number"]
+    if not isinstance(number, str) or len(number) != 6 or not number.isdigit() or values["filling.responsible.issuer"] != "CRM":
+        return "CRM precisa ter seis algarismos e emissor CRM no cenário sintético"
+    return None
 
 
 def _obstetric(values: Mapping[str, Any]) -> str | None:
@@ -168,6 +202,12 @@ def _summary(key: str, parts: tuple[str, ...], template: str) -> Constraint:
 
 
 CONSTRAINTS: tuple[Constraint, ...] = (
+    Constraint("medidas_ao_nascer", ("newborn.apgar_1min", "newborn.apgar_5min", "newborn.weight_g",
+                                      "newborn.length_tenths_cm", "newborn.head_circumference_cm"), ("newborn",),
+               _birth_measurements),
+    Constraint("identificacao_do_responsavel_dnv", ("filling.responsible.role", "filling.responsible.document_type",
+                                                 "filling.responsible.document_number", "filling.responsible.issuer"),
+               ("filling",), _filling_professional),
     Constraint("gravidez_e_gemelaridade", ("birth.twins", "birth.pregnancy_type"), ("birth",),
                lambda v: None if v["birth.pregnancy_type"] == ("Dupla" if v["birth.twins"] else "Única") else "tipo de gravidez difere da gemelaridade"),
     Constraint("cesarea_e_via_de_parto", ("birth.delivery_type", "birth.cesarean_before_labor"), ("birth",),
@@ -176,6 +216,18 @@ CONSTRAINTS: tuple[Constraint, ...] = (
                lambda v: None if v["newborn.anomaly_status"] == "Ignorado" and v["newborn.anomaly_description"] is None else "diagnóstico não validado"),
     Constraint("ocupacao_e_cbo", ("mother.occupation", "mother.occupation_cbo"), ("mother",),
                lambda v: None if v["mother.occupation_cbo"] == OCCUPATION_CODES.get(v["mother.occupation"]) else "CBO não corresponde à ocupação documentada"),
+    Constraint("ocupacao_do_falecido_e_cbo", ("deceased.occupation", "deceased.occupation_cbo"), ("deceased",),
+               lambda v: None if v["deceased.occupation_cbo"] == OCCUPATION_CODES.get(v["deceased.occupation"])
+               else "CBO não corresponde à ocupação documentada"),
+    Constraint("naturalidade_do_falecido", ("deceased.naturalidade",), ("deceased",),
+               lambda v: None if v["deceased.naturalidade"] in
+               {f"{profile['city']} - {profile['uf']}" for profile in LOCATION_PROFILES}
+               else "naturalidade não pertence a um município e UF do catálogo"),
+    *(Constraint(f"cenario_hospitalar:{key}", (key,), (REGISTRY[key].entity,),
+                 lambda values, key=key, expected=expected: None if values[key] == expected
+                 else f"{key} precisa ser {expected} neste cenário hospitalar")
+      for key, expected in (("death.type", "2"), ("death.place.category", "1"),
+                            ("death.medical_assistance", "1"), ("death.autopsy", "2"), ("certifier.role", "1"))),
     Constraint("idade_da_mae_no_nascimento", ("mother.birth_date", "mother.age", "birth.date"), ("mother",), _mother_age),
     Constraint("idade_do_pai_no_nascimento", ("father.birth_date", "father.age", "birth.date"), ("father",),
                _age_rule("father", "birth.date", "pai")),
@@ -196,6 +248,8 @@ CONSTRAINTS: tuple[Constraint, ...] = (
     _between("pregnancy.weeks", 22, 42, "semanas_de_gestacao"),
     Constraint("dum_coerente", ("pregnancy.last_menstrual_period", "pregnancy.weeks", "birth.date"), ("pregnancy",),
                _last_menstrual_period),
+    Constraint("metodo_gestacional", ("pregnancy.dum_known", "pregnancy.last_menstrual_period", "pregnancy.reported_weeks",
+                                     "pregnancy.estimation_method", "pregnancy.weeks"), ("pregnancy",), _pregnancy_method),
     _between("pregnancy.prenatal_start_month", 1, 9, "mes_inicio_pre_natal"),
     _between("pregnancy.prenatal_visits", 0, 20, "consultas_pre_natal"),
     Constraint("historico_obstetrico", tuple(f"mother.obstetric.{name}" for name in (

@@ -88,7 +88,7 @@ YES_NO = (("Sim", "1"), ("Não", "2"), ("Ignorado", "9"))
 DO_LABELS = [
     ("Tipo de óbito", "I", "checkbox", (("Fetal", "1"), ("Não Fetal", "2")), NEW),
     ("Data do óbito", "I", "digit_sequence", 8, "death.date"), ("Hora", "I", "digit_sequence", 4, "death.time"),
-    ("Cartão SUS", "I", "digit_sequence", 15, NEW), ("Naturalidade", "I", "text", 0, NEW),
+    ("Cartão SUS", "I", "digit_sequence", 15, NEW), ("Naturalidade", "I", "text", 0, "deceased.naturalidade"),
     ("Nome do Falecido", "I", "text", 0, "deceased.name"), ("Nome do Pai", "I", "text", 0, "deceased.father_name"),
     ("Nome da Mãe", "I", "text", 0, "deceased.mother_name"),
     ("Data de nascimento", "I", "digit_sequence", 8, "deceased.birth_date"), ("Idade", "I", "text", 0, "deceased.age"),

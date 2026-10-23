@@ -52,7 +52,8 @@ def generate(args: argparse.Namespace) -> None:
 
     mapping = json.loads(args.field_map.read_text(encoding="utf-8"))
     available = {str(field["field_id"]) for field in mapping["fields"]}
-    selected = available if args.fields is None else set(args.fields)
+    selected = ({str(field["field_id"]) for field in mapping["fields"] if not field.get("unsupported_reason")}
+                if args.fields is None else set(args.fields))
     if selected - available:
         raise ValueError(f"Unknown fields: {', '.join(sorted(selected - available))}")
     documents = generate_dataset(
@@ -178,7 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
     dataset = commands.add_parser("generate", help="Generate synthetic PDFs and ground-truth JSON")
     dataset.add_argument("--template", type=Path, required=True)
     dataset.add_argument("--field-map", type=Path, required=True)
-    dataset.add_argument("--fields", nargs="+", help="Field IDs; defaults to all mapped fields")
+    dataset.add_argument("--fields", nargs="+", help="Field IDs; defaults to all supported mapped fields")
     dataset.add_argument("--count", type=int, default=10)
     dataset.add_argument("--seed", type=int)
     dataset.add_argument("--printed", action="store_true", help="Use printed text instead of handwriting")

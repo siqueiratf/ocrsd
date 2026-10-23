@@ -160,6 +160,9 @@ DNV_CHOICES = {
 
 
 def checkbox_choice(field: dict, binding: Binding, value) -> list[dict] | None:
+    elements = field.get("elements") or []
+    if len(elements) == 1 and isinstance(value, bool):
+        return elements if value else []
     if binding.key in DNV_CHOICES:
         labels, codes, prefix = DNV_CHOICES[binding.key]
         target = normalize(value)

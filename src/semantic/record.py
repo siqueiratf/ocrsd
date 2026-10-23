@@ -75,7 +75,8 @@ class SemanticRecord:
         self.provenance: dict | None = None
 
     @classmethod
-    def from_values(cls, values: dict[str, Any], context: str | None, seed: int = 0) -> SemanticRecord:
+    def from_values(cls, values: dict[str, Any], context: str | None, seed: int = 0,
+                    allow_partial: bool = False) -> SemanticRecord:
         record = cls(seed, context)
         problems = []
         for key, value in values.items():
@@ -90,7 +91,8 @@ class SemanticRecord:
                 problems.append(str(exc))
         if problems:
             raise SemanticConstraintError(problems)
-        record._frozen = {entity for entity, keys in ENTITY_KEYS.items() if keys and all(key in record._values for key in keys)}
+        record._frozen = ({semantic_field(key).entity for key in record._values} if allow_partial else
+                          {entity for entity, keys in ENTITY_KEYS.items() if keys and all(key in record._values for key in keys)})
         partial = {semantic_field(key).entity for key in record._values} - record._frozen
         if partial:
             raise SemanticConstraintError([f"Registro incompleto para a entidade {entity}: faltam "

@@ -303,7 +303,7 @@ class AssistedMappingFlowTests(unittest.TestCase):
     def test_new_semantic_definition_from_proposal_is_reused_by_next_analysis(self):
         first = self.import_model("Declaração de óbito", DEATH)
         proposal = self.analyze(first)["proposal"]
-        new = next(field for field in proposal["fields"] if field["label"] == "Naturalidade")
+        new = next(field for field in proposal["fields"] if field["label"] == "Município e UF do SVO ou IML")
         self.assertEqual(new["suggestion"]["match"], "new")
         suggested = new["suggestion"]["proposal"]
         spec = {"key": suggested["key"], "label": suggested["label"], "description": suggested["description"],
@@ -320,7 +320,8 @@ class AssistedMappingFlowTests(unittest.TestCase):
 
         second = self.import_model("Outra declaração de óbito", DEATH)
         self.assertIn(spec["key"], {option["key"] for option in self.editor_state(second)["semantic_options"]})
-        reused = next(item for item in self.analyze(second)["proposal"]["fields"] if item["label"] == "Naturalidade")
+        reused = next(item for item in self.analyze(second)["proposal"]["fields"]
+                      if item["label"] == "Município e UF do SVO ou IML")
         self.assertEqual(reused["semantic"], spec["key"])
         self.assertEqual(reused["suggestion"]["match"], "matched")
         state = self.editor_state(second)

@@ -24,13 +24,13 @@ API_PORT ?= $(if $(strip $(PORT)),$(PORT),8000)
 
 .PHONY: help dataset dataset-font dataset-sjvasquez dataset-aaron1259 dataset-wpvnteam
 .PHONY: download-sjvasquez download-aaron1259 download-wpvnteam
-.PHONY: test smoke check gui web
+.PHONY: test smoke check gui web web-clean
 
 WEB_PY_STAMP := .venv/.ocrsd-web-dependencies
 
 help:
 	@printf '%s\n' \
-	  'make dataset                  Gera 10 DNVs com font e seu mapa de 69 campos.' \
+	  'make dataset                  Gera 10 DNVs com font e os campos suportados.' \
 	  'make dataset-sjvasquez         Usa o modelo neural sjvasquez.' \
 	  'make dataset-aaron1259         Usa o modelo neural aaron1259.' \
 	  'make dataset-wpvnteam          Usa o modelo neural wpvnteam.' \
@@ -45,6 +45,7 @@ help:
 	  'make smoke                    Valida geracao, alinhamento, recortes e ocultacao.' \
 	  'make web                      Prepara e inicia a interface web, a API e o worker.' \
 	  'make web PORT=8001            Usa outra porta local para a interface e a API.' \
+	  'make web-clean                Inicia web com armazenamento vazio; mantém modelos padrão do catálogo.' \
 	  'make gui                      Abre a interface desktop.' \
 	  '' \
 	  'Cada execucao cria documents/<tipo>/dataset/yyyymmdd_hhmm-<tipo>-<total>.' \
@@ -100,3 +101,8 @@ $(WEB_PY_STAMP): pyproject.toml uv.lock
 
 web: $(WEB_PY_STAMP)
 	env OCRSD_NEURAL_ENABLED=true OCRSD_API_PORT='$(API_PORT)' $(UV) run --offline --no-sync python -m scripts.run_web
+
+web-clean: $(WEB_PY_STAMP)
+	@demo_storage=$$(mktemp -d /tmp/ocrsd-web-clean.XXXXXX); \
+	  trap 'rm -rf "$$demo_storage"' EXIT; \
+	  env OCRSD_STORAGE="$$demo_storage" OCRSD_NEURAL_ENABLED=true OCRSD_API_PORT='$(API_PORT)' $(UV) run --offline --no-sync python -m scripts.run_web

@@ -321,7 +321,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                                "group": field.get("section_label") or field.get("group_label") or (DNV_GROUPS.get(str(section)) if current and current["id"] == "dnv" else None) or section or "Outros campos",
                                "description": field.get("description") or "", "official_variable": field.get("official_variable") or "",
                                "bbox": field.get("bbox"), "elements": field.get("elements") or [],
-                               "blocked": BLOCKED_FIELD if str(field["field_id"]) in blocked else ""})
+                               "blocked": field.get("unsupported_reason") or (BLOCKED_FIELD if str(field["field_id"]) in blocked else "")})
         groups = {}
         for field in fields:
             groups.setdefault(field["group"], []).append(field)
@@ -916,6 +916,10 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 blocked = sorted(set(selected) & set(unavailable_custom_fields(definition)))
                 if blocked:
                     raise ServiceError(422, "validation_error", f"O campo {blocked[0]} não pode ser gerado: {BLOCKED_FIELD.lower()}")
+                unsupported = next((field for field in definition["fields"]
+                                    if str(field["field_id"]) in selected and field.get("unsupported_reason")), None)
+                if unsupported:
+                    raise ServiceError(422, "unsupported_field", f"{unsupported.get('label') or unsupported['field_id']}: {unsupported['unsupported_reason']}")
                 state["fields"] = selected
             elif step == 3:
                 count = parsed(form, "count", int)

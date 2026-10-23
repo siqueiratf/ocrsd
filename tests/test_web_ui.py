@@ -59,6 +59,34 @@ class InterfaceTests(unittest.TestCase):
         subprocess.run([sys.executable, "-m", "src.web.worker", "--once"], cwd=ROOT, env=environment,
                        capture_output=True, text=True, timeout=90, check=True)
 
+    def test_gallery_deletes_only_custom_models_and_wizard_shows_description(self):
+        gallery = self.page("/modelos").text
+        self.assertIn("Declaração de Nascido Vivo (DNV)", gallery)
+        self.assertNotIn("/modelos/dnv/excluir", gallery)
+        wizard = self.page("/geracao?modelo=dnv").text
+        self.assertIn("Formulário oficial do SINASC preenchido com dados fictícios", wizard)
+
+        created = self.hx("POST", "/modelos/em-branco", data={"label": "Modelo temporário", "description": "Para excluir",
+                                                            "size": "a4", "orientation": "portrait"})
+        self.assertEqual(created.status_code, 200, created.text)
+        model_id = re.search(r"/modelos/([0-9a-f]{32})/editor", created.headers["hx-redirect"]).group(1)
+        self.assertIn(f"/modelos/{model_id}/excluir", self.page("/modelos").text)
+        deleted = self.hx("POST", f"/modelos/{model_id}/excluir")
+        self.assertEqual(deleted.headers.get("hx-redirect"), "/modelos")
+        self.assertNotIn(f"/modelos/{model_id}/excluir", self.page("/modelos").text)
+        self.assertEqual(self.hx("POST", "/modelos/dnv/excluir").status_code, 404)
+
+    def test_unsupported_do_cause_is_visible_but_cannot_be_generated(self):
+        first = self.page("/geracao?modelo=do").text
+        draft = re.search(r'name="draft_id" value="([0-9a-f]+)"', first).group(1)
+        self.hx("POST", "/geracao/etapa/1", data={"draft_id": draft, "document_type": "do"})
+        page = self.page(f"/geracao?draft={draft}&etapa=2").text
+        self.assertIn('value="40_a_causa"', page)
+        self.assertIn('name="fields" value="40_a_causa" disabled', page)
+        response = self.client.post("/api/v1/generation/validate", json={"document_type": "do", "fields": ["40_a_causa"]})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["code"], "unsupported_field")
+
     def test_pages_session_security_and_assets(self):
         response = self.client.get("/", follow_redirects=False)
         self.assertEqual((response.status_code, response.headers["location"]), (303, "/modelos"))
@@ -306,7 +334,7 @@ class InterfaceTests(unittest.TestCase):
         generation = self.page(f"/geracao?modelo={model_id}").text
         self.assertIn("Modelo revisado", generation)
         self.assertNotIn("ainda é um rascunho", generation)
-        reverted = self.save(model_id, {**data, "revision": new_revision}, [fields[0], {**fields[1], "elements": fields[1]["elements"][:1]}])
+        reverted = self.save(model_id, {**data, "revision": new_revision}, [fields[0], {**fields[1], "elements": []}])
         self.assertIn("voltou para rascunho", reverted.text)
         self.assertNotIn(f'value="{model_id}"', self.page("/geracao").text)
 

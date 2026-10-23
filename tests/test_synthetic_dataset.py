@@ -429,6 +429,27 @@ class SyntheticDatasetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "campo"):
             generate_dataset(Path("template.pdf"), Path("mapping.json"), set(), Path("out"), 1)
 
+    def test_single_box_checkbox_can_be_marked_or_left_empty(self):
+        from src.web.services import mapping_issues
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / "template.pdf"
+            document = fitz.open()
+            document.new_page(width=300, height=300)
+            document.save(template)
+            document.close()
+            field = {"field_id": "ignorado", "label": "Ignorado", "data_type": "checkbox", "bbox": [10, 10, 60, 40],
+                     "elements": [{"element_id": "ignorado_caixa", "label": "Ignorado", "value": "Ignorado", "bbox": [12, 12, 32, 32]}]}
+            mapping = root / "mapping.json"
+            mapping.write_text(json.dumps({"template_id": "single_box", "dpi": 72, "page_size_px": [300, 300], "fields": [field]}))
+            self.assertEqual(mapping_issues({"fields": [field]}), [])
+            generated = generate_dataset(template, mapping, {"ignorado"}, root / "out", 12, seed=7,
+                                         handwriting=False, text_handwriting=False)
+            values = [item.values["ignorado"] for item in generated]
+            self.assertIn("", values)
+            self.assertIn("Ignorado", values)
+
     def test_generates_checkbox_and_digit_elements(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

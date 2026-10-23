@@ -74,6 +74,37 @@
   semânticas reutilizáveis e proveniência da revisão no mapeamento. Sugestões
   pendentes bloqueiam a publicação; modelos padrão continuam protegidos.
 
+### Modelos padrão
+
+- Declaração de Óbito (DO) adicionada como modelo padrão com 103 campos
+  mapeados, 27 com vínculo semântico explícito, coordenadas medidas sobre o
+  formulário oficial v01/10 a 300 dpi. Entidades: falecido, óbito, registro do
+  óbito e médico atestante.
+- Mapeamento da DNV corrigido: peso ao nascer com 4 dígitos (antes 3), Cartão
+  SUS como sequência de 15 dígitos, data do preenchimento com índices na ordem
+  correta, DUM sem sobreposição de caixas, campos com tipo nulo agora tipados
+  (texto, endereço, município, ocupação, nome), bboxes de texto ampliados para
+  cobrir a área de escrita.
+- Resolução de contexto corrigida para reconhecer `do_v1` como `declaracao_obito`.
+
+### Geração assistida por IA
+
+- Modo de geração na etapa Quantidade do assistente: tradicional (padrão) ou
+  assistida por IA. A opção de IA aparece desabilitada quando o provedor local
+  não está disponível, com instrução de configuração.
+- `AssistedRecords`: um modelo de linguagem local (Ollama com qwen3:1.7b, GPU)
+  propõe registros semânticos validados pelas mesmas regras do motor tradicional.
+  Valores aceitos são injetados como restrições; valores rejeitados são reenviados
+  ao modelo com correções. Se o modelo falhar após 3 tentativas, o job falha com
+  diagnóstico legível.
+- Proveniência completa em cada ground truth (`semantic_provenance`): modo,
+  provedor, modelo, digest, versão do prompt, cenário, chaves aceitas,
+  tentativas e valores rejeitados.
+- Reprodução exata de jobs assistidos: os registros aceitos são armazenados no
+  banco e reutilizados sem chamar a IA.
+- Detalhes do dataset mostram o modo de geração (Tradicional / Assistida por IA /
+  Reprodução), o provedor, o modelo, a temperatura e o resumo de aceitação.
+
 ### Motor de geração
 
 - Camada semântica (`src/semantic/`): registro de campos semânticos reutilizáveis

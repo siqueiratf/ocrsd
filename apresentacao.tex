@@ -1,0 +1,165 @@
+\documentclass[aspectratio=169,12pt]{beamer}
+\usetheme{Madrid}
+\usecolortheme{whale}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+
+\definecolor{labrec}{RGB}{20,60,110}
+\setbeamercolor{palette primary}{bg=labrec,fg=white}
+\setbeamercolor{palette secondary}{bg=labrec!80,fg=white}
+\setbeamercolor{palette tertiary}{bg=labrec!60,fg=white}
+\setbeamercolor{title}{bg=labrec,fg=white}
+\setbeamercolor{frametitle}{bg=labrec!90,fg=white}
+\setbeamercolor{structure}{fg=labrec}
+\setbeamerfont{title}{size=\Large,series=\bfseries}
+\setbeamerfont{subtitle}{size=\normalsize}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \leavevmode\hbox{%
+    \begin{beamercolorbox}[wd=.33\paperwidth,ht=2.5ex,dp=1.5ex,center]{palette primary}%
+      \usebeamerfont{author in head/foot}\insertshortauthor
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.34\paperwidth,ht=2.5ex,dp=1.5ex,center]{palette secondary}%
+      \usebeamerfont{title in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.33\paperwidth,ht=2.5ex,dp=1.5ex,right]{palette tertiary}%
+      \insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+    \end{beamercolorbox}%
+  }\vskip0pt%
+}
+
+\title{OCRSD}
+\subtitle{Only Civil Registry Synthetic Dataset\\[4pt]
+{\small Geração de documentos sintéticos do registro civil brasileiro}}
+\author{LabREC\,---\,Laboratório de Reconhecimento e Extração de Conhecimento}
+\institute{UFSC\,---\,Universidade Federal de Santa Catarina}
+\date{Outubro de 2026}
+\titlegraphic{%
+  \vspace{-8pt}%
+  \includegraphics[height=1.1cm]{ocrsd-logo.pdf}\hspace{12pt}%
+  \includegraphics[height=1.1cm]{labrec-logo.pdf}\hspace{12pt}%
+  \includegraphics[height=1.1cm]{registro-civil-logo.pdf}%
+}
+
+\begin{document}
+
+% ---- SLIDE 1: Título ----
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ---- SLIDE 2: O que é o OCRSD ----
+\begin{frame}[shrink=5]{O que é o OCRSD}
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+\textbf{Problema:} modelos de OCR e extração de dados precisam de milhares de
+documentos reais para treinamento, mas documentos do registro civil contêm
+dados pessoais protegidos.
+
+\vspace{8pt}
+\textbf{Solução:} o OCRSD gera documentos sintéticos com dados fictícios e
+coerentes, escritos sobre os formulários oficiais.
+
+\vspace{8pt}
+\begin{itemize}
+  \item Modelos padrão: \textbf{DNV} (69 campos) e \textbf{DO} (103 campos)
+  \item Registro semântico com nomes, datas, endereços e vínculos consistentes
+  \item Escrita por fonte ou modelos neurais locais
+  \item Ground truth por campo com coordenadas e valores
+  \item Geração determinística (mesma semente = mesmo resultado)
+\end{itemize}
+\end{column}
+\begin{column}{0.42\textwidth}
+  \includegraphics[width=\textwidth]{dnv_trad.png}\\[2pt]
+  {\tiny Exemplo: DNV sintética (geração tradicional)}
+\end{column}
+\end{columns}
+\end{frame}
+
+% ---- SLIDE 3: Geração assistida por IA ----
+\begin{frame}[shrink=5]{Geração assistida por IA local}
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+Um modelo de linguagem local (\textbf{qwen3:1.7b} via Ollama, GPU) propõe
+registros coerentes que passam pelas mesmas regras de validação do motor
+tradicional.
+
+\vspace{6pt}
+\textbf{O LLM não gera o PDF.} Ele propõe apenas valores semânticos (nomes,
+idades, municípios) que são validados, aceitos ou rejeitados, e depois
+escritos pelo motor existente.
+
+\vspace{6pt}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+                        & \textbf{DNV} & \textbf{DO} \\
+\midrule
+Campos com IA           & 9 de 11      & 8 de 9      \\
+Aceitos na 1ª tentativa & 10/10        & 10/10       \\
+Tempo (10 docs, GPU)    & 109\,s       & 85\,s       \\
+\bottomrule
+\end{tabular}
+
+\vspace{6pt}
+\begin{itemize}
+  \item Proveniência completa (modelo, digest, cenário, tentativas)
+  \item Reprodução exata sem chamar a IA de novo
+  \item Funciona sem API externa (Ollama local, GTX 1060)
+\end{itemize}
+\end{column}
+\begin{column}{0.42\textwidth}
+  \includegraphics[width=\textwidth]{do_ai.png}\\[2pt]
+  {\tiny Exemplo: DO sintética (geração assistida por IA)}
+\end{column}
+\end{columns}
+\end{frame}
+
+% ---- SLIDE 4: Arquitetura e interface ----
+\begin{frame}[shrink=10]{Arquitetura e interface web}
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+\small
+\textbf{Plataforma web} (FastAPI + HTMX, sem Node):
+worker com fila SQLite e progresso em tempo real;
+editor de mapeamentos com assistente de IA;
+galeria de modelos, presets de escrita, compartilhamento.
+
+\vspace{6pt}
+\textbf{Motor semântico:} entidades com geradores, vínculos e
+restrições; mapeamento por inferência ou vínculo explícito.
+
+\vspace{6pt}
+\textbf{Demonstração:} 40 documentos
+(DNV + DO $\times$ tradicional + IA)
+com ground truth, manifesto e proveniência.
+
+\vspace{6pt}
+\footnotesize
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Componente} & \textbf{Tecnologia} \\
+\midrule
+Interface / Geração & FastAPI, PyMuPDF \\
+Escrita & Fonte / TF / PyTorch \\
+IA local & Ollama (qwen3:1.7b) \\
+Dados / Implantação & SQLite, Docker \\
+\bottomrule
+\end{tabular}
+\end{column}
+\begin{column}{0.45\textwidth}
+\centering
+\vspace{-4pt}
+\includegraphics[width=0.48\textwidth]{dnv_ai.png}%
+\hfill%
+\includegraphics[width=0.48\textwidth]{do_trad.png}\\[2pt]
+{\tiny DNV (IA) \hspace{1.5cm} DO (tradicional)}
+\end{column}
+\end{columns}
+\end{frame}
+
+\end{document}

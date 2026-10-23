@@ -328,7 +328,8 @@ class WebTests(unittest.TestCase):
         catalog = Catalog(self.settings)
         definition = catalog.definition("dnv", "mapeamento_seguindo_norma")
         options = GenerationOptions(document_type="dnv", mapping_id="mapeamento_seguindo_norma", count=2, seed=5,
-                                    fields=[str(field["field_id"]) for field in definition["fields"]],
+                                    fields=[str(field["field_id"]) for field in definition["fields"]
+                                            if not field.get("unsupported_reason")],
                                     writing=Writing(model="aaron1259", text_policy="normalize"))
         with patch.object(Catalog, "models", return_value=[{"id": "aaron1259", "available": True}]), \
                 patch("src.synthetic_dataset.load_model", return_value=model):

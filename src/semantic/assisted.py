@@ -193,7 +193,7 @@ class AssistedRecords:
                     continue
                 value, problem = check_value(slot, proposed[slot.key])
                 if problem:
-                    rejected.append({"key": slot.key, "value": _unwrap(proposed[slot.key]), "reason": problem})
+                    rejected.append({"key": slot.key, "reason": problem})
                 else:
                     accepted[slot.key] = value
             entry.update({"accepted": accepted, "rejected": rejected})

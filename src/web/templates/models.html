@@ -40,6 +40,7 @@
         {% else %}
         <a class="btn" href="/modelos/{{ model.id }}/editor" title="Publique o modelo no editor para usá-lo na geração">{{ icon('publish') }}Publicar</a>
         {% endif %}
+        {% if not model.builtin %}<form hx-post="/modelos/{{ model.id }}/excluir" hx-confirm="Excluir o modelo “{{ model.label }}”? Esta ação remove o PDF e o mapeamento personalizados." hx-disabled-elt="find button"><button type="submit" class="btn btn-danger">{{ icon('trash') }}Excluir</button></form>{% endif %}
       </div>
     </div>
   </article>
