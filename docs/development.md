@@ -80,14 +80,16 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 | --- | --- | --- |
 | `OCRSD_STORAGE` | `var/web` | Banco e saídas; `/data` no Compose, `/var/lib/ocrsd` no systemd |
 | `OCRSD_DOCUMENTS` | catálogo do projeto | Raiz administrada de templates, mapas e presets |
-| `OCRSD_MAX_COUNT` | 10 | Documentos por job; limite absoluto do contrato: 100 |
+| `OCRSD_MAX_COUNT` | sem limite (`null`) | Documentos por job; se definido, é um limite absoluto do contrato |
 | `OCRSD_MAX_PENDING` | 20 | Jobs simultaneamente na fila/em execução |
 | `OCRSD_JOBS_PER_HOUR` | 10 | Submissões por IP/hora, transação persistente |
 | `OCRSD_RETENTION_HOURS` | 24 | Retenção após término; limpeza pelo worker |
-| `OCRSD_JOB_TIMEOUT` | 900 | Tempo máximo do subprocesso em segundos |
-| `OCRSD_MAX_JOB_BYTES` | 268435456 | 256 MiB por job, incluindo ZIP e temporários |
+| `OCRSD_JOB_TIMEOUT` | 900 | Tempo-base do subprocesso em segundos; somado a `count * OCRSD_JOB_SECONDS_PER_DOCUMENT` |
+| `OCRSD_JOB_SECONDS_PER_DOCUMENT` | 30 | Segundos adicionais de orçamento por documento solicitado no job |
+| `OCRSD_MAX_JOB_BYTES` | 268435456 | Tamanho-base por job em bytes (256 MiB), incluindo ZIP e temporários; somado a `count * OCRSD_JOB_BYTES_PER_DOCUMENT` |
+| `OCRSD_JOB_BYTES_PER_DOCUMENT` | 4194304 | Bytes adicionais de orçamento por documento solicitado no job (4 MiB) |
 | `OCRSD_MAX_UPLOAD_BYTES` | 12582912 | Limite do template PDF enviado; 12 MiB |
-| `OCRSD_MAX_STORAGE_BYTES` | 4294967296 | Reserva de saídas: 4 GiB; até 16 jobs não expirados no padrão |
+| `OCRSD_MAX_STORAGE_BYTES` | 4294967296 | Reserva de saídas: 4 GiB; a reserva de cada job escala com `count`, então o número de jobs não expirados simultâneos varia |
 | `OCRSD_MIN_FREE_BYTES` | 536870912 | Margem livre mínima; 512 MiB |
 | `OCRSD_MEMORY_MB` | 4096 | Limite de espaço virtual do subprocesso, além do cgroup |
 | `OCRSD_NEURAL_ENABLED` | false no código; true no exemplo de deploy | Requer habilitação e pesos completos instalados pelo administrador |

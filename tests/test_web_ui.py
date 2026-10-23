@@ -54,7 +54,7 @@ class InterfaceTests(unittest.TestCase):
         return form
 
     def run_worker(self):
-        environment = {**os.environ, **{f"OCRSD_{key.upper()}": str(value) for key, value in self.settings.model_dump().items()},
+        environment = {**os.environ, **{f"OCRSD_{key.upper()}": str(value) for key, value in self.settings.model_dump().items() if value is not None},
                        "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
         subprocess.run([sys.executable, "-m", "src.web.worker", "--once"], cwd=ROOT, env=environment,
                        capture_output=True, text=True, timeout=90, check=True)
@@ -176,7 +176,9 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(invalid.status_code, 422)
         self.assertIn("Quantidade de documentos", invalid.text)
         self.assertIn("ao menos um campo", self.hx("POST", "/geracao/jobs", data=self.generation_form(fields=[])).text)
+        self.settings.max_count = 10
         self.assertIn("Limite de 10", self.hx("POST", "/geracao/jobs", data=self.generation_form(count="11")).text)
+        self.settings.max_count = None
 
         queued = self.hx("POST", "/geracao/jobs", data=self.generation_form())
         self.assertEqual(queued.status_code, 200, queued.text)

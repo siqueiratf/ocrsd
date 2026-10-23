@@ -122,14 +122,16 @@ def execute(settings_data: dict, identifier: str, parent_pid: int) -> None:
     os.umask(0o077)
     settings = Settings(**settings_data)
     resource.setrlimit(resource.RLIMIT_AS, (settings.memory_mb * 1024**2,) * 2)
-    resource.setrlimit(resource.RLIMIT_CPU, (settings.job_timeout, settings.job_timeout + 1))
-    resource.setrlimit(resource.RLIMIT_FSIZE, (settings.max_job_bytes,) * 2)
     store = JobStore(settings)
     try:
         import cv2
         cv2.setNumThreads(1)
         row = store.get(identifier)
         options = GenerationOptions.model_validate_json(row["options"])
+        byte_budget = settings.job_byte_budget(options.count)
+        time_budget = settings.job_time_budget(options.count)
+        resource.setrlimit(resource.RLIMIT_CPU, (time_budget, time_budget + 1))
+        resource.setrlimit(resource.RLIMIT_FSIZE, (byte_budget,) * 2)
         replay = store.replay(row)
         if row.get("replay_of") and replay is None:
             raise ValueError("Os registros aceitos da geração original não estão disponíveis")
@@ -137,7 +139,7 @@ def execute(settings_data: dict, identifier: str, parent_pid: int) -> None:
                              lambda completed: None, row.get("owner_id"),
                              lambda completed, pdf, ground_truth: store.publish_document(identifier, completed, pdf, ground_truth),
                              store.source(row), replay)
-        if sum(item["size"] for item in artifacts) > settings.max_job_bytes:
+        if sum(item["size"] for item in artifacts) > byte_budget:
             raise ValueError("Limite de tamanho excedido")
         if options.generation_mode == "ai" and replay is None:
             store.save_records(identifier, accepted_records(store.directory(identifier)))
@@ -153,6 +155,8 @@ def run_job(store: JobStore, row: dict) -> None:
     process.start()
     start = time.monotonic()
     failure = None
+    time_budget = store.settings.job_time_budget(row["total"])
+    byte_budget = store.settings.job_byte_budget(row["total"])
     try:
         while process.is_alive():
             store.heartbeat()
@@ -160,9 +164,9 @@ def run_job(store: JobStore, row: dict) -> None:
             size = sum(p.stat().st_size for p in store.directory(row["id"]).glob("*") if p.is_file())
             if current["cancel_requested"]:
                 failure = "Cancelado"
-            elif time.monotonic() - start > store.settings.job_timeout:
+            elif time.monotonic() - start > time_budget:
                 failure = "Tempo máximo de execução excedido"
-            elif size > store.settings.max_job_bytes:
+            elif size > byte_budget:
                 failure = "Limite de armazenamento do job excedido"
             elif shutil.disk_usage(store.root).free < store.settings.min_free_bytes:
                 failure = "Espaço livre insuficiente"

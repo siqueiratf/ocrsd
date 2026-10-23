@@ -91,7 +91,7 @@ class WebTests(unittest.TestCase):
         return job, {"Authorization": "Bearer " + job["token"]}
 
     def worker_environment(self):
-        return {**os.environ, **{f"OCRSD_{key.upper()}": str(value) for key, value in self.settings.model_dump().items()},
+        return {**os.environ, **{f"OCRSD_{key.upper()}": str(value) for key, value in self.settings.model_dump().items() if value is not None},
                 "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
 
     def run_worker(self):
@@ -120,6 +120,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_strict_validation_and_bounded_body(self):
+        self.settings.max_count = 10
         changes = [{"count": 0}, {"count": True}, {"count": "1"}, {"count": 11}, {"seed": -1},
                    {"fields": []}, {"fields": ["unknown"]}, {"fields": self.options.fields * 2},
                    {"document_type": "../dnv"}, {"output": "/tmp/escape"}, {"filter_preset": "other"},
@@ -227,6 +228,34 @@ class WebTests(unittest.TestCase):
         self.settings.max_storage_bytes = self.settings.max_job_bytes
         self.assertEqual(self.client.post("/api/v1/jobs", json=self.options.model_dump()).json()["error"]["code"], "storage_quota")
 
+    def test_unlimited_count_has_no_quota_ceiling(self):
+        self.assertIsNone(self.settings.max_count)
+        catalog = Catalog(self.settings)
+        self.options.count = 1000
+        self.assertIs(catalog.validate(self.options), self.options)
+
+    def test_configured_max_count_still_rejects_larger_counts(self):
+        catalog = Catalog(self.settings)
+        self.settings.max_count = 5
+        self.options.count = 6
+        with self.assertRaises(ServiceError) as caught:
+            catalog.validate(self.options)
+        self.assertEqual(caught.exception.code, "quota")
+        self.options.count = 5
+        self.assertIs(catalog.validate(self.options), self.options)
+
+    def test_job_budgets_scale_with_document_count(self):
+        self.assertEqual(self.settings.job_byte_budget(0), self.settings.max_job_bytes)
+        self.assertEqual(self.settings.job_byte_budget(10), self.settings.max_job_bytes + 10 * self.settings.job_bytes_per_document)
+        self.assertEqual(self.settings.job_time_budget(0), self.settings.job_timeout)
+        self.assertEqual(self.settings.job_time_budget(10), self.settings.job_timeout + 10 * self.settings.job_seconds_per_document)
+
+    def test_large_count_job_exceeds_storage_quota_via_scaled_budget(self):
+        self.settings.max_storage_bytes = self.settings.job_byte_budget(1)
+        self.options.count = 1000
+        response = self.client.post("/api/v1/jobs", json=self.options.model_dump())
+        self.assertEqual(response.json()["error"]["code"], "storage_quota")
+
     def test_worker_failure_and_recovery(self):
         job, headers = self.submit()
         with self.store.connection() as db:
@@ -244,8 +273,8 @@ class WebTests(unittest.TestCase):
     def test_running_cancellation_and_timeout(self):
         for cancel in (True, False):
             with self.subTest(cancel=cancel):
-                self.settings.max_count = 100
                 self.settings.job_timeout = 90 if cancel else 1
+                self.settings.job_seconds_per_document = 0
                 self.options.count = 100
                 job, headers = self.submit()
                 process = subprocess.Popen([sys.executable, "-m", "src.web.worker", "--once"], cwd=ROOT,

@@ -255,7 +255,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         return model
 
     def wizard_initial() -> dict:
-        return {"document_type": "", "mapping_id": "", "fields": [], "count": min(10, settings.max_count),
+        return {"document_type": "", "mapping_id": "", "fields": [], "count": 10 if settings.max_count is None else min(10, settings.max_count),
                 "preset": "padrao_fonte_natural", "filter_preset": "none", "generation_mode": "traditional", "step": 1}
 
     def assistant_summary() -> dict:
@@ -886,7 +886,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 state["fields"] = [str(value) for value in form.getlist("fields")]
             elif step == 3:
                 count = parsed(form, "count", int)
-                if isinstance(count, int) and 1 <= count <= settings.max_count:
+                if isinstance(count, int) and count >= 1 and (settings.max_count is None or count <= settings.max_count):
                     state["count"] = count
                 if text(form, "generation_mode") in {"traditional", "ai"}:
                     state["generation_mode"] = text(form, "generation_mode")
@@ -923,8 +923,9 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 state["fields"] = selected
             elif step == 3:
                 count = parsed(form, "count", int)
-                if not isinstance(count, int) or not 1 <= count <= settings.max_count:
-                    raise ServiceError(422, "validation_error", f"Informe de 1 a {settings.max_count} documentos")
+                if not isinstance(count, int) or count < 1 or (settings.max_count is not None and count > settings.max_count):
+                    message = f"Informe de 1 a {settings.max_count} documentos" if settings.max_count is not None else "Informe ao menos 1 documento"
+                    raise ServiceError(422, "validation_error", message)
                 mode = text(form, "generation_mode") or "traditional"
                 if mode not in {"traditional", "ai"}:
                     raise ServiceError(422, "validation_error", "Selecione um modo de geração válido")

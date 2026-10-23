@@ -36,7 +36,7 @@ class GenerationOptions(StrictModel):
     document_type: Identifier
     mapping_id: Identifier | None = None
     fields: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(min_length=1, max_length=200)
-    count: int = Field(default=1, ge=1, le=100, strict=True)
+    count: int = Field(default=1, ge=1, strict=True)
     seed: int | None = Field(default=None, ge=0, le=2**32 - 1, strict=True)
     writing: Writing = Field(default_factory=Writing)
     filter_preset: Literal["none", "light", "medium", "strong"] = "none"
@@ -80,7 +80,7 @@ class PresetResponse(Resource):
 class Capabilities(BaseModel):
     models: list[ModelResponse]
     filters: list[str]
-    max_count: int
+    max_count: int | None
     retention_hours: int
 
 

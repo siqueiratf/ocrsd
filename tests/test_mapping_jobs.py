@@ -265,7 +265,7 @@ class AnalysisApiTests(unittest.TestCase):
         return self.client.request(method, path, headers={"X-Workspace-Token": token} if token else {}, **kwargs)
 
     def run_worker(self):
-        environment = {**os.environ, **{f"OCRSD_{key.upper()}": str(value) for key, value in self.settings.model_dump().items()},
+        environment = {**os.environ, **{f"OCRSD_{key.upper()}": str(value) for key, value in self.settings.model_dump().items() if value is not None},
                        "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
         result = subprocess.run([sys.executable, "-m", "src.web.worker", "--once"], cwd=ROOT, env=environment,
                                 capture_output=True, text=True, timeout=120)

@@ -11,14 +11,16 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OCRSD_", extra="ignore")
     storage: Path = Path("var/web")
     documents: Path = DOCUMENTS_ROOT
-    max_count: int = Field(default=10, ge=1, le=100)
+    max_count: int | None = Field(default=None, ge=1)
     max_pending: int = Field(default=20, ge=1, le=1000)
     max_pending_analyses: int = Field(default=5, ge=1, le=1000)
     jobs_per_hour: int = Field(default=10, ge=1)
     retention_hours: int = Field(default=24, ge=1)
     job_timeout: int = Field(default=900, ge=1)
+    job_seconds_per_document: int = Field(default=30, ge=0)
     analysis_timeout: int = Field(default=300, ge=10)
     max_job_bytes: int = Field(default=256 * 1024 * 1024, ge=1024)
+    job_bytes_per_document: int = Field(default=4 * 1024 * 1024, ge=0)
     max_upload_bytes: int = Field(default=12 * 1024 * 1024, ge=1024)
     max_storage_bytes: int = Field(default=4 * 1024**3, ge=1024)
     min_free_bytes: int = Field(default=512 * 1024**2, ge=0)
@@ -40,3 +42,9 @@ class Settings(BaseSettings):
         if self.ai_budget >= self.analysis_timeout:
             raise ValueError("ai_budget precisa ser menor que analysis_timeout")
         return self
+
+    def job_byte_budget(self, count: int) -> int:
+        return self.max_job_bytes + count * self.job_bytes_per_document
+
+    def job_time_budget(self, count: int) -> int:
+        return self.job_timeout + count * self.job_seconds_per_document

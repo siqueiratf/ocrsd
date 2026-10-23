@@ -208,7 +208,7 @@ class Catalog:
         fields = {str(field["field_id"]) for field in definition["fields"]}
         if set(options.fields) - fields or len(set(options.fields)) != len(options.fields):
             raise ServiceError(422, "invalid_fields", "Selecione campos existentes, sem repetições")
-        if options.count > self.settings.max_count:
+        if self.settings.max_count is not None and options.count > self.settings.max_count:
             raise ServiceError(422, "quota", f"Limite de {self.settings.max_count} documentos por job")
         if not any(m["id"] == options.writing.model and m["available"] for m in self.models()):
             raise ServiceError(422, "model_unavailable", "Modelo não habilitado ou pesos ausentes")

@@ -63,7 +63,7 @@ class WizardTests(unittest.TestCase):
         job = self.app.state.store.list_jobs(owner)[0]
         self.assertIsInstance(job["options"]["seed"], int)
         self.assertEqual(job["options"]["mapping_id"], "mapeamento_seguindo_norma")
-        environment = {**os.environ, **{f"OCRSD_{key.upper()}": str(value) for key, value in self.settings.model_dump().items()},
+        environment = {**os.environ, **{f"OCRSD_{key.upper()}": str(value) for key, value in self.settings.model_dump().items() if value is not None},
                        "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
         subprocess.run([sys.executable, "-m", "src.web.worker", "--once"], env=environment,
                        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=90, check=True)

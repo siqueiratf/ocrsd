@@ -227,10 +227,12 @@ class JobStore:
                 raise ServiceError(429, "queue_full", "Fila cheia; tente mais tarde")
             if db.execute("SELECT COUNT(*) FROM jobs WHERE client=? AND created_at>?", (client_hash, now - 3600)).fetchone()[0] >= self.settings.jobs_per_hour:
                 raise ServiceError(429, "rate_limit", "Limite horário de jobs atingido")
-            reserved = db.execute("SELECT COUNT(*) FROM jobs WHERE status != 'expired'").fetchone()[0]
-            if (reserved + 1) * self.settings.max_job_bytes + self.cache_bytes() > self.settings.max_storage_bytes:
+            reserved, reserved_count = db.execute("SELECT COALESCE(SUM(total),0), COUNT(*) FROM jobs WHERE status != 'expired'").fetchone()
+            reserved_budget = reserved_count * self.settings.max_job_bytes + reserved * self.settings.job_bytes_per_document
+            new_budget = self.settings.job_byte_budget(options.count)
+            if reserved_budget + new_budget + self.cache_bytes() > self.settings.max_storage_bytes:
                 raise ServiceError(429, "storage_quota", "Armazenamento reservado esgotado; aguarde a expiração")
-            if shutil.disk_usage(self.root).free < self.settings.min_free_bytes + self.settings.max_job_bytes:
+            if shutil.disk_usage(self.root).free < self.settings.min_free_bytes + new_budget:
                 raise ServiceError(503, "storage_full", "Espaço insuficiente para um novo job")
             if options.seed is None:
                 options = options.model_copy(update={"seed": fresh_seed(db)})

@@ -29,7 +29,7 @@
 <section class="card section-card">
   <header class="section-title"><span class="step">3</span><div><h2>Parâmetros de geração</h2><p>Defina o volume e a reprodutibilidade.</p></div></header>
   <div class="grid-2">
-    <label class="field">Quantidade de documentos<input type="number" name="count" min="1" max="{{ max_count }}" value="{{ options.count }}" required><small class="hint">Máximo de {{ max_count }} por job.</small></label>
+    <label class="field">Quantidade de documentos<input type="number" name="count" min="1" {% if max_count %}max="{{ max_count }}"{% endif %} value="{{ options.count }}" required><small class="hint">{{ ("Máximo de " ~ max_count ~ " por job.") if max_count else "Mínimo de 1 documento, sem limite máximo." }}</small></label>
     <label class="field">Seed aleatória<input type="number" name="seed" min="0" max="4294967295" value="{{ options.seed }}" required><small class="hint">A mesma seed reproduz o mesmo dataset.</small></label>
   </div>
   <label class="field">Nome do dataset<input name="name" maxlength="120" value="{{ options.name }}" required></label>
