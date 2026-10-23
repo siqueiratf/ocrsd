@@ -163,6 +163,15 @@ class ResolutionTests(unittest.TestCase):
             self.assertEqual(resolve_field({"field_id": field_id, "label": label, "bloco": block}, "declaracao_obito"), Binding(key), label)
         self.assertEqual(KEYS, frozenset(REGISTRY))
 
+    def test_registration_date_parts_are_not_registration_numbers(self):
+        for document, key in (("certidao_obito", "death_registration.date"), ("certidao_casamento_cnj", "registration.date")):
+            for field_id, part in (("dia_registro", "day"), ("mes_registro", "month"), ("ano_registro", "year")):
+                with self.subTest(document=document, field_id=field_id):
+                    field = {"field_id": field_id, "label": field_id.replace("_", " do "), "data_type": "integer"}
+                    self.assertEqual(resolve_field(field, document), Binding(key, part))
+        self.assertEqual(resolve_field({"field_id": "numero_registro", "label": "Número do registro", "data_type": "integer"},
+                                       "declaracao_obito"), Binding("death_registration.number"))
+
     def test_twins_are_presented_from_booleans(self):
         certidao = _fields(CERTIDAO)
         self.assertEqual(present_text(certidao["gemeos"], Binding("birth.twins"), True), "SIM")

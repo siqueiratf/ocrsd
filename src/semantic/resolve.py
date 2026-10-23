@@ -257,7 +257,7 @@ def resolve_field(field: dict, document: str | None = None) -> Binding | None:
     attribute = next((found for found in (_attribute(segment, field) for segment in segments) if found), None)
     attribute = attribute or _attribute(text, field)
     part = None
-    if attribute is None and (part := _date_part(text)):
+    if attribute in {None, "number", "registration_number"} and (part := _date_part(text)):
         attribute = "date"
     attribute = attribute or TYPE_ATTRIBUTES.get(str(field.get("data_type")))
     if attribute in {None, "ambiguous"}:
