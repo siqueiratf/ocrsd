@@ -129,7 +129,7 @@ def execute(settings_data: dict, identifier: str, parent_pid: int) -> None:
         row = store.get(identifier)
         options = GenerationOptions.model_validate_json(row["options"])
         byte_budget = settings.job_byte_budget(options.count)
-        time_budget = settings.job_time_budget(options.count)
+        time_budget = settings.job_time_budget(options.count, options.generation_mode)
         resource.setrlimit(resource.RLIMIT_CPU, (time_budget, time_budget + 1))
         resource.setrlimit(resource.RLIMIT_FSIZE, (byte_budget,) * 2)
         replay = store.replay(row)
@@ -155,7 +155,11 @@ def run_job(store: JobStore, row: dict) -> None:
     process.start()
     start = time.monotonic()
     failure = None
-    time_budget = store.settings.job_time_budget(row["total"])
+    try:
+        generation_mode = json.loads(row["options"]).get("generation_mode", "traditional")
+    except (TypeError, ValueError, AttributeError):
+        generation_mode = "traditional"
+    time_budget = store.settings.job_time_budget(row["total"], generation_mode)
     byte_budget = store.settings.job_byte_budget(row["total"])
     try:
         while process.is_alive():

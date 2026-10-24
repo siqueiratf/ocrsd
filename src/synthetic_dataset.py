@@ -25,6 +25,7 @@ from src.field_rules import (DATE_PARTS, DNV_TEST_PREFIX, SEPARATED_DATE, SEX_VA
                               document_number, format_date, format_dnv, masked_value, sex_text)
 from src.neural_handwriting import NeuralPen, load_model, prepare_text, render_strokes
 from src.semantic import REGISTRY, VERSION as SEMANTIC_VERSION, SemanticRecord
+from src.semantic.assisted import ai_binding_key, serialize_ai_values
 from src.semantic.custom import generate_custom_value, validate_custom_definition
 from src.semantic.data import CITIES, COMPLEMENTS, FIRST_NAMES, LAST_NAMES, LOCATION_PROFILES, OCCUPATIONS, STREETS, UF_VALUES
 from src.semantic.plan import SemanticPlan, semantic_plan
@@ -771,11 +772,23 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         bindings = plan.bindings
     generation_context["record"] = record
     bindings.update({str(field["field_id"]): Binding(field["semantic"], source="custom") for field in custom_fields})
+    ai_values = getattr(record, "ai_values", None) or {}
+    fields_by_id = {str(field["field_id"]): field for field in selected}
+    ai_bindings = {field_id: Binding(ai_binding_key(field_id, fields_by_id[field_id].get("data_type", "text")), source="ai")
+                  for field_id in ai_values if field_id in fields_by_id}
+    bindings.update(ai_bindings)
+    ai_store = {binding.key: ai_values[field_id] for field_id, binding in ai_bindings.items()}
     snapshot = record.snapshot()
     snapshot.update({key: value.isoformat() if isinstance(value, (date, time)) else value for key, value in custom_values.items()})
+    snapshot.update({binding.key: (value.isoformat() if isinstance(value, (date, time)) else value)
+                     for field_id, binding in ai_bindings.items() for value in (ai_values[field_id],)})
 
     def semantic_value(binding: Binding):
-        return custom_values[binding.key] if binding.source == "custom" else record.value(binding.key)
+        if binding.source == "custom":
+            return custom_values[binding.key]
+        if binding.source == "ai":
+            return ai_store[binding.key]
+        return record.value(binding.key)
 
     def insert_value(rect_values: list[int], text: str, font_size: float | None = None,
                      pencil: bool = False, force_printed: bool = False) -> tuple[str, dict]:
@@ -945,6 +958,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         "semantic_context": record.context,
         "semantic_record": snapshot,
         **({"semantic_provenance": record.provenance} if record.provenance else {}),
+        **({"ai_values": serialize_ai_values(ai_values)} if ai_values else {}),
         "generation": reproduction,
     }
     json_path.write_text(json.dumps(ground_truth, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

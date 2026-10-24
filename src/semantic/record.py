@@ -73,6 +73,7 @@ class SemanticRecord:
         self._links: dict[str, Any] = {}
         self._frozen: set[str] = set()
         self.provenance: dict | None = None
+        self.ai_values: dict[str, Any] = {}
 
     @classmethod
     def from_values(cls, values: dict[str, Any], context: str | None, seed: int = 0,
@@ -80,7 +81,7 @@ class SemanticRecord:
         record = cls(seed, context)
         problems = []
         for key, value in values.items():
-            if key.startswith("custom."):
+            if key.startswith("custom.") or key.startswith("ai."):
                 continue
             if key not in REGISTRY:
                 problems.append(f"Chave semântica desconhecida: {key}")

@@ -27,10 +27,10 @@ from src.web.models import GenerationOptions, Identifier, ModelPromote, ModelUpd
 from src.web.palette import (CUSTOM_BASES, EDITOR_OPTIONS, GENERATION_RULES, ICON_NAMES, LAYOUT_PALETTE, PALETTE, TYPE_LABELS,
                              custom_field_config, custom_palette)
 from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, STANDARD_EDITS_DISABLED, Catalog, ServiceError,
-                              create_blank_model, create_model, duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key, preview_strip,
-                              promote_model, render_writing_samples, realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count, render_preview,
-                              revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping, with_approved_semantics,
-                              writing_issues, writing_message)
+                              ai_slots, create_blank_model, create_model, duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key,
+                              preview_strip, promote_model, render_writing_samples, realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count,
+                              render_preview, revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping,
+                              with_approved_semantics, writing_issues, writing_message)
 from src.web.settings import Settings
 from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model_defaults, preset_title, writing_summary
 
@@ -375,6 +375,12 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             if any(item["id"] == state.get("preset") and item["conflict"] for item in styles):
                 notices.append("O estilo de escrita escolhido não é compatível com os campos selecionados. Escolha outro estilo.")
         selected_style = next((item for item in styles if item["id"] == state.get("preset")), None)
+        ai_hint = None
+        if step == 3 and definition and state.get("fields"):
+            selected_fields = [field for field in definition["fields"] if str(field["field_id"]) in set(state["fields"])]
+            if selected_fields:
+                ai_ids = ai_slots({**definition, "fields": selected_fields}, current["id"])
+                ai_hint = {"ai": len(ai_ids), "total": len(selected_fields)}
         if step == 6 and not state.get("submitted_job") and not error:
             try:
                 if not selected_style:
@@ -391,7 +397,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 "types": types, "model_groups": model_groups(types, current), "model_info": models, "current_type": current, "mapping": mapping,
                 "definition": definition, "fields": fields, "groups": groups, "styles": styles,
                 "selected_style": selected_style, "assistant": assistant, "selectable": [field for field in fields if not field["blocked"]],
-                "max_count": settings.max_count, "unpublished": unpublished}
+                "ai_hint": ai_hint, "max_count": settings.max_count, "unpublished": unpublished}
 
     def wizard_url(identifier: str, step: int) -> str:
         return f"/geracao?draft={identifier}&etapa={step}"
@@ -509,7 +515,9 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         info["ai"] = {"provider": parameters.get("provider"), "model": parameters.get("model"), "digest": digest[:12] or None,
                       "prompt_version": parameters.get("prompt_version"), "temperature": parameters.get("temperature"),
                       "accepted": sum(item.get("status") == "accepted" for item in documents) if documents else None,
-                      "attempts": sum(int(item.get("attempts") or 0) for item in documents) if documents else None} if parameters else None
+                      "attempts": sum(int(item.get("attempts") or 0) for item in documents) if documents else None,
+                      "ai_fields": sum(len(item.get("ai_fields") or []) for item in documents) if documents else None,
+                      "fallback_fields": sum(len(item.get("fallback_fields") or []) for item in documents) if documents else None} if parameters else None
         return info
 
     def jobs_context(owner_id: str, search: str, status: str, selected: str = "", document_type: str = "", order: str = "recentes", page: int = 1) -> dict:

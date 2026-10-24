@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     ai_budget: int = Field(default=90, ge=1)
     ai_allow_remote: bool = False
     ai_api_key: SecretStr | None = None
+    ai_rules_chars: int = Field(default=1800, ge=0)
+    ai_max_fields_per_request: int = Field(default=24, ge=1, le=100)
+    ai_seconds_per_document: int = Field(default=120, ge=0)
     mapping_min_score: float = Field(default=0.5, ge=0, le=1)
     mapping_min_margin: float = Field(default=0.2, ge=0, le=1)
     standard_edits: bool = False
@@ -47,5 +50,6 @@ class Settings(BaseSettings):
     def job_byte_budget(self, count: int) -> int:
         return self.max_job_bytes + count * self.job_bytes_per_document
 
-    def job_time_budget(self, count: int) -> int:
-        return self.job_timeout + count * self.job_seconds_per_document
+    def job_time_budget(self, count: int, generation_mode: str = "traditional") -> int:
+        per_document = self.ai_seconds_per_document if generation_mode == "ai" else self.job_seconds_per_document
+        return self.job_timeout + count * per_document

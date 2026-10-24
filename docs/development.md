@@ -118,6 +118,9 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 | `OCRSD_AI_BASE_URL` | `http://127.0.0.1:11434/v1` | Endereço do servidor de IA; somente loopback, salvo `OCRSD_AI_ALLOW_REMOTE=true` com HTTPS |
 | `OCRSD_AI_MODEL` | `qwen3:1.7b` | Modelo instalado manualmente pelo administrador; nenhum peso é baixado automaticamente |
 | `OCRSD_AI_TIMEOUT` / `OCRSD_AI_BUDGET` | 60 / 90 | Tempo por requisição e orçamento total da IA por análise, em segundos |
+| `OCRSD_AI_RULES_CHARS` | 1800 | Tamanho máximo (em caracteres, cortado em um parágrafo) do `regras.md` do documento enviado ao prompt da geração assistida |
+| `OCRSD_AI_MAX_FIELDS_PER_REQUEST` | 24 | Quantos campos sem vínculo de registro civil entram em cada requisição de geração assistida; o excedente vira requisições adicionais |
+| `OCRSD_AI_SECONDS_PER_DOCUMENT` | 120 | Substitui `OCRSD_JOB_SECONDS_PER_DOCUMENT` no orçamento de tempo do job quando `generation_mode=ai` |
 | `OCRSD_MAPPING_MIN_SCORE` / `OCRSD_MAPPING_MIN_MARGIN` | 0.5 / 0.2 | Similaridade mínima e margem para associar um rótulo a uma chave semântica |
 | `OCRSD_STANDARD_EDITS` | false (true em `make web`) | Habilita promover um modelo personalizado a padrão e substituir o mapeamento de um modelo padrão pelo editor; grava em `documents/`. Mantenha `false` em implantações. |
 
@@ -137,6 +140,44 @@ do ground truth representam o texto gerado antes da marcação. A geometria orig
 Determinismo significa mesmos valores e pixels para versões, assets e opções iguais;
 PDF/ZIP podem ter metadados temporais diferentes. Atualizações de bibliotecas ou
 pesos podem mudar resultados. Os testes reais usam fonte local, sem inferência neural.
+
+## Geração assistida por IA (local)
+
+Em `/geracao`, etapa 3, "Geração assistida por IA" usa um servidor local compatível
+com a API da OpenAI (Ollama por padrão) para propor os valores de preenchimento, para
+qualquer documento padrão — não apenas DNV/DO. Instalação em Arch Linux:
+
+```sh
+sudo pacman -S ollama-cuda
+sudo systemctl enable --now ollama
+ollama pull qwen3:4b
+```
+
+Defina `OCRSD_AI_PROVIDER=openai` e `OCRSD_AI_MODEL=qwen3:4b` (o `make web` já
+habilita o provedor; o modelo pode ser trocado por variável de ambiente). `scripts/run_web.py`
+mostra "indisponível" na interface quando nenhum servidor responde em
+`OCRSD_AI_BASE_URL` (loopback por padrão).
+
+O que é enviado ao modelo: para campos vinculados ao registro civil (DNV/DO), os
+mesmos slots determinísticos de sempre (nome do papel, não a pessoa). Para os demais
+campos selecionados sem vínculo de registro, um "campo" com rótulo, descrição,
+tipo em português, e as restrições do próprio campo (`opcoes` a partir de valores
+permitidos ou rótulos de caixas de seleção, `intervalo` para número/decimal,
+`max_caracteres` a partir da validação e de uma estimativa de capacidade da área do
+campo no PDF, `formato` para datas/horários/UF). O prompt também recebe o nome, o
+órgão e a descrição do documento, e um trecho de `documents/<chave>/regras.md`
+(cortado em até `OCRSD_AI_RULES_CHARS` caracteres, em um parágrafo). Nenhum dado
+pessoal real é enviado: tudo é fictício. Identificadores e dígitos verificadores
+(CPF, CNS, número da DNV, sequências de algarismos, campos com máscara ou padrão
+puramente numérico, assinaturas) nunca são enviados ao modelo e continuam gerados
+pelo mecanismo determinístico. Quando a IA não responde um valor válido após as
+tentativas configuradas, o campo não vinculado ao registro civil recebe um valor do
+gerador determinístico (registrado na proveniência como "fallback"); já os campos do
+registro civil continuam exigindo uma resposta válida da IA, sob pena de falha do job.
+
+`scripts/ai_benchmark.py --document <chave> --count N --out relatorio.json` mede
+latência, taxa de aceitação e motivos de rejeição sem subir o servidor web; falha de
+forma clara se nenhum servidor de IA responder.
 
 ## Contrato e verificação
 

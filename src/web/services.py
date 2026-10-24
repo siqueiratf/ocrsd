@@ -284,14 +284,13 @@ class Catalog:
         return options
 
 
-def ai_slots(definition: dict, document_type: str) -> tuple:
-    from src.semantic.assisted import slots_for
-    from src.semantic.resolve import document_context
+def ai_slots(definition: dict, document_type: str) -> set[str]:
+    from src.semantic.assisted import ai_coverage
 
-    context = document_context(definition.get("template_id") or document_type)
-    standard = [field for field in apply_shared_rules(definition)["fields"]
-                if not (isinstance(field.get("semantic"), str) and field["semantic"].startswith("custom."))]
-    return slots_for(context, [binding.key for binding in semantic_plan(standard, context).bindings.values()])
+    resolved = apply_shared_rules(definition)
+    document = resolved.get("template_id") or document_type
+    registry_ids, generic_ids = ai_coverage(resolved["fields"], document, resolved.get("dpi", 300))
+    return registry_ids | generic_ids
 
 
 def unavailable_custom_fields(definition: dict) -> dict[str, str]:
@@ -1009,6 +1008,7 @@ class ReplayRecords:
         self.source_job = replay.get("source_job")
 
     def __call__(self, index: int, seed: int, context: str | None, plan, legacy_keys: list[str]):
+        from src.semantic.assisted import restore_ai_values
         from src.semantic.record import SemanticRecord
 
         stored = self.documents.get(index)
@@ -1016,11 +1016,23 @@ class ReplayRecords:
             raise ValueError(f"Os registros armazenados não correspondem ao documento {index} desta geração")
         record = SemanticRecord.from_values(stored["semantic_record"], context, seed, allow_partial=True)
         plan.apply(record, legacy_keys)
+        record.ai_values = restore_ai_values(stored.get("ai_values") or {})
         record.provenance = {"mode": "ai_replay", "source_job": self.source_job, **({"source": stored["provenance"]} if stored.get("provenance") else {})}
         return record
 
 
-def record_factory(options: GenerationOptions, settings: Settings, replay: dict | None = None) -> tuple[Callable | None, Callable[[], dict]]:
+def _trim_rules(text: str, limit: int) -> str:
+    text = text.strip()
+    if limit <= 0 or len(text) <= limit:
+        return text
+    cut = text.rfind("\n\n", 0, limit)
+    if cut < limit * 0.4:
+        cut = limit
+    return text[:cut].strip()
+
+
+def record_factory(options: GenerationOptions, settings: Settings, replay: dict | None = None,
+                   definition: dict | None = None, document: Any | None = None) -> tuple[Callable | None, Callable[[], dict]]:
     if replay is not None:
         source = {key: value for key, value in (replay.get("generation") or {}).items() if key != "documents"}
         return ReplayRecords(replay), lambda: {"mode": "ai_replay", "source_job": replay.get("source_job"), "source_generation": source,
@@ -1037,7 +1049,21 @@ def record_factory(options: GenerationOptions, settings: Settings, replay: dict 
         raise AssistedGenerationError(f"Assistente de IA indisponível: {exc}", []) from exc
     if not status.available or not hasattr(assistant, "complete_json"):
         raise AssistedGenerationError(f"Assistente de IA indisponível: {status.detail}", [])
-    factory = AssistedRecords(assistant, model_digest=assistant.model_digest())
+    resolved = apply_shared_rules(definition) if definition else {"fields": [], "dpi": 300}
+    selected = {str(field_id) for field_id in options.fields}
+    fields = [field for field in resolved["fields"] if str(field["field_id"]) in selected]
+    document_meta, rules_text = None, None
+    if document is not None:
+        document_meta = {"nome": document.label, "orgao": (document.orgao or {}).get("nome"), "descricao": document.description}
+        rules_path = document.root / "regras.md"
+        if rules_path.is_file():
+            try:
+                rules_text = _trim_rules(rules_path.read_text(encoding="utf-8"), settings.ai_rules_chars) or None
+            except OSError:
+                rules_text = None
+    factory = AssistedRecords(assistant, model_digest=assistant.model_digest(), fields=fields, dpi=resolved.get("dpi", 300),
+                              document_meta=document_meta, rules_text=rules_text,
+                              max_fields_per_request=settings.ai_max_fields_per_request)
     return factory, lambda: {"mode": "ai", **factory.parameters, "documents": list(factory.documents)}
 
 
@@ -1048,9 +1074,10 @@ def accepted_records(output: Path) -> dict:
         truth = json.loads((output / entry["ground_truth"]).read_text(encoding="utf-8"))
         provenance = truth.get("semantic_provenance") or {}
         documents.append({"index": index, "semantic_seed": truth["semantic_seed"], "semantic_context": truth.get("semantic_context"),
-                          "semantic_record": truth["semantic_record"],
+                          "semantic_record": truth["semantic_record"], "ai_values": truth.get("ai_values") or {},
                           "provenance": {key: provenance.get(key) for key in ("mode", "provider", "model", "model_digest", "prompt_version",
-                                                                             "temperature", "scenario", "ai_keys") if key in provenance}})
+                                                                             "temperature", "scenario", "ai_keys", "ai_fields",
+                                                                             "fallback_fields") if key in provenance}})
     return {"seed": manifest.get("seed"), "generation": manifest.get("generation"), "documents": documents}
 
 
@@ -1060,15 +1087,22 @@ def generate(options: GenerationOptions, output: Path, settings: Settings,
              replay: dict | None = None) -> list[dict]:
     with tempfile.TemporaryDirectory(prefix="ocrsd-source-") as directory:
         catalog = Catalog(settings)
+        document = None
         if source:
             options = catalog.validate(options, owner_id, source["definition"], replay=replay is not None)
             template, mapping = source["template"], Path(directory) / f"{options.mapping_id}.json"
             mapping.write_text(json.dumps(source["definition"], ensure_ascii=False), encoding="utf-8")
+            definition = source["definition"]
         else:
             options = catalog.validate(options, owner_id, replay=replay is not None)
             template = catalog.document(options.document_type, owner_id).template
             mapping = catalog.mapping(options.document_type, options.mapping_id, owner_id)
-        factory, generation = record_factory(options, settings, replay)
+            definition = catalog.definition(options.document_type, options.mapping_id, owner_id)
+        try:
+            document = catalog.document(options.document_type, owner_id)
+        except ServiceError:
+            document = None
+        factory, generation = record_factory(options, settings, replay, definition, document)
         return generate_from(options, template, mapping, output, progress, document_ready, factory, generation)
 
 

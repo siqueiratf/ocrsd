@@ -135,6 +135,7 @@ class OpenAICompatibleAssistant:
         self.failure_limit, self.cooldown, self.clock = failure_limit, cooldown, clock
         self.failures, self.open_until, self.requests = 0, 0.0, 0
         self.deadline: float | None = None
+        self.schema_unsupported = False
         self._lock = threading.Lock()
 
     def _paused(self) -> bool:
@@ -259,21 +260,61 @@ class OpenAICompatibleAssistant:
                 pass
         return answer
 
+    def _request_chat(self, body: dict) -> tuple[dict, dict]:
+        reply = self._http("POST", "/chat/completions", body)
+        choices = reply.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            raise AssistantError("resposta sem escolhas")
+        answer = parse_json_object((choices[0].get("message") or {}).get("content"))
+        return answer, reply
+
+    def _schema_format(self, campos: list[dict]) -> dict:
+        properties: dict[str, dict] = {}
+        required: list[str] = []
+        for campo in campos:
+            key = str(campo.get("chave"))
+            required.append(key)
+            if campo.get("opcoes"):
+                properties[key] = {"type": "string", "enum": [str(item) for item in campo["opcoes"]]}
+            elif campo.get("intervalo") is not None:
+                low, high = campo["intervalo"]
+                schema: dict[str, Any] = {"type": "number" if campo.get("tipo") == "número decimal" else "integer"}
+                if low is not None:
+                    schema["minimum"] = low
+                if high is not None:
+                    schema["maximum"] = high
+                properties[key] = schema
+            elif campo.get("max_caracteres") is not None:
+                properties[key] = {"type": "string", "maxLength": int(campo["max_caracteres"])}
+            else:
+                properties[key] = {"type": "string"}
+        return {"type": "json_schema", "json_schema": {"name": "registro", "strict": True, "schema": {
+            "type": "object", "properties": {"valores": {"type": "object", "properties": properties,
+                                                          "required": required, "additionalProperties": False}},
+            "required": ["valores"], "additionalProperties": False}}}
+
     def complete_json(self, system: str, payload: dict, *, temperature: float, seed: int) -> tuple[dict, dict]:
         if self._paused():
             raise AssistantError("assistente pausado após falhas consecutivas")
+        campos = payload.get("campos") if isinstance(payload.get("campos"), list) else None
+        use_schema = bool(campos) and not self.schema_unsupported
         body = {"model": self.model, "messages": self._messages(system, payload), "temperature": float(temperature),
-                "seed": int(seed), "stream": False, "response_format": {"type": "json_object"}}
+                "seed": int(seed), "stream": False,
+                "response_format": self._schema_format(campos) if use_schema else {"type": "json_object"}}
         started = time.monotonic()
         try:
-            reply = self._http("POST", "/chat/completions", body)
-            choices = reply.get("choices")
-            if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
-                raise AssistantError("resposta sem escolhas")
-            answer = parse_json_object((choices[0].get("message") or {}).get("content"))
+            answer, reply = self._request_chat(body)
         except AssistantError:
-            self._record(False)
-            raise
+            if not use_schema:
+                self._record(False)
+                raise
+            self.schema_unsupported = True
+            body["response_format"] = {"type": "json_object"}
+            try:
+                answer, reply = self._request_chat(body)
+            except AssistantError:
+                self._record(False)
+                raise
         self._record(True)
         usage = reply.get("usage") if isinstance(reply.get("usage"), dict) else {}
         return answer, {"model": str(reply.get("model") or self.model), "seconds": round(time.monotonic() - started, 3),
