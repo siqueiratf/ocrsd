@@ -34,8 +34,21 @@ pregnancy.dum_known pregnancy.reported_weeks pregnancy.estimation_method birth.o
 newborn.race newborn.weight_g newborn.apgar_1min newborn.apgar_5min newborn.length_tenths_cm newborn.head_circumference_cm
 mother.schooling mother.marital_status mother.race birth.presentation birth.labor_induced birth.attendant_role
 filling.responsible.role filling.responsible.document_type
+burial.municipality burial.place burial.uf certificate.clerk_name certificate.clerk_role certificate.issue_date
+certificate.issue_summary death_registration.declarant_name death_registration.matricula deceased.marital_status deceased.children_summary
+deceased.naturalidade.municipality deceased.naturalidade.uf deceased.parents_names deceased.spouse_name
+marriage.celebrant.name marriage.date marriage.property_regime marriage_registration.date marriage_registration.matricula
+newborn.naturalidade.uf office.address office.city_uf office.cns office.official_name parent1.grandparents_names
+parent1.name parent1.naturalidade.municipality parent1.naturalidade.uf parent2.grandparents_names parent2.name
+parent2.naturalidade.municipality parent2.naturalidade.uf spouse1.birth_date spouse1.cpf spouse1.marital_status_before
+spouse1.name spouse1.name_after spouse1.nationality spouse1.naturalidade.municipality spouse1.naturalidade.uf
+spouse1.parents_names spouse2.birth_date spouse2.cpf spouse2.marital_status_before spouse2.name spouse2.name_after
+spouse2.nationality spouse2.naturalidade.municipality spouse2.naturalidade.uf spouse2.parents_names
+spouse1.age spouse2.age
 """.split()
-ADDRESS_PREFIXES = ("birth.place", "mother.residence", "deceased.residence", "death.place", "registration.office")
+ADDRESS_PREFIXES = ("birth.place", "mother.residence", "deceased.residence", "death.place", "registration.office",
+                    "death_registration.office", "burial", "deceased.naturalidade", "spouse1.naturalidade",
+                    "spouse2.naturalidade", "parent1.naturalidade", "parent2.naturalidade")
 PROFILE_FIELDS = {"municipality": "city", "uf": "uf", "ibge": "ibge", "cep": "cep", "street": "street", "neighborhood": "neighborhood"}
 
 
@@ -91,7 +104,7 @@ class RegistryTests(unittest.TestCase):
             self.assertIn(field.entity, GENERATORS)
             self.assertTrue(field.label and field.description and field.group and field.contexts and field.synonyms)
             self.assertTrue(set(field.depends_on) <= set(REGISTRY), key)
-            self.assertTrue(set(field.contexts) <= {"dnv", "certidao_nascimento", "declaracao_obito"})
+            self.assertTrue(set(field.contexts) <= {"dnv", "certidao_nascimento", "declaracao_obito", "certidao_casamento"})
             for synonym in field.synonyms:
                 stripped = "".join(c for c in unicodedata.normalize("NFKD", synonym) if not unicodedata.combining(c)).lower()
                 self.assertEqual(synonym, stripped, key)

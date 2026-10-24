@@ -4,15 +4,19 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Callable, Mapping
 
+from src.field_rules import format_date
 from src.semantic.data import LOCATION_PROFILES, OCCUPATION_CODES
 from src.semantic.registry import REGISTRY
 
 ADDRESS_PARTS = {"municipality": "city", "uf": "uf", "ibge": "ibge", "cep": "cep"}
 ADDRESS_PREFIXES = ("birth.place", "mother.residence", "deceased.residence", "death.place", "registration.office",
-                    "death_registration.office")
+                    "death_registration.office", "burial", "deceased.naturalidade", "spouse1.naturalidade",
+                    "spouse2.naturalidade", "parent1.naturalidade", "parent2.naturalidade")
 SEXES = frozenset({"M", "F"})
 REFERENCE_END = date(2025, 12, 31)
-EVENT_DATES = ("birth.date", "filling.date", "registration.date", "death.date", "death_registration.date")
+EVENT_DATES = ("birth.date", "filling.date", "registration.date", "death.date", "death_registration.date",
+              "marriage.date", "marriage_registration.date", "certificate.issue_date")
+MANDATORY_SEPARATION_AGE = 70
 
 
 @dataclass(frozen=True)
@@ -201,6 +205,68 @@ def _summary(key: str, parts: tuple[str, ...], template: str) -> Constraint:
     return Constraint(f"resumo_coerente:{key}", (key, *parts), (REGISTRY[key].entity,), check)
 
 
+def _matricula_livro(key: str, date_key: str, livro: str, title: str) -> Constraint:
+    def check(values: Mapping[str, Any]) -> str | None:
+        matricula = values[key]
+        if len(matricula) != 32 or not matricula.isdigit():
+            return "a matrícula precisa ter 32 algarismos"
+        if matricula[10:14] != f"{values[date_key].year:04d}":
+            return f"o ano da matrícula ({matricula[10:14]}) difere do ano do registro ({values[date_key].year})"
+        if matricula[14] != livro:
+            return f"a matrícula de {title} usa o livro código {livro}"
+        return None
+    return Constraint(f"matricula_coerente:{key}", (key, date_key), (REGISTRY[key].entity,), check)
+
+
+def _spouse_minimum_age(number: int) -> Constraint:
+    person = f"spouse{number}"
+
+    def check(values: Mapping[str, Any]) -> str | None:
+        if completed_years(values[f"{person}.birth_date"], values["marriage.date"]) < 16:
+            return f"o {number}º cônjuge tem menos de 16 anos na data da celebração"
+        return None
+    return Constraint(f"idade_minima_casamento:{person}", (f"{person}.birth_date", "marriage.date"), ("marriage",), check)
+
+
+def _property_regime(values: Mapping[str, Any]) -> str | None:
+    ages = [completed_years(values[f"spouse{number}.birth_date"], values["marriage.date"]) for number in (1, 2)]
+    forced, regime = max(ages) >= MANDATORY_SEPARATION_AGE, values["marriage.property_regime"]
+    if forced and regime != "SEPARAÇÃO OBRIGATÓRIA DE BENS":
+        return f"o regime deveria ser SEPARAÇÃO OBRIGATÓRIA DE BENS (cônjuge com {max(ages)} anos na celebração)"
+    if not forced and regime == "SEPARAÇÃO OBRIGATÓRIA DE BENS":
+        return "o regime obrigatório só se aplica quando um dos cônjuges tem 70 anos ou mais na celebração"
+    return None
+
+
+def _issue_after(reg_key: str) -> Constraint:
+    return Constraint(f"emissao_apos_registro:{reg_key}", ("certificate.issue_date", reg_key), ("certificate",),
+                      lambda values: None if values["certificate.issue_date"] >= values[reg_key]
+                      else f"a emissão da certidão é anterior ao registro ({reg_key})")
+
+
+def _office_address_coherent(values: Mapping[str, Any]) -> str | None:
+    if not values["office.address"].endswith(values["office.city_uf"]):
+        return "o endereço do ofício precisa terminar com office.city_uf"
+    return None
+
+
+def _issue_summary_coherent(values: Mapping[str, Any]) -> str | None:
+    expected = f"{values['office.city_uf']}, {format_date(values['certificate.issue_date'], 'EXTENSO_PALAVRAS')}"
+    return None if values["certificate.issue_summary"] == expected else f"certificate.issue_summary deveria ser “{expected}”"
+
+
+def _newborn_naturalidade_uf(values: Mapping[str, Any]) -> str | None:
+    expected = next((profile["uf"] for profile in LOCATION_PROFILES if profile["city"] == values["newborn.naturalidade"]), None)
+    return None if values["newborn.naturalidade.uf"] == expected else "a UF da naturalidade não corresponde ao município"
+
+
+def _deceased_spouse_name(values: Mapping[str, Any]) -> str | None:
+    married_like = values["deceased.marital_status"] in {"CASADO(A)", "VIÚVO(A)", "UNIÃO ESTÁVEL"}
+    if married_like != (values["deceased.spouse_name"] is not None):
+        return "o nome do cônjuge só existe quando o falecido era casado, em união estável ou viúvo"
+    return None
+
+
 CONSTRAINTS: tuple[Constraint, ...] = (
     Constraint("medidas_ao_nascer", ("newborn.apgar_1min", "newborn.apgar_5min", "newborn.weight_g",
                                       "newborn.length_tenths_cm", "newborn.head_circumference_cm"), ("newborn",),
@@ -268,6 +334,30 @@ CONSTRAINTS: tuple[Constraint, ...] = (
     _summary("birth.place.summary", ("birth.establishment.name", "birth.place.municipality", "birth.place.uf"), "{}, {} - {}"),
     _summary("registration.place.summary", ("registration.office.municipality", "registration.office.uf"), "{} - {}"),
     _summary("death_registration.place.summary", ("death_registration.office.municipality", "death_registration.office.uf"), "{} - {}"),
+    _summary("deceased.naturalidade", ("deceased.naturalidade.municipality", "deceased.naturalidade.uf"), "{} - {}"),
+    Constraint("naturalidade_do_recem_nascido_uf", ("newborn.naturalidade", "newborn.naturalidade.uf"), ("newborn",),
+               _newborn_naturalidade_uf),
+    Constraint("conjuge_do_falecido_coerente", ("deceased.marital_status", "deceased.spouse_name"), ("deceased",),
+               _deceased_spouse_name),
+    _spouse_minimum_age(1), _spouse_minimum_age(2),
+    Constraint("idade_do_1_conjuge_no_casamento", ("spouse1.birth_date", "spouse1.age", "marriage.date"), ("marriage",),
+               _age_rule("spouse1", "marriage.date", "1º cônjuge")),
+    Constraint("idade_do_2_conjuge_no_casamento", ("spouse2.birth_date", "spouse2.age", "marriage.date"), ("marriage",),
+               _age_rule("spouse2", "marriage.date", "2º cônjuge")),
+    Constraint("regime_de_bens_coerente", ("spouse1.birth_date", "spouse2.birth_date", "marriage.date",
+                                           "marriage.property_regime"), ("marriage",), _property_regime),
+    Constraint("genitores_distintos", ("parent1.name", "parent2.name"), ("parent1", "parent2"),
+               lambda values: None if values["parent1.name"] != values["parent2.name"]
+               else "os dois genitores não podem ser a mesma pessoa"),
+    _matricula_livro("marriage_registration.matricula", "marriage_registration.date", "2", "casamento"),
+    _matricula_livro("death_registration.matricula", "death_registration.date", "4", "óbito"),
+    Constraint("registro_de_casamento_apos_celebracao", ("marriage_registration.date", "marriage.date"), ("marriage_registration",),
+               lambda values: None if values["marriage_registration.date"] >= values["marriage.date"]
+               else "o registro do casamento é anterior à celebração"),
+    _issue_after("registration.date"), _issue_after("death_registration.date"), _issue_after("marriage_registration.date"),
+    Constraint("endereco_do_oficio_coerente", ("office.address", "office.city_uf"), ("office",), _office_address_coherent),
+    Constraint("resumo_de_emissao_coerente", ("certificate.issue_summary", "office.city_uf", "certificate.issue_date"),
+               ("certificate",), _issue_summary_coherent),
 )
 
 

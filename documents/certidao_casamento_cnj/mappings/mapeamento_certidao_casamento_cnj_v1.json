@@ -25,7 +25,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "spouse1.name_after"
     },
     {
       "field_id": "conjuge1_cpf",
@@ -42,7 +42,7 @@
         "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$",
         "document_kind": "cpf"
       },
-      "semantic": false
+      "semantic": "spouse1.cpf"
     },
     {
       "field_id": "conjuge2_nome_apos",
@@ -61,7 +61,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "spouse2.name_after"
     },
     {
       "field_id": "conjuge2_cpf",
@@ -78,7 +78,7 @@
         "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$",
         "document_kind": "cpf"
       },
-      "semantic": false
+      "semantic": "spouse2.cpf"
     },
     {
       "field_id": "matricula",
@@ -95,7 +95,7 @@
         "pattern": "^[0-9]{6}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}\\.[0-9]\\.[0-9]{5}\\.[0-9]{3}\\.[0-9]{7}-[0-9]{2}$",
         "mask": "######.##.##.####.#.#####.###.#######-##"
       },
-      "semantic": false
+      "semantic": "marriage_registration.matricula"
     },
     {
       "field_id": "conjuge1_nome_habilitacao",
@@ -114,7 +114,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "spouse1.name"
     },
     {
       "field_id": "conjuge1_dia_nasc",
@@ -132,7 +132,10 @@
         "max_value": 31,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "spouse1.birth_date",
+        "part": "day"
+      }
     },
     {
       "field_id": "conjuge1_mes_nasc",
@@ -150,7 +153,10 @@
         "max_value": 12,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "spouse1.birth_date",
+        "part": "month"
+      }
     },
     {
       "field_id": "conjuge1_ano_nasc",
@@ -168,7 +174,10 @@
         "max_value": 2100,
         "pattern": "^[0-9]{4}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "spouse1.birth_date",
+        "part": "year"
+      }
     },
     {
       "field_id": "conjuge1_nacionalidade",
@@ -192,7 +201,7 @@
           "JAPONESA"
         ]
       },
-      "semantic": false
+      "semantic": "spouse1.nationality"
     },
     {
       "field_id": "conjuge1_estado_civil",
@@ -212,7 +221,7 @@
           "DIVORCIADO(A)"
         ]
       },
-      "semantic": false
+      "semantic": "spouse1.marital_status_before"
     },
     {
       "field_id": "conjuge1_municipio_naturalidade",
@@ -230,7 +239,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "spouse1.naturalidade.municipality"
     },
     {
       "field_id": "conjuge1_uf",
@@ -274,7 +283,7 @@
           "TO"
         ]
       },
-      "semantic": false
+      "semantic": "spouse1.naturalidade.uf"
     },
     {
       "field_id": "conjuge1_genitores",
@@ -293,7 +302,7 @@
         "language": "pt-BR",
         "max_length": 200
       },
-      "semantic": false
+      "semantic": "spouse1.parents_names"
     },
     {
       "field_id": "conjuge1_nome_passou_utilizar",
@@ -313,7 +322,7 @@
         "language": "pt-BR",
         "blank_probability": 0.3
       },
-      "semantic": false
+      "semantic": "spouse1.name_after"
     },
     {
       "field_id": "conjuge2_nome_habilitacao",
@@ -332,7 +341,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "spouse2.name"
     },
     {
       "field_id": "conjuge2_dia_nasc",
@@ -350,7 +359,10 @@
         "max_value": 31,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "spouse2.birth_date",
+        "part": "day"
+      }
     },
     {
       "field_id": "conjuge2_mes_nasc",
@@ -368,7 +380,10 @@
         "max_value": 12,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "spouse2.birth_date",
+        "part": "month"
+      }
     },
     {
       "field_id": "conjuge2_ano_nasc",
@@ -386,7 +401,10 @@
         "max_value": 2100,
         "pattern": "^[0-9]{4}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "spouse2.birth_date",
+        "part": "year"
+      }
     },
     {
       "field_id": "conjuge2_nacionalidade",
@@ -410,7 +428,7 @@
           "JAPONESA"
         ]
       },
-      "semantic": false
+      "semantic": "spouse2.nationality"
     },
     {
       "field_id": "conjuge2_estado_civil",
@@ -430,7 +448,7 @@
           "DIVORCIADO(A)"
         ]
       },
-      "semantic": false
+      "semantic": "spouse2.marital_status_before"
     },
     {
       "field_id": "conjuge2_municipio_naturalidade",
@@ -448,7 +466,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "spouse2.naturalidade.municipality"
     },
     {
       "field_id": "conjuge2_uf",
@@ -492,7 +510,7 @@
           "TO"
         ]
       },
-      "semantic": false
+      "semantic": "spouse2.naturalidade.uf"
     },
     {
       "field_id": "conjuge2_genitores",
@@ -511,7 +529,7 @@
         "language": "pt-BR",
         "max_length": 200
       },
-      "semantic": false
+      "semantic": "spouse2.parents_names"
     },
     {
       "field_id": "conjuge2_nome_passou_utilizar",
@@ -531,7 +549,7 @@
         "language": "pt-BR",
         "blank_probability": 0.3
       },
-      "semantic": false
+      "semantic": "spouse2.name_after"
     },
     {
       "field_id": "data_celebracao_extenso",
@@ -547,7 +565,10 @@
       "validation": {
         "format": "EXTENSO_PALAVRAS"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage.date",
+        "format": "DD de mês de AAAA"
+      }
     },
     {
       "field_id": "dia_celebracao",
@@ -565,7 +586,10 @@
         "max_value": 31,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage.date",
+        "part": "day"
+      }
     },
     {
       "field_id": "mes_celebracao",
@@ -583,7 +607,10 @@
         "max_value": 12,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage.date",
+        "part": "month"
+      }
     },
     {
       "field_id": "ano_celebracao",
@@ -601,7 +628,10 @@
         "max_value": 2100,
         "pattern": "^[0-9]{4}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage.date",
+        "part": "year"
+      }
     },
     {
       "field_id": "regime_bens",
@@ -623,7 +653,7 @@
           "PARTICIPAÇÃO FINAL NOS AQUESTOS"
         ]
       },
-      "semantic": false
+      "semantic": "marriage.property_regime"
     },
     {
       "field_id": "data_registro_extenso",
@@ -639,7 +669,10 @@
       "validation": {
         "format": "EXTENSO_PALAVRAS"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage_registration.date",
+        "format": "DD de mês de AAAA"
+      }
     },
     {
       "field_id": "dia_registro",
@@ -657,7 +690,10 @@
         "max_value": 31,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage_registration.date",
+        "part": "day"
+      }
     },
     {
       "field_id": "mes_registro",
@@ -675,7 +711,10 @@
         "max_value": 12,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage_registration.date",
+        "part": "month"
+      }
     },
     {
       "field_id": "ano_registro",
@@ -693,7 +732,10 @@
         "max_value": 2100,
         "pattern": "^[0-9]{4}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage_registration.date",
+        "part": "year"
+      }
     },
     {
       "field_id": "averbacoes",
@@ -749,7 +791,7 @@
       "validation": {
         "digit_count": 6
       },
-      "semantic": false
+      "semantic": "office.cns"
     },
     {
       "field_id": "oficial_nome",
@@ -768,7 +810,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "office.official_name"
     },
     {
       "field_id": "oficial_cidade_uf",
@@ -786,7 +828,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "office.city_uf"
     },
     {
       "field_id": "oficial_endereco",
@@ -804,7 +846,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "office.address"
     },
     {
       "field_id": "data_emissao",
@@ -822,7 +864,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "certificate.issue_summary"
     },
     {
       "field_id": "nome_oficial_escrevente",
@@ -841,7 +883,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "certificate.clerk_name"
     },
     {
       "field_id": "cargo",
@@ -862,7 +904,7 @@
           "ESCREVENTE SUBSTITUTO"
         ]
       },
-      "semantic": false
+      "semantic": "certificate.clerk_role"
     }
   ]
 }

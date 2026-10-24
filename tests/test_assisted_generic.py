@@ -220,10 +220,11 @@ class AssistedRecordsGenericTests(unittest.TestCase):
             factory = AssistedRecords(assistant, fields=fields, dpi=300)
             generate_dataset(_template(root), _mapping(root, fields, "certidao_nascimento"), {f["field_id"] for f in fields},
                              root / "out", 1, seed=3, record_factory=factory)
-            known = assistant.calls[0]["ja_definidos"]
-            self.assertEqual(set(known), {"nome", "dia"})
+            generic_call = next(call for call in assistant.calls
+                                if [campo["chave"] for campo in call["campos"]] == ["observacao"])
+            known = generic_call["ja_definidos"]
+            self.assertTrue({"nome", "dia"} <= set(known))
             self.assertRegex(known["dia"], r"^\d{2}/\d{2}/\d{4}$")
-            self.assertEqual([campo["chave"] for campo in assistant.calls[0]["campos"]], ["observacao"])
 
     def test_invalid_value_triggers_correction_then_deterministic_fallback(self):
         def always_invalid_age(payload):

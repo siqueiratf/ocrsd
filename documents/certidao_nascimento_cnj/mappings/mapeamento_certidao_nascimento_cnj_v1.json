@@ -219,7 +219,7 @@
           "TO"
         ]
       },
-      "semantic": false
+      "semantic": "newborn.naturalidade.uf"
     },
     {
       "field_id": "local_nascimento",
@@ -337,7 +337,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "parent1.name"
     },
     {
       "field_id": "genitor1_municipio",
@@ -355,7 +355,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "parent1.naturalidade.municipality"
     },
     {
       "field_id": "genitor1_uf",
@@ -399,7 +399,7 @@
           "TO"
         ]
       },
-      "semantic": false
+      "semantic": "parent1.naturalidade.uf"
     },
     {
       "field_id": "avos1",
@@ -418,7 +418,7 @@
         "language": "pt-BR",
         "max_length": 200
       },
-      "semantic": false
+      "semantic": "parent1.grandparents_names"
     },
     {
       "field_id": "genitor2_nome",
@@ -438,7 +438,7 @@
         "language": "pt-BR",
         "blank_probability": 0.2
       },
-      "semantic": false
+      "semantic": "parent2.name"
     },
     {
       "field_id": "genitor2_municipio",
@@ -457,7 +457,7 @@
         "language": "pt-BR",
         "blank_probability": 0.2
       },
-      "semantic": false
+      "semantic": "parent2.naturalidade.municipality"
     },
     {
       "field_id": "genitor2_uf",
@@ -502,7 +502,7 @@
         ],
         "blank_probability": 0.2
       },
-      "semantic": false
+      "semantic": "parent2.naturalidade.uf"
     },
     {
       "field_id": "avos2",
@@ -522,7 +522,7 @@
         "max_length": 200,
         "blank_probability": 0.3
       },
-      "semantic": false
+      "semantic": "parent2.grandparents_names"
     },
     {
       "field_id": "gemeo",
@@ -633,7 +633,7 @@
       "validation": {
         "digit_count": 6
       },
-      "semantic": false
+      "semantic": "office.cns"
     },
     {
       "field_id": "oficial_nome",
@@ -652,7 +652,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "office.official_name"
     },
     {
       "field_id": "oficial_cidade_uf",
@@ -670,7 +670,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "office.city_uf"
     },
     {
       "field_id": "oficial_endereco",
@@ -688,7 +688,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "office.address"
     },
     {
       "field_id": "data_emissao",
@@ -706,7 +706,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "certificate.issue_summary"
     },
     {
       "field_id": "nome_oficial_escrevente",
@@ -725,7 +725,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "certificate.clerk_name"
     },
     {
       "field_id": "cargo",
@@ -746,7 +746,7 @@
           "ESCREVENTE SUBSTITUTO"
         ]
       },
-      "semantic": false
+      "semantic": "certificate.clerk_role"
     }
   ]
 }

@@ -42,7 +42,7 @@
         "pattern": "^[0-9]{6}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}\\.[0-9]\\.[0-9]{5}\\.[0-9]{3}\\.[0-9]{7}-[0-9]{2}$",
         "mask": "######.##.##.####.#.#####.###.#######-##"
       },
-      "semantic": false
+      "semantic": "marriage_registration.matricula"
     },
     {
       "field_id": "filiacao",
@@ -77,7 +77,10 @@
       "validation": {
         "format": "EXTENSO_PALAVRAS"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage.date",
+        "format": "DD de mês de AAAA"
+      }
     },
     {
       "field_id": "dia_celebracao",
@@ -95,7 +98,10 @@
         "max_value": 31,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage.date",
+        "part": "day"
+      }
     },
     {
       "field_id": "mes_celebracao",
@@ -113,7 +119,10 @@
         "max_value": 12,
         "pattern": "^[0-9]{1,2}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage.date",
+        "part": "month"
+      }
     },
     {
       "field_id": "ano_celebracao",
@@ -131,7 +140,10 @@
         "max_value": 2100,
         "pattern": "^[0-9]{4}$"
       },
-      "semantic": false
+      "semantic": {
+        "key": "marriage.date",
+        "part": "year"
+      }
     },
     {
       "field_id": "presidente_celebracao",
@@ -150,7 +162,7 @@
         "portuguese_rules": true,
         "language": "pt-BR"
       },
-      "semantic": false
+      "semantic": "marriage.celebrant.name"
     },
     {
       "field_id": "regime_bens",
@@ -172,7 +184,7 @@
           "PARTICIPAÇÃO FINAL NOS AQUESTOS"
         ]
       },
-      "semantic": false
+      "semantic": "marriage.property_regime"
     },
     {
       "field_id": "documentos_apresentados",

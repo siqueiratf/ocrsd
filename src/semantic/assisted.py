@@ -105,6 +105,33 @@ SLOTS: dict[str, tuple[Slot, ...]] = {
         Slot("deceased.residence.municipality", "município de residência da pessoa falecida", CITIES),
         Slot("death.place.municipality", "município onde ocorreu o óbito", CITIES),
         Slot("certifier.name", "nome completo do médico que atesta o óbito"),
+        Slot("death_registration.declarant_name", "nome completo de quem declarou o óbito"),
+    ),
+    "certidao_nascimento": (
+        Slot("newborn.name", "nome completo da pessoa registrada"),
+        Slot("mother.name", "nome completo da mãe"),
+        Slot("father.name", "nome completo do pai"),
+        Slot("newborn.naturalidade", "município da naturalidade da pessoa registrada", CITIES),
+    ),
+    "certidao_casamento": (
+        Slot("spouse1.name", "nome completo do primeiro cônjuge no momento da habilitação"),
+        Slot("spouse2.name", "nome completo do segundo cônjuge no momento da habilitação"),
+        Slot("spouse1.age", "idade do primeiro cônjuge em anos completos na celebração", low=16, high=95),
+        Slot("spouse2.age", "idade do segundo cônjuge em anos completos na celebração", low=16, high=95),
+        Slot("spouse1.nationality", "nacionalidade do primeiro cônjuge",
+             ("BRASILEIRA", "PORTUGUESA", "ITALIANA", "ESPANHOLA", "ARGENTINA", "ANGOLANA", "JAPONESA")),
+        Slot("spouse2.nationality", "nacionalidade do segundo cônjuge",
+             ("BRASILEIRA", "PORTUGUESA", "ITALIANA", "ESPANHOLA", "ARGENTINA", "ANGOLANA", "JAPONESA")),
+        Slot("spouse1.marital_status_before", "estado civil do primeiro cônjuge antes do casamento",
+             ("SOLTEIRO(A)", "DIVORCIADO(A)", "VIÚVO(A)")),
+        Slot("spouse2.marital_status_before", "estado civil do segundo cônjuge antes do casamento",
+             ("SOLTEIRO(A)", "DIVORCIADO(A)", "VIÚVO(A)")),
+        Slot("spouse1.naturalidade.municipality", "município da naturalidade do primeiro cônjuge", CITIES),
+        Slot("spouse2.naturalidade.municipality", "município da naturalidade do segundo cônjuge", CITIES),
+        Slot("marriage.property_regime", "regime de bens do casamento",
+             ("COMUNHÃO PARCIAL DE BENS", "COMUNHÃO UNIVERSAL DE BENS", "SEPARAÇÃO TOTAL DE BENS",
+              "SEPARAÇÃO OBRIGATÓRIA DE BENS", "PARTICIPAÇÃO FINAL NOS AQUESTOS")),
+        Slot("marriage.celebrant.name", "nome completo de quem presidiu a celebração"),
     ),
 }
 SCENARIOS: dict[str, tuple[tuple[str, float], ...]] = {
@@ -112,6 +139,9 @@ SCENARIOS: dict[str, tuple[tuple[str, float], ...]] = {
             ("família de cidade grande", 2), ("parto em município diferente da residência", 1)),
     "declaracao_obito": (("pessoa idosa", 6), ("adulto entre 30 e 59 anos", 3), ("adulto jovem", 1), ("criança", 0.3),
                          ("óbito fora do município de residência", 1)),
+    "certidao_casamento": (("casal jovem", 4), ("segundo casamento de pessoa divorciada", 2),
+                           ("casal com mais de 70 anos", 1), ("casamento civil em cidade do interior", 2),
+                           ("cenário comum", 3)),
 }
 GENERIC_SCENARIOS: tuple[tuple[str, float], ...] = (
     ("pessoa jovem", 2), ("pessoa idosa", 2), ("família em capital", 2), ("família no interior", 2), ("cenário comum", 2),

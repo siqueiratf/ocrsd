@@ -8,9 +8,10 @@ KINDS = frozenset({
     "matricula", "document_number", "issuer", "street", "house_number", "complement", "neighborhood", "occupation", "text",
     "boolean",
 })
-CONTEXTS = ("dnv", "certidao_nascimento", "declaracao_obito")
-DNV, CERT, DO = ("dnv",), ("certidao_nascimento",), ("declaracao_obito",)
+CONTEXTS = ("dnv", "certidao_nascimento", "declaracao_obito", "certidao_casamento")
+DNV, CERT, DO, CASAMENTO = ("dnv",), ("certidao_nascimento",), ("declaracao_obito",), ("certidao_casamento",)
 BIRTH_DOCS = DNV + CERT
+ALL_CERTS = CERT + DO + CASAMENTO
 
 
 @dataclass(frozen=True)
@@ -282,6 +283,181 @@ FIELDS.extend([
     _field("mother.occupation_cbo", "CBO da ocupação da mãe", "document_number", "Mãe",
            "Código CBO apenas quando a ocupação tem correspondência documentada; vazio nos demais casos", DNV,
            ("codigo cbo", "cbo 2002"), ("mother.occupation",), optional=True),
+])
+
+
+def _spouse_fields(number: int) -> list[SemanticField]:
+    prefix, ordinal, tag = f"spouse{number}", ("primeiro", "segundo")[number - 1], str(number)
+    group = f"{number}º Cônjuge"
+    return [
+        _field(f"{prefix}.name", f"Nome do {ordinal} cônjuge (na habilitação)", "name", group,
+               f"Nome do {ordinal} cônjuge no momento da habilitação para o casamento", CASAMENTO,
+               (f"nome no momento da habilitacao {tag} conjuge", f"nome do {ordinal} conjuge",
+                f"conjuge{tag} nome habilitacao")),
+        _field(f"{prefix}.cpf", f"CPF do {ordinal} cônjuge", "cpf", group,
+               f"CPF sintético do {ordinal} cônjuge, com dígitos verificadores válidos", CASAMENTO,
+               (f"cpf {tag} conjuge", f"numero do cpf {tag} conjuge")),
+        _field(f"{prefix}.nationality", f"Nacionalidade do {ordinal} cônjuge", "text", group,
+               f"Nacionalidade do {ordinal} cônjuge, majoritariamente brasileira", CASAMENTO,
+               (f"nacionalidade {tag} conjuge",)),
+        _field(f"{prefix}.naturalidade.municipality", f"Município da naturalidade do {ordinal} cônjuge",
+               "municipality", group, f"Município de nascimento do {ordinal} cônjuge", CASAMENTO,
+               (f"municipio da naturalidade {tag} conjuge",)),
+        _field(f"{prefix}.naturalidade.uf", f"UF da naturalidade do {ordinal} cônjuge", "uf", group,
+               f"UF de nascimento do {ordinal} cônjuge, do mesmo município da naturalidade", CASAMENTO,
+               (f"uf {tag} conjuge",), (f"{prefix}.naturalidade.municipality",)),
+        _field(f"{prefix}.parents_names", f"Genitores do {ordinal} cônjuge", "text", group,
+               f"Nomes dos genitores do {ordinal} cônjuge, no formato “A e B”, com sobrenomes plausivelmente "
+               "compartilhados com o cônjuge", CASAMENTO,
+               (f"genitores {tag} conjuge", f"genitor(es) do {tag} conjuge", f"genitor(es) do {ordinal} conjuge")),
+    ]
+
+
+def _name_after_field(number: int) -> SemanticField:
+    prefix, ordinal, tag = f"spouse{number}", ("primeiro", "segundo")[number - 1], str(number)
+    return SemanticField(
+        key=f"{prefix}.name_after", label=f"Nome que o {ordinal} cônjuge passou a utilizar", kind="name",
+        entity="marriage", group=f"{number}º Cônjuge",
+        description=f"Nome adotado pelo {ordinal} cônjuge após o casamento; mantém, acrescenta ou retira o "
+                    "sobrenome do outro cônjuge, derivado dos nomes de ambos",
+        depends_on=("spouse1.name", "spouse2.name"), contexts=CASAMENTO,
+        synonyms=(f"nome que o a {tag} conjuge passou a utilizar", f"nome apos o casamento {tag} conjuge",
+                  f"nome que cada um dos conjuges passou a utilizar"))
+
+
+def _spouse_age_field(number: int) -> SemanticField:
+    prefix, ordinal, tag = f"spouse{number}", ("primeiro", "segundo")[number - 1], str(number)
+    return SemanticField(
+        key=f"{prefix}.age", label=f"Idade do {ordinal} cônjuge na celebração", kind="integer",
+        entity="marriage", group=f"{number}º Cônjuge",
+        description=f"Idade do {ordinal} cônjuge em anos completos na data da celebração do casamento (16 anos ou "
+                    "mais, geralmente 18 anos ou mais)",
+        depends_on=(f"{prefix}.birth_date", "marriage.date"), contexts=CASAMENTO,
+        synonyms=(f"idade {tag} conjuge", f"idade do {ordinal} conjuge na celebracao"))
+
+
+def _spouse_birth_date_field(number: int) -> SemanticField:
+    prefix, ordinal, tag = f"spouse{number}", ("primeiro", "segundo")[number - 1], str(number)
+    return SemanticField(
+        key=f"{prefix}.birth_date", label=f"Data de nascimento do {ordinal} cônjuge", kind="date",
+        entity="marriage", group=f"{number}º Cônjuge",
+        description=f"Data de nascimento do {ordinal} cônjuge, coerente com a idade na celebração",
+        depends_on=(f"{prefix}.age", "marriage.date"), contexts=CASAMENTO,
+        synonyms=(f"data de nascimento {tag} conjuge", f"nascimento {tag} conjuge"))
+
+
+def _spouse_marital_status_field(number: int) -> SemanticField:
+    prefix, ordinal, tag = f"spouse{number}", ("primeiro", "segundo")[number - 1], str(number)
+    return SemanticField(
+        key=f"{prefix}.marital_status_before", label=f"Estado civil do {ordinal} cônjuge antes do casamento",
+        kind="text", entity="marriage", group=f"{number}º Cônjuge",
+        description=f"Estado civil do {ordinal} cônjuge antes do casamento, coerente com a idade", contexts=CASAMENTO,
+        depends_on=(f"{prefix}.age",),
+        synonyms=(f"estado civil {tag} conjuge", f"estado civil {tag} conjuge antes do casamento"))
+
+
+FIELDS.extend([
+    *_spouse_fields(1), *_spouse_fields(2),
+    _name_after_field(1), _name_after_field(2),
+    _spouse_age_field(1), _spouse_age_field(2),
+    _spouse_birth_date_field(1), _spouse_birth_date_field(2),
+    _spouse_marital_status_field(1), _spouse_marital_status_field(2),
+    _field("marriage.date", "Data da celebração do casamento", "date", "Casamento",
+           "Data em que o casamento foi celebrado; ambos os cônjuges com 16 anos ou mais, geralmente 18 anos ou mais",
+           CASAMENTO, ("data da celebracao do casamento", "data da celebracao", "celebracao do casamento")),
+    _field("marriage.property_regime", "Regime de bens do casamento", "text", "Casamento",
+           "Regime de bens adotado; comunhão parcial é o mais frequente; separação obrigatória é exigida quando "
+           "um dos cônjuges tem 70 anos ou mais na celebração", CASAMENTO,
+           ("regime de bens", "regime de bens do casamento")),
+    _field("marriage.celebrant.name", "Nome de quem presidiu a celebração", "name", "Casamento",
+           "Nome da autoridade que presidiu a celebração do casamento", CASAMENTO,
+           ("nome do presidente da celebracao", "presidente da celebracao", "quem presidiu a celebracao")),
+    _field("marriage_registration.date", "Data do registro do casamento", "date", "Registro do casamento",
+           "Data do registro civil do casamento, igual ou posterior à celebração", CASAMENTO,
+           ("data de registro do casamento", "data do registro", "data do registro civil"), ("marriage.date",)),
+    _field("marriage_registration.matricula", "Matrícula do casamento", "matricula", "Registro do casamento",
+           "Matrícula sintética de 32 algarismos no leiaute do registro civil, livro B (casamento)", CASAMENTO,
+           ("matricula",), ("marriage_registration.date",)),
+    _field("office.cns", "CNS do ofício", "document_number", "Cartório",
+           "Número do CNS (Cadastro Nacional de Serventias) do ofício de registro civil, com 6 algarismos",
+           ALL_CERTS, ("cns do oficio", "cns", "cadastro nacional de serventias")),
+    _field("office.official_name", "Nome do oficial titular", "name", "Cartório",
+           "Nome do oficial titular do registro civil", ALL_CERTS, ("nome do oficial", "oficial titular")),
+    _field("office.city_uf", "Cidade e UF do ofício", "text", "Cartório",
+           "Texto “Município - UF” do ofício de registro civil, coerente com o registro do contexto", ALL_CERTS,
+           ("cidade uf", "cidade e uf do oficio")),
+    _field("office.address", "Endereço do ofício", "text", "Cartório",
+           "Endereço do ofício de registro civil (logradouro, número, CEP, município e UF)", ALL_CERTS,
+           ("endereco do oficio", "endereco")),
+    _field("certificate.issue_date", "Data de emissão da certidão", "date", "Certidão",
+           "Data de emissão da certidão, posterior ou igual ao registro do contexto e anterior à data de referência",
+           ALL_CERTS, ("data de emissao", "data de emissao da certidao")),
+    _field("certificate.clerk_name", "Nome de quem assina a certidão", "name", "Certidão",
+           "Nome do oficial ou escrevente que assina a certidão", ALL_CERTS,
+           ("nome do oficial escrevente", "nome de quem assina")),
+    _field("certificate.clerk_role", "Cargo de quem assina a certidão", "text", "Certidão",
+           "Cargo de quem assina a certidão", ALL_CERTS, ("cargo",)),
+    _field("certificate.issue_summary", "Local e data de emissão", "text", "Certidão",
+           "Texto “Município - UF, DD de mês de AAAA” coerente com office.city_uf e certificate.issue_date",
+           ALL_CERTS, ("local e data de emissao", "municipio uf e data de emissao"),
+           ("office.city_uf", "certificate.issue_date")),
+    _field("deceased.spouse_name", "Nome do cônjuge do falecido", "name", "Falecido",
+           "Nome do último cônjuge ou convivente; vazio quando o falecido não era casado nem viúvo", DO,
+           ("nome do ultimo conjuge", "nome do conjuge ou convivente"), ("deceased.marital_status",), True),
+    _field("deceased.children_summary", "Existência de filhos", "text", "Falecido",
+           "“Não” ou a relação de nomes e idades dos filhos; sempre “Não” para menores de 16 anos", DO,
+           ("existencia de filhos",)),
+    _field("deceased.marital_status", "Estado civil do falecido", "text", "Falecido",
+           "Estado civil da pessoa falecida", DO, ("estado civil", "estado civil do falecido")),
+    _field("deceased.naturalidade.municipality", "Município da naturalidade do falecido", "municipality", "Falecido",
+           "Município de nascimento da pessoa falecida, coerente com deceased.naturalidade", DO,
+           ("municipio da naturalidade",)),
+    _field("deceased.naturalidade.uf", "UF da naturalidade do falecido", "uf", "Falecido",
+           "UF de nascimento da pessoa falecida, do mesmo município da naturalidade", DO,
+           ("uf da naturalidade", "uf naturalidade"), ("deceased.naturalidade.municipality",)),
+    _field("deceased.parents_names", "Genitores do falecido", "text", "Falecido",
+           "Nomes da mãe e do pai do falecido, no formato “mãe; pai”", DO,
+           ("nome do a s genitor es", "genitores do falecido"), ("deceased.mother_name", "deceased.father_name")),
+    _field("burial.place", "Local de sepultamento", "text", "Sepultamento",
+           "Local de sepultamento ou cremação", DO, ("local de sepultamento", "local de sepultamento cremacao")),
+    _field("burial.municipality", "Município do sepultamento", "municipality", "Sepultamento",
+           "Município do sepultamento ou cremação, geralmente o do óbito ou da residência", DO,
+           ("municipio do sepultamento", "municipio sepultamento")),
+    _field("burial.uf", "UF do sepultamento", "uf", "Sepultamento",
+           "UF do sepultamento ou cremação, do mesmo município", DO,
+           ("uf do sepultamento", "uf sepultamento"), ("burial.municipality",)),
+    _field("death_registration.declarant_name", "Nome do declarante do óbito", "name", "Registro do óbito",
+           "Nome de quem declarou o óbito", DO, ("nome do declarante", "declarante do obito")),
+    _field("death_registration.matricula", "Matrícula do óbito", "matricula", "Registro do óbito",
+           "Matrícula sintética de 32 algarismos no leiaute do registro civil, livro C (óbito)", DO,
+           ("matricula",), ("death_registration.date",)),
+    _field("parent1.name", "Nome do(a) primeiro(a) genitor(a)", "name", "Genitor 1",
+           "Nome do primeiro genitor da pessoa registrada; mãe ou pai, em ordem aleatória", CERT,
+           ("nome do a genitor a", "nome do primeiro genitor")),
+    _field("parent2.name", "Nome do(a) segundo(a) genitor(a)", "name", "Genitor 2",
+           "Nome do segundo genitor da pessoa registrada, quando existir", CERT,
+           ("nome do a segundo a genitor a", "nome do segundo genitor"), optional=True),
+    _field("parent1.naturalidade.municipality", "Município da naturalidade do(a) primeiro(a) genitor(a)",
+           "municipality", "Genitor 1", "Município de nascimento do primeiro genitor", CERT,
+           ("municipio de nascimento do a genitor a",)),
+    _field("parent1.naturalidade.uf", "UF da naturalidade do(a) primeiro(a) genitor(a)", "uf", "Genitor 1",
+           "UF de nascimento do primeiro genitor, do mesmo município", CERT,
+           ("uf do a genitor a",), ("parent1.naturalidade.municipality",)),
+    _field("parent2.naturalidade.municipality", "Município da naturalidade do(a) segundo(a) genitor(a)",
+           "municipality", "Genitor 2", "Município de nascimento do segundo genitor, quando existir", CERT,
+           ("municipio de nascimento do a segundo a genitor a",), optional=True),
+    _field("parent2.naturalidade.uf", "UF da naturalidade do(a) segundo(a) genitor(a)", "uf", "Genitor 2",
+           "UF de nascimento do segundo genitor, do mesmo município", CERT,
+           ("uf do a segundo a genitor a",), ("parent2.naturalidade.municipality",), optional=True),
+    _field("parent1.grandparents_names", "Avós da linha do(a) primeiro(a) genitor(a)", "text", "Genitor 1",
+           "Avós da linha do primeiro genitor, no formato “avó e avô”", CERT,
+           ("avo s respectivo s", "avos do primeiro genitor")),
+    _field("parent2.grandparents_names", "Avós da linha do(a) segundo(a) genitor(a)", "text", "Genitor 2",
+           "Avós da linha do segundo genitor, quando existir", CERT,
+           ("avo s respectivo s segundo genitor", "avos do segundo genitor"), optional=True),
+    _field("newborn.naturalidade.uf", "UF da naturalidade do recém-nascido", "uf", "Recém-nascido",
+           "UF da naturalidade do recém-nascido, do mesmo município de newborn.naturalidade", CERT,
+           ("uf da naturalidade", "uf naturalidade"), ("newborn.naturalidade",)),
 ])
 REGISTRY: dict[str, SemanticField] = {field.key: field for field in FIELDS}
 ENTITY_KEYS: dict[str, tuple[str, ...]] = {

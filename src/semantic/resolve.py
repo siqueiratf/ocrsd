@@ -139,6 +139,8 @@ def document_context(document: str | None) -> str | None:
         return "declaracao_obito"
     if "certidao" in text and "nascimento" in text:
         return "certidao_nascimento"
+    if "casamento" in text:
+        return "certidao_casamento"
     return text.replace(" ", "_")
 
 

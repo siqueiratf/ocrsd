@@ -7,7 +7,7 @@ import re
 from datetime import date, time, timedelta
 from typing import Any, Callable
 
-from src.field_rules import DNV_TEST_PREFIX, cpf
+from src.field_rules import DNV_TEST_PREFIX, cpf, format_date
 from src.semantic.constraints import REFERENCE_END, completed_years
 from src.semantic.data import (COMPLEMENTS, ESTABLISHMENT_NAMES, FEMALE_ASSOCIATED_FIRST_NAMES, ISSUERS, LOCATION_PROFILES,
                                MALE_ASSOCIATED_FIRST_NAMES, OCCUPATIONS, OCCUPATION_CODES, PROFILES_BY_IBGE, REGISTRY_OFFICE_NAMES, SURNAMES)
@@ -29,6 +29,8 @@ FATHER_AGE_WEIGHTS = _weights(12, 90, ((15, 0.05), (19, 1.5), (24, 6), (29, 9), 
                                        (59, 0.6), (69, 0.1), (90, 0.01)))
 DECEASED_AGES = range(0, 111)
 DECEASED_AGE_WEIGHTS = _weights(0, 110, ((0, 3), (14, 0.15), (29, 0.4), (49, 0.8), (64, 1.6), (79, 3), (94, 2.2), (110, 0.15)))
+SPOUSE_AGES = range(16, 96)
+SPOUSE_AGE_WEIGHTS = _weights(16, 95, ((19, 1), (24, 7), (29, 9), (34, 8), (44, 6), (59, 3), (74, 1.2), (95, 0.3)))
 WEEKS = range(22, 43)
 WEEK_WEIGHTS = _weights(22, 42, ((27, 0.3), (31, 0.8), (33, 1.5), (36, 4), (37, 10), (38, 22), (39, 28), (40, 20), (41, 8),
                                  (42, 1)))
@@ -225,7 +227,7 @@ def newborn(record, rng: random.Random) -> dict[str, Any]:
     length = max(350, min(600, int(rng.gauss(500 + (weeks - 39) * 9, 15))))
     head = max(25, min(40, round(rng.gauss(34 + (weeks - 39) * 0.4, 1.4))))
     apgar_1 = record.pick(rng, "newborn.apgar_1min", range(5, 11), (1, 2, 4, 13, 35, 45))
-    return {
+    values = {
         "newborn.anomaly_status": "Ignorado", "newborn.anomaly_description": None,
         "newborn.race": record.pick(rng, "newborn.race", ("Branca", "Preta", "Amarela", "Parda", "Indígena"), (38, 10, 1, 49, 2)),
         "newborn.weight_g": weight, "newborn.length_tenths_cm": length, "newborn.head_circumference_cm": head,
@@ -234,6 +236,9 @@ def newborn(record, rng: random.Random) -> dict[str, Any]:
         "newborn.sex": sex, "newborn.cpf": record.draw("newborn.cpf", rng, lambda: cpf_digits(rng)),
         "newborn.naturalidade": record.pick(rng, "newborn.naturalidade", cities, (60, 40)),
     }
+    values["newborn.naturalidade.uf"] = next(profile["uf"] for profile in LOCATION_PROFILES
+                                             if profile["city"] == values["newborn.naturalidade"])
+    return values
 
 
 def guardian(record, rng: random.Random) -> dict[str, Any]:
@@ -348,6 +353,14 @@ def death(record, rng: random.Random) -> dict[str, Any]:
     }
 
 
+def _DECEASED_MARITAL_WEIGHTS(age: int) -> tuple[tuple[str, ...], tuple[float, ...]]:
+    if age < 18:
+        return ("SOLTEIRO(A)",), (1,)
+    options = ("SOLTEIRO(A)", "CASADO(A)", "UNIÃO ESTÁVEL", "DIVORCIADO(A)", "SEPARADO(A) JUDICIALMENTE", "VIÚVO(A)")
+    weights = (max(1.0, 30 - age / 3), 35, 10, 10, 4, max(0.5, (age - 40) * 1.2))
+    return options, weights
+
+
 def deceased(record, rng: random.Random) -> dict[str, Any]:
     age, born = age_and_birth_date(record, rng, "deceased", record.value("death.date"), DECEASED_AGES, DECEASED_AGE_WEIGHTS)
     sex = record.pick(rng, "deceased.sex", ("M", "F"), (52, 48))
@@ -356,16 +369,36 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     residence = pick_profile(record, rng, "deceased.residence", favoring(profile_of(record, "death.place"), 0.7))
     birthplace = rng.choice(LOCATION_PROFILES)
     occupation = "Não se aplica" if age < 14 else record.pick(rng, "deceased.occupation", OCCUPATIONS)
-    return {
+    values = {
         "deceased.name": name, "deceased.sex": sex, "deceased.birth_date": born, "deceased.age": age,
         "deceased.cpf": record.draw("deceased.cpf", rng, lambda: cpf_digits(rng)),
         "deceased.naturalidade": f"{birthplace['city']} - {birthplace['uf']}",
+        "deceased.naturalidade.municipality": birthplace["city"], "deceased.naturalidade.uf": birthplace["uf"],
         "deceased.mother_name": record.draw("deceased.mother_name", rng, lambda: mother_name),
         "deceased.father_name": record.draw("deceased.father_name", rng, lambda: father_name),
+        "deceased.parents_names": f"{mother_name}; {father_name}",
         "deceased.occupation": occupation, "deceased.occupation_cbo": OCCUPATION_CODES.get(occupation),
         **address("deceased.residence", residence, house_number(record, rng, "deceased.residence.number"),
                   ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge")),
     }
+    marital_options, marital_weights = _DECEASED_MARITAL_WEIGHTS(age)
+    marital = record.pick(rng, "deceased.marital_status", marital_options, marital_weights)
+    married_like = marital in {"CASADO(A)", "VIÚVO(A)", "UNIÃO ESTÁVEL"}
+    spouse_sex = "F" if sex == "M" else "M"
+    values["deceased.marital_status"] = marital
+    values["deceased.spouse_name"] = (record.draw("deceased.spouse_name", rng, lambda: person_name(record, rng, spouse_sex))
+                                      if married_like else None)
+    values["deceased.children_summary"] = record.draw("deceased.children_summary", rng,
+                                                      lambda: _children_summary(record, rng, age, name))
+    return values
+
+
+def _children_summary(record, rng: random.Random, age: int, parent: str) -> str:
+    if age < 16 or rng.random() < 0.3:
+        return "Não"
+    ages = sorted((rng.randint(max(0, age - 50), age - 16) for _ in range(rng.choices((1, 2, 3), (4, 4, 2))[0])), reverse=True)
+    return "; ".join(f"{person_name(record, rng, rng.choice(('F', 'M')), [surnames(rng)[0], parent.split()[-1]])}, "
+                     f"{years} {'ano' if years == 1 else 'anos'}" for years in ages)
 
 
 def death_registration(record, rng: random.Random) -> dict[str, Any]:
@@ -375,13 +408,18 @@ def death_registration(record, rng: random.Random) -> dict[str, Any]:
                       [1 if index <= 15 else 0.3 if index <= 90 else 0.01 for index in range(len(span))])
     office = pick_profile(record, rng, "death_registration.office", favoring(profile_of(record, "death.place"), 0.8),
                           ("municipality", "uf"))
-    return {
+    values = {
         "death_registration.date": day,
         "death_registration.number": record.draw("death_registration.number", rng, lambda: str(rng.randint(1, 250000))),
         "death_registration.office.name": record.pick(rng, "death_registration.office.name", REGISTRY_OFFICE_NAMES),
         "death_registration.office.municipality": office["city"], "death_registration.office.uf": office["uf"],
         "death_registration.place.summary": f"{office['city']} - {office['uf']}",
     }
+    sex = rng.choice(("F", "M"))
+    values["death_registration.declarant_name"] = record.draw("death_registration.declarant_name", rng,
+                                                               lambda: person_name(record, rng, sex))
+    values["death_registration.matricula"] = build_matricula(rng, day.year, "4")
+    return values
 
 
 def certifier(record, rng: random.Random) -> dict[str, Any]:
@@ -391,8 +429,170 @@ def certifier(record, rng: random.Random) -> dict[str, Any]:
             "certifier.role": "1"}
 
 
+def build_matricula(rng: random.Random, year: int, livro: str) -> str:
+    term = f"{rng.randint(1, 250000):07d}"
+    return "".join((digits(rng, 6), "01", "55", f"{year:04d}", livro, f"{rng.randint(1, 400):05d}",
+                    f"{rng.randint(1, 300):03d}", term, digits(rng, 2)))
+
+
+def burial(record, rng: random.Random) -> dict[str, Any]:
+    profile = pick_profile(record, rng, "burial", favoring(profile_of(record, "death.place"), 0.75), ("municipality", "uf"))
+    values = address("burial", profile, "", ("municipality", "uf"))
+    return {**values, "burial.place": f"Cemitério Municipal de {values['burial.municipality']}"}
+
+
+def _parent_order(rng: random.Random) -> tuple[str, str]:
+    order = ("mother", "father")
+    return order if rng.random() < 0.5 else order[::-1]
+
+
+def _parent_view(record, rng: random.Random, prefix: str, role: str) -> dict[str, Any]:
+    name = record.value(f"{role}.name")
+    profile = pick_profile(record, rng, f"{prefix}.naturalidade", parts=("municipality", "uf"))
+    naturalidade = address(f"{prefix}.naturalidade", profile, "", ("municipality", "uf"))
+    grandmother, grandfather = parent_names(record, rng, name)
+    return {f"{prefix}.name": name, f"{prefix}.grandparents_names": f"{grandmother} e {grandfather}", **naturalidade}
+
+
+def parent1(record, rng: random.Random) -> dict[str, Any]:
+    first, _ = record.link("parent_order", _parent_order)
+    return _parent_view(record, rng, "parent1", first)
+
+
+def parent2(record, rng: random.Random) -> dict[str, Any]:
+    _, second = record.link("parent_order", _parent_order)
+    return _parent_view(record, rng, "parent2", second)
+
+
+SPOUSE_NATIONALITIES = ("BRASILEIRA",)
+SPOUSE_NATIONALITY_WEIGHTS = (1,)
+MARITAL_STATUS_BEFORE = ("SOLTEIRO(A)", "DIVORCIADO(A)", "VIÚVO(A)")
+
+
+def _spouse(record, rng: random.Random, prefix: str) -> dict[str, Any]:
+    sex = rng.choice(("F", "M"))
+    name = record.draw(f"{prefix}.name", rng, lambda: person_name(record, rng, sex))
+    nationality = record.pick(rng, f"{prefix}.nationality", SPOUSE_NATIONALITIES, SPOUSE_NATIONALITY_WEIGHTS)
+    profile = pick_profile(record, rng, f"{prefix}.naturalidade", parts=("municipality", "uf"))
+    naturalidade = address(f"{prefix}.naturalidade", profile, "", ("municipality", "uf"))
+    mother_name, father_name = parent_names(record, rng, name)
+    return {
+        f"{prefix}.name": name,
+        f"{prefix}.cpf": record.draw(f"{prefix}.cpf", rng, lambda: cpf_digits(rng)),
+        f"{prefix}.nationality": nationality,
+        f"{prefix}.parents_names": f"{mother_name} e {father_name}",
+        **naturalidade,
+    }
+
+
+def spouse1(record, rng: random.Random) -> dict[str, Any]:
+    return _spouse(record, rng, "spouse1")
+
+
+def spouse2(record, rng: random.Random) -> dict[str, Any]:
+    return _spouse(record, rng, "spouse2")
+
+
+def _name_after(rng: random.Random, own: str, other: str) -> str:
+    own_first, own_family, other_last = own.split()[0], family_names(own), family_names(other)[-1]
+    choice = rng.choices(("keep", "add", "drop"), (55, 35, 10))[0]
+    if choice == "add" and other_last not in own_family:
+        family = own_family + [other_last]
+    elif choice == "drop" and len(own_family) > 1:
+        family = own_family[:-1]
+    else:
+        family = own_family
+    return " ".join([own_first, *family])
+
+
+PROPERTY_REGIMES = ("COMUNHÃO PARCIAL DE BENS", "COMUNHÃO UNIVERSAL DE BENS", "SEPARAÇÃO TOTAL DE BENS",
+                    "PARTICIPAÇÃO FINAL NOS AQUESTOS")
+PROPERTY_REGIME_WEIGHTS = (70, 14, 13, 3)
+MANDATORY_SEPARATION_AGE = 70
+
+
+def _spouse_marital_status(rng: random.Random, record, prefix: str, age: int) -> str:
+    weights = (96, 3, 1) if age < 24 else (70, 27, 3) if age < 45 else (45, 40, 15)
+    return record.pick(rng, f"{prefix}.marital_status_before", MARITAL_STATUS_BEFORE, weights)
+
+
+def marriage(record, rng: random.Random) -> dict[str, Any]:
+    day = record.pick(rng, "marriage.date", DateSpan(EVENT_START, EVENT_END))
+    age1, born1 = age_and_birth_date(record, rng, "spouse1", day, SPOUSE_AGES, SPOUSE_AGE_WEIGHTS)
+    age2, born2 = age_and_birth_date(record, rng, "spouse2", day, SPOUSE_AGES, SPOUSE_AGE_WEIGHTS)
+    if max(age1, age2) >= MANDATORY_SEPARATION_AGE:
+        regime = "SEPARAÇÃO OBRIGATÓRIA DE BENS"
+    else:
+        regime = record.pick(rng, "marriage.property_regime", PROPERTY_REGIMES, PROPERTY_REGIME_WEIGHTS)
+    sex = rng.choice(("F", "M"))
+    name1, name2 = record.value("spouse1.name"), record.value("spouse2.name")
+    return {
+        "marriage.date": day, "marriage.property_regime": regime,
+        "marriage.celebrant.name": record.draw("marriage.celebrant.name", rng, lambda: person_name(record, rng, sex)),
+        "spouse1.name_after": _name_after(rng, name1, name2), "spouse2.name_after": _name_after(rng, name2, name1),
+        "spouse1.age": age1, "spouse2.age": age2, "spouse1.birth_date": born1, "spouse2.birth_date": born2,
+        "spouse1.marital_status_before": _spouse_marital_status(rng, record, "spouse1", age1),
+        "spouse2.marital_status_before": _spouse_marital_status(rng, record, "spouse2", age2),
+    }
+
+
+def marriage_registration(record, rng: random.Random) -> dict[str, Any]:
+    start = record.value("marriage.date")
+    span = DateSpan(start, min(start + timedelta(days=60), EVENT_END))
+    day = record.pick(rng, "marriage_registration.date", span,
+                      [10 if index == 0 else 4 if index <= 5 else 0.3 for index in range(len(span))])
+    return {"marriage_registration.date": day, "marriage_registration.matricula": build_matricula(rng, day.year, "2")}
+
+
+CLERK_ROLES = ("OFICIAL DE REGISTRO CIVIL", "OFICIAL SUBSTITUTO", "ESCREVENTE AUTORIZADO", "ESCREVENTE SUBSTITUTO")
+CLERK_ROLE_WEIGHTS = (55, 15, 20, 10)
+OFFICE_REGISTRATION_DATE_KEYS = {"certidao_nascimento": "registration.date", "declaracao_obito": "death_registration.date",
+                                 "certidao_casamento": "marriage_registration.date"}
+
+
+def office(record, rng: random.Random) -> dict[str, Any]:
+    context = record.context
+    if context == "certidao_nascimento":
+        municipality, uf = record.value("registration.office.municipality"), record.value("registration.office.uf")
+    elif context == "declaracao_obito":
+        municipality, uf = record.value("death_registration.office.municipality"), record.value("death_registration.office.uf")
+    else:
+        chosen = rng.choice(LOCATION_PROFILES)
+        municipality, uf = chosen["city"], chosen["uf"]
+    profile = next(item for item in LOCATION_PROFILES if item["city"] == municipality)
+    number = house_number(record, rng, "office.address_number")
+    return {
+        "office.cns": record.draw("office.cns", rng, lambda: digits(rng, 6)),
+        "office.official_name": record.draw("office.official_name", rng, lambda: person_name(record, rng, rng.choice(("F", "M")))),
+        "office.city_uf": f"{municipality} - {uf}",
+        "office.address": (f"{profile['street']}, nº {number}, {profile['neighborhood']}, "
+                           f"CEP {profile['cep'][:5]}-{profile['cep'][5:]}, {municipality} - {uf}"),
+    }
+
+
+def certificate(record, rng: random.Random) -> dict[str, Any]:
+    context = record.context
+    if context in OFFICE_REGISTRATION_DATE_KEYS:
+        start = record.value(OFFICE_REGISTRATION_DATE_KEYS[context])
+    else:
+        start = max((record.value(key) for key in OFFICE_REGISTRATION_DATE_KEYS.values()), default=EVENT_START)
+    span = DateSpan(start, min(start + timedelta(days=5 * 365), EVENT_END))
+    day = record.pick(rng, "certificate.issue_date", span,
+                      [8 if index <= 30 else 2 if index <= 365 else 0.2 for index in range(len(span))])
+    sex = rng.choice(("F", "M"))
+    city_uf = record.value("office.city_uf")
+    return {
+        "certificate.issue_date": day,
+        "certificate.clerk_name": record.draw("certificate.clerk_name", rng, lambda: person_name(record, rng, sex)),
+        "certificate.clerk_role": record.pick(rng, "certificate.clerk_role", CLERK_ROLES, CLERK_ROLE_WEIGHTS),
+        "certificate.issue_summary": f"{city_uf}, {format_date(day, 'EXTENSO_PALAVRAS')}",
+    }
+
+
 GENERATORS: dict[str, Callable[[Any, random.Random], dict[str, Any]]] = {
     "newborn": newborn, "mother": mother, "father": father, "guardian": guardian, "parents": parents,
     "grandparents": grandparents, "birth": birth, "pregnancy": pregnancy, "filling": filling, "registration": registration,
     "deceased": deceased, "death": death, "certifier": certifier, "twin": twin, "death_registration": death_registration,
+    "burial": burial, "parent1": parent1, "parent2": parent2, "spouse1": spouse1, "spouse2": spouse2,
+    "marriage": marriage, "marriage_registration": marriage_registration, "office": office, "certificate": certificate,
 }

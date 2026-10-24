@@ -164,7 +164,7 @@ class ResolutionTests(unittest.TestCase):
         self.assertEqual(KEYS, frozenset(REGISTRY))
 
     def test_registration_date_parts_are_not_registration_numbers(self):
-        for document, key in (("certidao_obito", "death_registration.date"), ("certidao_casamento_cnj", "registration.date")):
+        for document, key in (("certidao_obito", "death_registration.date"), ("documento_generico_x", "registration.date")):
             for field_id, part in (("dia_registro", "day"), ("mes_registro", "month"), ("ano_registro", "year")):
                 with self.subTest(document=document, field_id=field_id):
                     field = {"field_id": field_id, "label": field_id.replace("_", " do "), "data_type": "integer"}
