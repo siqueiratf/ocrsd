@@ -1,0 +1,251 @@
+{
+  "template_id": "drei_certidao_inteiro_teor_empresarial",
+  "dpi": 300,
+  "page_size_px": [
+    2481,
+    3508
+  ],
+  "source_template": "documents/drei_certidao_inteiro_teor_empresarial/template.pdf",
+  "reference_manual": "IN DREI nº 81/2020 (consolidada). A Certidão de Inteiro Teor constitui-se de cópia reprográfica, certificada, de ato arquivado; a certificação é lavrada na última folha, mencionando número e data de arquivamento do original, bem como natureza, números e datas dos atos subsequentes arquivados, assinada pelo Secretário-Geral, que também rubrica as demais folhas (podendo a autenticidade ser atestada por chancela mecânica ou outro processo tecnológico). O Anexo VIII da IN DREI nº 81/2020 não traz um formulário fixo para este tipo de certidão (apenas para a Certidão Simplificada); o layout deste template foi composto a partir dessa definição legal (texto também usado, com a mesma citação de fundamento legal, em normas de procedimento de Juntas Comerciais estaduais, ex.: JUCEES, Norma de Procedimento GERAT nº 007), reaproveitando o cabeçalho/rodapé padrão (SINREM, Junta Comercial, protocolo, assinatura do Secretário-Geral) do modelo oficial de Certidão Simplificada do mesmo Anexo VIII.",
+  "fields": [
+    {
+      "field_id": "uf_junta_comercial",
+      "label": "UF da Junta Comercial",
+      "description": "Unidade da Federação à qual pertence a Junta Comercial emissora.",
+      "bbox": [
+        767,
+        242,
+        1058,
+        292
+      ],
+      "data_type": "uf",
+      "validation": {}
+    },
+    {
+      "field_id": "nome_empresarial",
+      "label": "Nome Empresarial",
+      "description": "Nome empresarial da sociedade ou do empresário titular do ato reproduzido.",
+      "bbox": [
+        253,
+        833,
+        2228,
+        900
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 80,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "cnpj",
+      "label": "CNPJ",
+      "description": "CNPJ da empresa, no formato 00.000.000/0000-00.",
+      "bbox": [
+        253,
+        975,
+        1224,
+        1042
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "12.345.678/0001-09",
+          "98.765.432/0001-00",
+          "45.678.912/0001-10"
+        ],
+        "pattern": "^[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}/[0-9]{4}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "nire",
+      "label": "NIRE",
+      "description": "Número de Identificação do Registro de Empresas na Junta Comercial.",
+      "bbox": [
+        1257,
+        975,
+        2228,
+        1042
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "35200012345",
+          "41200067890",
+          "29200054321"
+        ],
+        "pattern": "^[0-9]{11}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "tipo_ato_certificado",
+      "label": "Tipo do ato certificado",
+      "description": "Natureza do ato arquivado cujo inteiro teor é reproduzido nesta certidão.",
+      "bbox": [
+        253,
+        1258,
+        889,
+        1317
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CONTRATO SOCIAL",
+          "ALTERAÇÃO CONTRATUAL",
+          "ATA DE ASSEMBLEIA",
+          "ESTATUTO SOCIAL",
+          "REQUERIMENTO DE EMPRESÁRIO",
+          "DISTRATO SOCIAL"
+        ]
+      }
+    },
+    {
+      "field_id": "numero_arquivamento_original",
+      "label": "Número do arquivamento do ato",
+      "description": "Número do arquivamento, nesta Junta Comercial, do ato cujo teor é reproduzido.",
+      "bbox": [
+        922,
+        1258,
+        1558,
+        1317
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 9
+      }
+    },
+    {
+      "field_id": "data_arquivamento_original",
+      "label": "Data de arquivamento do ato",
+      "description": "Data em que o ato reproduzido foi arquivado nesta Junta Comercial.",
+      "bbox": [
+        1592,
+        1258,
+        2228,
+        1317
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "texto_integral_ato",
+      "label": "Texto integral do ato",
+      "description": "Transcrição (cópia fiel) do texto integral do ato arquivado reproduzido nesta certidão.",
+      "bbox": [
+        236,
+        1408,
+        2244,
+        1758
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 900,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "atos_subsequentes",
+      "label": "Atos subsequentes arquivados",
+      "description": "Natureza, números e datas de eventuais atos subsequentes arquivados sobre o mesmo ato certificado.",
+      "bbox": [
+        236,
+        1833,
+        2244,
+        1950
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 140,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.5
+      }
+    },
+    {
+      "field_id": "codigo_autenticacao",
+      "label": "Código de autenticação",
+      "description": "Código alfanumérico de autenticação/chancela mecânica desta certidão (sem função de verificação real).",
+      "bbox": [
+        657,
+        2183,
+        1407,
+        2238
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "A1B2C3D4E5",
+          "7F8G9H1J2K",
+          "M3N4P5Q6R7"
+        ],
+        "pattern": "^[A-Z0-9]{10}$"
+      }
+    },
+    {
+      "field_id": "numero_protocolo",
+      "label": "Número do protocolo",
+      "description": "Número do protocolo do pedido de certidão nesta Junta Comercial.",
+      "bbox": [
+        624,
+        2338,
+        1249,
+        2392
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 10
+      }
+    },
+    {
+      "field_id": "municipio_emissao",
+      "label": "Município de emissão",
+      "description": "Município da sede da Junta Comercial que expede a certidão.",
+      "bbox": [
+        494,
+        2467,
+        1119,
+        2521
+      ],
+      "data_type": "municipality",
+      "validation": {}
+    },
+    {
+      "field_id": "data_emissao",
+      "label": "Data de emissão",
+      "description": "Data de expedição da certidão, por extenso.",
+      "bbox": [
+        1153,
+        2467,
+        1778,
+        2521
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD de mês de AAAA"
+      }
+    },
+    {
+      "field_id": "nome_secretario_geral",
+      "label": "Nome do Secretário-Geral",
+      "description": "Nome completo do Secretário-Geral da Junta Comercial que assina e rubrica a certidão.",
+      "bbox": [
+        782,
+        2775,
+        1699,
+        2833
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    }
+  ]
+}

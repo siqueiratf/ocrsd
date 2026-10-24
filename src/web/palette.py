@@ -155,7 +155,7 @@ def custom_palette(field_types: list[dict]) -> dict:
         for item in field_types]}
 
 
-ICON_NAMES = sorted({*TYPE_ICONS.values(), "heading", "line", "frame", "sparkle"})
+ICON_NAMES = sorted({*TYPE_ICONS.values(), "heading", "line", "frame", "sparkle", "external"})
 EDITOR_OPTIONS = {"type_labels": TYPE_LABELS, "type_category": TYPE_CATEGORY, "type_icons": TYPE_ICONS, "uf_values": UF_VALUES,
                   "date_formats": list(DATE_FORMAT_LABELS.items()), "date_parts": [[key, label] for key, (label, _) in DATE_PARTS.items()],
                   "sex_formats": list(SEX_FORMATS.items()), "dnv_formats": list(DNV_FORMATS.items()), "dnv_prefix": DNV_TEST_PREFIX,

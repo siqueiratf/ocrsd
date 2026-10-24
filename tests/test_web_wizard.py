@@ -99,7 +99,7 @@ class WizardTests(unittest.TestCase):
         other = re.search(r'name="draft_id" value="([0-9a-f]+)"', second.text).group(1)
         self.assertNotEqual(self.draft, other)
         self.assertEqual(self.advance(1, document_type="dnv", mapping_id=self.mapping).status_code, 200)
-        self.assertIn("CERTIDAO NASCIMENTO", self.request("GET", f"/geracao?draft={other}&etapa=1").text)
+        self.assertIn("Certidão de Nascimento", self.request("GET", f"/geracao?draft={other}&etapa=1").text)
         fields = re.findall(r'name="fields" value="([^"]+)"', self.request("GET", f"/geracao?draft={self.draft}&etapa=2").text)
         self.assertEqual(self.advance(2, direction="back", fields=fields[:1]).status_code, 200)
         self.assertIn(f'name="fields" value="{fields[0]}" checked', self.request("GET", f"/geracao?draft={self.draft}&etapa=2").text)

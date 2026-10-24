@@ -1,0 +1,4 @@
+{
+  "active_mapping": "mapeamento_certidao_casamento_v1",
+  "source": "Arte vetorial do modelo de certidão de casamento já presente no repositório, agora com mapeamento de campos. Removido texto oculto residual ('Reis') e o número de matrícula de exemplo pré-impresso, para permitir o preenchimento sintético."
+}

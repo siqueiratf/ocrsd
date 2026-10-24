@@ -54,7 +54,8 @@ LABELS = {"name": "Nome", "count": "Quantidade de documentos", "seed": "Seed ale
           "model": "Modelo de escrita", "intensity": "Variação da escrita", "writer": "Identidade do escritor",
           "bias": "Regularidade", "color": "Cor", "width": "Espessura", "pressure": "Pressão", "dropout": "Falhas",
           "text_policy": "Caracteres não suportados", "label": "Nome do modelo", "description": "Descrição",
-          "expires_in_hours": "Validade do link", "generation_mode": "Modo de geração", "key": "Chave do documento"}
+          "expires_in_hours": "Validade do link", "generation_mode": "Modo de geração", "key": "Chave do documento",
+          "orgao": "Órgão", "documentacao": "Link da documentação", "categoria": "Categoria"}
 BLOCKED_FIELD = "Sem gerador validado"
 AI_FAILURE = "A geração assistida por IA falhou:"
 try:
@@ -291,6 +292,30 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             state["original_model_unavailable"] = True
         return state
 
+    def model_groups(types: list[dict], current: dict | None) -> list[dict]:
+        by_org: dict[str, dict] = {}
+        for item in types:
+            if not item["builtin"]:
+                continue
+            org = item["orgao"] or {"key": "outros", "sigla": "Outros", "nome": "Outros"}
+            group = by_org.setdefault(org["key"], {"key": org["key"], "sigla": org["sigla"], "nome": org["nome"], "docs": []})
+            group["docs"].append(item)
+        planned_counts: dict[str, int] = {}
+        for entry in catalog.catalog_data()["documentos"].values():
+            if entry.get("status") == "planejado":
+                planned_counts[entry.get("orgao")] = planned_counts.get(entry.get("orgao"), 0) + 1
+        ordered = sorted(by_org.values(), key=lambda group: group["nome"])
+        for group in ordered:
+            group["planned_count"] = planned_counts.get(group["key"], 0)
+        custom = [item for item in types if not item["builtin"]]
+        if custom:
+            ordered.append({"key": "meus_modelos", "sigla": "", "nome": "Meus modelos", "docs": custom, "planned_count": 0})
+        total = sum(len(group["docs"]) for group in ordered)
+        for index, group in enumerate(ordered):
+            selected_here = current is not None and any(item["id"] == current["id"] for item in group["docs"])
+            group["open"] = selected_here or (current is None and (total <= 12 or index == 0))
+        return ordered
+
     def wizard_context(owner_id: str, state: dict, identifier: str, step: int, error: str = "", assistant: dict | None = None) -> dict:
         owned = store.list_models(owner_id)
         published = [row for row in owned if row["status"] == "published"]
@@ -363,7 +388,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 error = exc.message
         return {"draft_id": identifier, "state": state, "wizard_step": step, "wizard_error": error,
                 "wizard_notice": " ".join(notices),
-                "types": types, "model_info": models, "current_type": current, "mapping": mapping,
+                "types": types, "model_groups": model_groups(types, current), "model_info": models, "current_type": current, "mapping": mapping,
                 "definition": definition, "fields": fields, "groups": groups, "styles": styles,
                 "selected_style": selected_style, "assistant": assistant, "selectable": [field for field in fields if not field["blocked"]],
                 "max_count": settings.max_count, "unpublished": unpublished}
@@ -626,21 +651,32 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         model = model_entry(owner_id, model_id)
         if model.builtin:
             raise ServiceError(404, "not_found", "Modelo não encontrado")
+        orgaos = sorted(({"key": key, **value} for key, value in catalog.catalog_data()["orgaos"].items()),
+                        key=lambda item: item.get("nome") or item["key"])
         return render(request, "partials/promote_dialog.html", model_id=model.id,
-                      key=safe_document_type_key(model.label), label=model.label, description=model.description)
+                      key=safe_document_type_key(model.label), label=model.label, description=model.description,
+                      orgaos=orgaos)
 
     @router.post("/modelos/{model_id}/salvar-padrao")
     async def promote(request: Request, model_id: Identifier, owner_id: Owner):
         form = await request.form()
         payload = validated(ModelPromote, {"key": text(form, "key"), "label": text(form, "label"),
-                                           "description": text(form, "description")})
-        promote_model(catalog, store, model_id, owner_id, payload.key, payload.label, payload.description)
+                                           "description": text(form, "description"), "orgao": text(form, "orgao"),
+                                           "documentacao": text(form, "documentacao"), "categoria": text(form, "categoria")})
+        promote_model(catalog, store, model_id, owner_id, payload.key, payload.label, payload.description,
+                     payload.orgao, payload.documentacao, payload.categoria)
         return Response(headers={"HX-Redirect": "/modelos"})
 
     @router.get("/modelos/{model_id}/previa.png")
     async def model_preview(model_id: Identifier, owner_id: Owner, largura: int = 1200):
         return Response(render_preview(catalog.document(model_id, owner_id).template, max(400, min(largura, 2600))),
                         media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+    @router.get("/modelos/{model_id}/template.pdf")
+    async def model_template(model_id: Identifier, owner_id: Owner):
+        model = model_entry(owner_id, model_id)
+        template = catalog.document(model_id, None if model.builtin else owner_id).template
+        return file_response(template, "application/pdf", f"{model.id}_template.pdf")
 
     @router.get("/modelos/{model_id}/editor")
     async def editor_page(request: Request, model_id: Identifier, owner_id: PageOwner, draft: str = ""):

@@ -6,6 +6,14 @@
     <label class="field">Chave<input name="key" required maxlength="100" pattern="[a-zA-Z0-9_-]+" value="{{ key }}" spellcheck="false"></label>
     <label class="field">Nome<input name="label" required maxlength="120" value="{{ label }}"></label>
     <label class="field">Descrição <span class="optional">opcional</span><textarea name="description" maxlength="500">{{ description }}</textarea></label>
+    <label class="field">Órgão
+      <select name="orgao" required>
+        <option value="" disabled selected>Selecione um órgão</option>
+        {% for item in orgaos %}<option value="{{ item.key }}">{{ item.sigla }} — {{ item.nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field">Link da documentação <span class="optional">opcional</span><input name="documentacao" type="url" maxlength="500" placeholder="https://..."></label>
+    <label class="field">Categoria <span class="optional">opcional</span><input name="categoria" maxlength="120"></label>
   </div>
   <footer class="dialog-foot">
     <button type="button" class="btn" data-fechar>Cancelar</button>

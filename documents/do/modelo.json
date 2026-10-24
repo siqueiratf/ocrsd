@@ -1,5 +1,3 @@
 {
-  "active_mapping": "mapeamento_do_v1",
-  "label": "Declaração de Óbito (DO)",
-  "description": "Reprodução do formulário no Apêndice A do manual do Ministério da Saúde (2022), preenchida com dados sintéticos para demonstração."
+  "active_mapping": "mapeamento_do_v1"
 }

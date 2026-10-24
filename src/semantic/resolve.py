@@ -233,6 +233,8 @@ def _key(role: str | None, attribute: str, text: str, document: str | None) -> s
 
 
 def resolve_field(field: dict, document: str | None = None) -> Binding | None:
+    if field.get("semantic") is False:
+        return None
     if field.get("semantic") not in (None, ""):
         return explicit_binding(field["semantic"])
     document = document_context(document)

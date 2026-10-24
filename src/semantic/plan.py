@@ -156,7 +156,7 @@ def _feasible(rules: tuple[Rule, ...], document: str | None) -> str | None:
 def _decide(encoded: str, document: str | None) -> Decision:
     field = json.loads(encoded)
     name = str(field.get("label") or field.get("description") or field.get("field_id") or "")
-    explicit = field.get("semantic") not in (None, "")
+    explicit = field.get("semantic") not in (None, "", False)
     try:
         binding = resolve_field(field, document)
     except ValueError as exc:

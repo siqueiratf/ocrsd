@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import json
 from pathlib import Path
@@ -8,6 +8,7 @@ import re
 
 
 DOCUMENTS_ROOT = Path(__file__).resolve().parent.parent / "documents"
+OUTROS_ORGAO = {"key": "outros", "sigla": "Outros", "nome": "Outros"}
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class DocumentType:
     mappings: tuple[Path, ...]
     presets: tuple[Path, ...]
     dataset: Path
+    catalog: dict = field(default_factory=dict)
 
     @property
     def metadata(self) -> dict:
@@ -29,14 +31,43 @@ class DocumentType:
         return data if isinstance(data, dict) else {}
 
     @property
+    def catalog_entry(self) -> dict:
+        entry = (self.catalog.get("documentos") or {}).get(self.key)
+        return entry if isinstance(entry, dict) else {}
+
+    @property
     def label(self) -> str:
+        label = self.catalog_entry.get("label")
+        if isinstance(label, str) and label.strip():
+            return label.strip()
         label = self.metadata.get("label")
         return label.strip() if isinstance(label, str) and label.strip() else self.key.replace("_", " ").upper()
 
     @property
     def description(self) -> str:
+        description = self.catalog_entry.get("description")
+        if isinstance(description, str) and description.strip():
+            return description.strip()
         description = self.metadata.get("description")
         return description.strip() if isinstance(description, str) else ""
+
+    @property
+    def orgao(self) -> dict:
+        key = self.catalog_entry.get("orgao")
+        entry = (self.catalog.get("orgaos") or {}).get(key) if isinstance(key, str) else None
+        if isinstance(entry, dict):
+            return {"key": key, "sigla": entry.get("sigla") or key, "nome": entry.get("nome") or key, "site": entry.get("site")}
+        return OUTROS_ORGAO
+
+    @property
+    def documentacao(self) -> str:
+        value = self.catalog_entry.get("documentacao")
+        return value.strip() if isinstance(value, str) else ""
+
+    @property
+    def categoria(self) -> str:
+        value = self.catalog_entry.get("categoria")
+        return value.strip() if isinstance(value, str) else ""
 
     @property
     def active_mapping(self) -> Path:
@@ -47,6 +78,9 @@ class DocumentType:
 def discover_document_types(root: Path = DOCUMENTS_ROOT) -> dict[str, DocumentType]:
     if not root.is_dir():
         return {}
+    from src.document_catalog import load_catalog
+
+    catalog = load_catalog(root)
     discovered: dict[str, DocumentType] = {}
     for folder in sorted(path for path in root.iterdir() if path.is_dir() and not path.name.startswith(".")):
         template = _template_for_folder(folder)
@@ -64,6 +98,7 @@ def discover_document_types(root: Path = DOCUMENTS_ROOT) -> dict[str, DocumentTy
             mappings=mappings,
             presets=tuple(sorted(presets_dir.glob("*.json"))),
             dataset=folder / "dataset",
+            catalog=catalog,
         )
     return discovered
 

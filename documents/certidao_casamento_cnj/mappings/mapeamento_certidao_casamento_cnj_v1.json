@@ -1,0 +1,868 @@
+{
+  "template_id": "certidao_casamento_cnj",
+  "dpi": 300,
+  "page_size_px": [
+    2481,
+    3355
+  ],
+  "source_template": "documents/certidao_casamento_cnj/template.pdf",
+  "reference_manual": "CNJ, Provimento n. 182, de 17 de setembro de 2024, Anexo V - Modelo de Certidão de Casamento (altera o Código Nacional de Normas da Corregedoria Nacional de Justiça - Provimento n. 149/2023). Fonte: https://www.stj.jus.br/internet_docs/biblioteca/clippinglegislacao/Provimento_182_2024_CNJ.pdf (página 6 do PDF de clipping). Modelo mais recente que documents/certidao_casamento (mantido inalterado), com campos de CPF e qualificação detalhada dos dois cônjuges. Recorte do anexo oficial (remoção do cabeçalho de publicação/DJe); valores de exemplo (zeros) pré-impressos nas áreas de resposta foram apagados e a marca d'água 'MODELO' foi clareada, para permitir o preenchimento sintético.",
+  "fields": [
+    {
+      "field_id": "conjuge1_nome_apos",
+      "label": "Nome que passou a utilizar após o casamento (1º cônjuge)",
+      "description": "Nome atual do primeiro cônjuge, após o casamento.",
+      "bbox": [
+        209,
+        618,
+        1506,
+        669
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_cpf",
+      "label": "Número do CPF (1º cônjuge)",
+      "description": "CPF do primeiro cônjuge, no formato 000.000.000-00.",
+      "bbox": [
+        1567,
+        618,
+        2243,
+        669
+      ],
+      "data_type": "document",
+      "validation": {
+        "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$",
+        "document_kind": "cpf"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_nome_apos",
+      "label": "Nome que passou a utilizar após o casamento (2º cônjuge)",
+      "description": "Nome atual do segundo cônjuge, após o casamento.",
+      "bbox": [
+        209,
+        709,
+        1506,
+        759
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_cpf",
+      "label": "Número do CPF (2º cônjuge)",
+      "description": "CPF do segundo cônjuge, no formato 000.000.000-00.",
+      "bbox": [
+        1567,
+        709,
+        2243,
+        759
+      ],
+      "data_type": "document",
+      "validation": {
+        "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$",
+        "document_kind": "cpf"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "matricula",
+      "label": "Matrícula",
+      "description": "Matrícula do registro civil no formato 000000.00.00.0000.0.00000.000.0000000-00.",
+      "bbox": [
+        730,
+        863,
+        1715,
+        911
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[0-9]{6}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}\\.[0-9]\\.[0-9]{5}\\.[0-9]{3}\\.[0-9]{7}-[0-9]{2}$",
+        "mask": "######.##.##.####.#.#####.###.#######-##"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_nome_habilitacao",
+      "label": "Nome no momento da habilitação (1º cônjuge)",
+      "description": "Nome do primeiro cônjuge no momento da habilitação para o casamento.",
+      "bbox": [
+        209,
+        964,
+        1506,
+        1015
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_dia_nasc",
+      "label": "Dia",
+      "description": "Dia numérico de nascimento do primeiro cônjuge.",
+      "bbox": [
+        1567,
+        985,
+        1742,
+        1015
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 31,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_mes_nasc",
+      "label": "Mês",
+      "description": "Mês numérico de nascimento do primeiro cônjuge.",
+      "bbox": [
+        1803,
+        985,
+        2008,
+        1015
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 12,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_ano_nasc",
+      "label": "Ano",
+      "description": "Ano numérico de nascimento do primeiro cônjuge.",
+      "bbox": [
+        2069,
+        985,
+        2243,
+        1015
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1900,
+        "max_value": 2100,
+        "pattern": "^[0-9]{4}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_nacionalidade",
+      "label": "Nacionalidade (1º cônjuge)",
+      "description": "Nacionalidade do primeiro cônjuge.",
+      "bbox": [
+        209,
+        1055,
+        649,
+        1105
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "BRASILEIRA",
+          "PORTUGUESA",
+          "ITALIANA",
+          "ESPANHOLA",
+          "ARGENTINA",
+          "ANGOLANA",
+          "JAPONESA"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_estado_civil",
+      "label": "Estado Civil (1º cônjuge, antes do casamento)",
+      "description": "Estado civil do primeiro cônjuge antes do casamento.",
+      "bbox": [
+        701,
+        1055,
+        1122,
+        1105
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "SOLTEIRO(A)",
+          "VIÚVO(A)",
+          "DIVORCIADO(A)"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_municipio_naturalidade",
+      "label": "Município da naturalidade (1º cônjuge)",
+      "description": "Município da naturalidade do primeiro cônjuge.",
+      "bbox": [
+        1183,
+        1055,
+        2008,
+        1105
+      ],
+      "data_type": "municipality",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_uf",
+      "label": "UF (1º cônjuge)",
+      "description": "UF da naturalidade do primeiro cônjuge.",
+      "bbox": [
+        2069,
+        1055,
+        2243,
+        1105
+      ],
+      "data_type": "uf",
+      "validation": {
+        "allowed_values": [
+          "AC",
+          "AL",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          "MA",
+          "MT",
+          "MS",
+          "MG",
+          "PA",
+          "PB",
+          "PR",
+          "PE",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SC",
+          "SP",
+          "SE",
+          "TO"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_genitores",
+      "label": "Genitor(es) do 1º cônjuge",
+      "description": "Nome dos genitores do primeiro cônjuge, separados por ;",
+      "bbox": [
+        209,
+        1145,
+        2243,
+        1196
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' ;-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "max_length": 200
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge1_nome_passou_utilizar",
+      "label": "Nome que o(a) 1º cônjuge passou a utilizar",
+      "description": "Nome que o primeiro cônjuge passou a utilizar após o casamento, quando houver alteração.",
+      "bbox": [
+        209,
+        1235,
+        2243,
+        1286
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.3
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_nome_habilitacao",
+      "label": "Nome no momento da habilitação (2º cônjuge)",
+      "description": "Nome do segundo cônjuge no momento da habilitação para o casamento.",
+      "bbox": [
+        209,
+        1361,
+        1506,
+        1412
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_dia_nasc",
+      "label": "Dia",
+      "description": "Dia numérico de nascimento do segundo cônjuge.",
+      "bbox": [
+        1567,
+        1382,
+        1742,
+        1412
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 31,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_mes_nasc",
+      "label": "Mês",
+      "description": "Mês numérico de nascimento do segundo cônjuge.",
+      "bbox": [
+        1803,
+        1382,
+        2008,
+        1412
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 12,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_ano_nasc",
+      "label": "Ano",
+      "description": "Ano numérico de nascimento do segundo cônjuge.",
+      "bbox": [
+        2069,
+        1382,
+        2243,
+        1412
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1900,
+        "max_value": 2100,
+        "pattern": "^[0-9]{4}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_nacionalidade",
+      "label": "Nacionalidade (2º cônjuge)",
+      "description": "Nacionalidade do segundo cônjuge.",
+      "bbox": [
+        209,
+        1451,
+        649,
+        1502
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "BRASILEIRA",
+          "PORTUGUESA",
+          "ITALIANA",
+          "ESPANHOLA",
+          "ARGENTINA",
+          "ANGOLANA",
+          "JAPONESA"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_estado_civil",
+      "label": "Estado Civil (2º cônjuge, antes do casamento)",
+      "description": "Estado civil do segundo cônjuge antes do casamento.",
+      "bbox": [
+        701,
+        1451,
+        1122,
+        1502
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "SOLTEIRO(A)",
+          "VIÚVO(A)",
+          "DIVORCIADO(A)"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_municipio_naturalidade",
+      "label": "Município da naturalidade (2º cônjuge)",
+      "description": "Município da naturalidade do segundo cônjuge.",
+      "bbox": [
+        1183,
+        1451,
+        2008,
+        1502
+      ],
+      "data_type": "municipality",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_uf",
+      "label": "UF (2º cônjuge)",
+      "description": "UF da naturalidade do segundo cônjuge.",
+      "bbox": [
+        2069,
+        1451,
+        2243,
+        1502
+      ],
+      "data_type": "uf",
+      "validation": {
+        "allowed_values": [
+          "AC",
+          "AL",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          "MA",
+          "MT",
+          "MS",
+          "MG",
+          "PA",
+          "PB",
+          "PR",
+          "PE",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SC",
+          "SP",
+          "SE",
+          "TO"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_genitores",
+      "label": "Genitor(es) do 2º cônjuge",
+      "description": "Nome dos genitores do segundo cônjuge, separados por ;",
+      "bbox": [
+        209,
+        1542,
+        2243,
+        1592
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' ;-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "max_length": 200
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "conjuge2_nome_passou_utilizar",
+      "label": "Nome que o(a) 2º cônjuge passou a utilizar",
+      "description": "Nome que o segundo cônjuge passou a utilizar após o casamento, quando houver alteração.",
+      "bbox": [
+        209,
+        1632,
+        2243,
+        1683
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.3
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "data_celebracao_extenso",
+      "label": "Data da celebração do casamento, por extenso",
+      "description": "Data da celebração do casamento, ou da conversão da união estável, escrita por extenso.",
+      "bbox": [
+        209,
+        1758,
+        1594,
+        1808
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "EXTENSO_PALAVRAS"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "dia_celebracao",
+      "label": "Dia",
+      "description": "Dia numérico da celebração.",
+      "bbox": [
+        1656,
+        1779,
+        1801,
+        1808
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 31,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "mes_celebracao",
+      "label": "Mês",
+      "description": "Mês numérico da celebração.",
+      "bbox": [
+        1863,
+        1779,
+        2037,
+        1808
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 12,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "ano_celebracao",
+      "label": "Ano",
+      "description": "Ano numérico da celebração.",
+      "bbox": [
+        2099,
+        1779,
+        2243,
+        1808
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1900,
+        "max_value": 2100,
+        "pattern": "^[0-9]{4}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "regime_bens",
+      "label": "Regime de Bens",
+      "description": "Regime de bens adotado no casamento.",
+      "bbox": [
+        209,
+        1884,
+        2243,
+        1934
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "COMUNHÃO PARCIAL DE BENS",
+          "COMUNHÃO UNIVERSAL DE BENS",
+          "SEPARAÇÃO TOTAL DE BENS",
+          "SEPARAÇÃO OBRIGATÓRIA DE BENS",
+          "PARTICIPAÇÃO FINAL NOS AQUESTOS"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "data_registro_extenso",
+      "label": "Data de registro do casamento, por extenso",
+      "description": "Data de registro do casamento, escrita por extenso.",
+      "bbox": [
+        209,
+        2009,
+        1624,
+        2060
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "EXTENSO_PALAVRAS"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "dia_registro",
+      "label": "Dia",
+      "description": "Dia numérico do registro civil.",
+      "bbox": [
+        1685,
+        2030,
+        1831,
+        2060
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 31,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "mes_registro",
+      "label": "Mês",
+      "description": "Mês numérico do registro civil.",
+      "bbox": [
+        1892,
+        2030,
+        2037,
+        2060
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 12,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "ano_registro",
+      "label": "Ano",
+      "description": "Ano numérico do registro civil.",
+      "bbox": [
+        2099,
+        2030,
+        2243,
+        2060
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1900,
+        "max_value": 2100,
+        "pattern": "^[0-9]{4}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "averbacoes",
+      "label": "Anotações/Averbações",
+      "description": "Averbações registrais a acrescer.",
+      "bbox": [
+        209,
+        2100,
+        2243,
+        2150
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "max_length": 200,
+        "blank_probability": 0.6
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "anotacoes_voluntarias",
+      "label": "Anotações voluntárias de cadastro",
+      "description": "Anotações voluntárias de cadastro, quando existirem.",
+      "bbox": [
+        209,
+        2190,
+        2243,
+        2241
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "max_length": 200,
+        "blank_probability": 0.7
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "cns_oficio",
+      "label": "CNS",
+      "description": "Número do CNS (Cadastro Nacional de Serventias) do ofício de registro civil.",
+      "bbox": [
+        209,
+        2295,
+        700,
+        2347
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 6
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "oficial_nome",
+      "label": "Nome do Oficial",
+      "description": "Nome do oficial titular do registro civil.",
+      "bbox": [
+        209,
+        2400,
+        1090,
+        2452
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "oficial_cidade_uf",
+      "label": "Cidade – UF",
+      "description": "Município e UF do ofício de registro civil.",
+      "bbox": [
+        209,
+        2505,
+        700,
+        2557
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+ - [A-Z]{2}$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "oficial_endereco",
+      "label": "Endereço",
+      "description": "Endereço do ofício de registro civil (rua, número, CEP, cidade e UF).",
+      "bbox": [
+        209,
+        2610,
+        1090,
+        2662
+      ],
+      "data_type": "address",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' º°./,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "data_emissao",
+      "label": "Local e data de emissão",
+      "description": "Município, UF e data de emissão da certidão.",
+      "bbox": [
+        1130,
+        2400,
+        2243,
+        2452
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' ,./-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "nome_oficial_escrevente",
+      "label": "Nome do Oficial/Escrevente",
+      "description": "Nome de quem assina a certidão (oficial ou escrevente autorizado).",
+      "bbox": [
+        1130,
+        2505,
+        2243,
+        2557
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "cargo",
+      "label": "Cargo",
+      "description": "Cargo de quem assina a certidão.",
+      "bbox": [
+        1130,
+        2610,
+        1700,
+        2662
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "OFICIAL DE REGISTRO CIVIL",
+          "OFICIAL SUBSTITUTO",
+          "ESCREVENTE AUTORIZADO",
+          "ESCREVENTE SUBSTITUTO"
+        ]
+      },
+      "semantic": false
+    }
+  ]
+}

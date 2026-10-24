@@ -48,8 +48,17 @@ class Resource(BaseModel):
     label: str
 
 
+class Orgao(BaseModel):
+    key: str
+    sigla: str
+    nome: str
+
+
 class DocumentTypeResponse(Resource):
     mappings: list[Resource]
+    orgao: Orgao | None = None
+    documentacao: str | None = None
+    categoria: str | None = None
 
 
 class FieldResponse(BaseModel):
@@ -156,6 +165,9 @@ class DocumentModelResponse(BaseModel):
     mapping_id: str
     builtin: bool
     editable: bool
+    orgao: Orgao | None = None
+    documentacao: str | None = None
+    categoria: str | None = None
     created_at: float | None = None
     updated_at: float | None = None
 
@@ -183,6 +195,9 @@ class ModelPromote(StrictModel):
     key: Annotated[str, Field(min_length=1, max_length=100)]
     label: Annotated[str, Field(min_length=1, max_length=120)]
     description: Annotated[str, Field(max_length=500)] = ""
+    orgao: Annotated[str, Field(min_length=1, max_length=50)]
+    documentacao: Annotated[str, Field(max_length=500)] = ""
+    categoria: Annotated[str, Field(max_length=120)] = ""
 
 
 class SemanticDefinitionCreate(StrictModel):

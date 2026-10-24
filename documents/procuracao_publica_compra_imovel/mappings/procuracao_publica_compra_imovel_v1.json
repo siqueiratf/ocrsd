@@ -1,0 +1,489 @@
+{
+  "template_id": "procuracao_publica_compra_imovel",
+  "dpi": 300,
+  "page_size_px": [
+    2481,
+    3508
+  ],
+  "source_template": "documents/procuracao_publica_compra_imovel/template.pdf",
+  "reference_manual": "Itamaraty, modelo de procuração pública 'Imóvel - compra de' (Consulado-Geral do Brasil em Bruxelas).",
+  "fields": [
+    {
+      "field_id": "numero_livro",
+      "label": "Número do livro",
+      "description": "Número do livro de procurações do Consulado em que este instrumento é lavrado.",
+      "bbox": [
+        379,
+        602,
+        608,
+        671
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 999
+      }
+    },
+    {
+      "field_id": "numero_folha",
+      "label": "Número da folha",
+      "description": "Número da folha do livro de procurações em que este instrumento é lavrado.",
+      "bbox": [
+        864,
+        602,
+        1093,
+        671
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 400
+      }
+    },
+    {
+      "field_id": "numero_ato",
+      "label": "Número do ato",
+      "description": "Número de ordem do ato no livro de procurações.",
+      "bbox": [
+        1313,
+        602,
+        1605,
+        671
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 9999
+      }
+    },
+    {
+      "field_id": "data_lavratura",
+      "label": "Data da lavratura",
+      "description": "Data em que o instrumento de procuração é lavrado, por extenso.",
+      "bbox": [
+        298,
+        710,
+        1131,
+        779
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "EXTENSO_PALAVRAS"
+      }
+    },
+    {
+      "field_id": "nome_autoridade_consular",
+      "label": "Nome da autoridade consular",
+      "description": "Nome de quem lavra o ato (Cônsul ou funcionário consular com fé pública).",
+      "bbox": [
+        478,
+        771,
+        1145,
+        840
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "cargo_autoridade_consular",
+      "label": "Cargo da autoridade consular",
+      "description": "Cargo de quem lavra o ato na Repartição Consular.",
+      "bbox": [
+        1180,
+        771,
+        1722,
+        840
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CÔNSUL-GERAL",
+          "CÔNSUL",
+          "VICE-CÔNSUL",
+          "CHEFE DO SETOR CONSULAR"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgante_nome",
+      "label": "Nome do(a) outorgante",
+      "description": "Nome completo do(a) outorgante.",
+      "bbox": [
+        353,
+        1056,
+        2289,
+        1125
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "outorgante_nacionalidade",
+      "label": "Nacionalidade do(a) outorgante",
+      "description": "Nacionalidade declarada do(a) outorgante.",
+      "bbox": [
+        506,
+        1136,
+        855,
+        1205
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "BRASILEIRO(A)",
+          "BRASILEIRO(A) NATURALIZADO(A)",
+          "PORTUGUÊS(A)",
+          "BELGA",
+          "ITALIANO(A)",
+          "FRANCÊS(A)"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgante_estado_civil",
+      "label": "Estado civil do(a) outorgante",
+      "description": "Estado civil do(a) outorgante.",
+      "bbox": [
+        1197,
+        1136,
+        1593,
+        1205
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "SOLTEIRO(A)",
+          "CASADO(A)",
+          "DIVORCIADO(A)",
+          "VIÚVO(A)",
+          "UNIÃO ESTÁVEL"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgante_profissao",
+      "label": "Profissão do(a) outorgante",
+      "description": "Profissão ou ocupação do(a) outorgante.",
+      "bbox": [
+        1888,
+        1136,
+        2331,
+        1205
+      ],
+      "data_type": "occupation"
+    },
+    {
+      "field_id": "outorgante_tipo_documento",
+      "label": "Tipo de documento do(a) outorgante",
+      "description": "Tipo do documento de identificação apresentado pelo(a) outorgante.",
+      "bbox": [
+        455,
+        1215,
+        1049,
+        1284
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CARTEIRA DE IDENTIDADE (RG)",
+          "PASSAPORTE",
+          "CARTEIRA NACIONAL DE HABILITAÇÃO (CNH)",
+          "CARTEIRA RNM/RNE (ESTRANGEIRO)"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgante_numero_documento",
+      "label": "Número do documento do(a) outorgante",
+      "description": "Número do documento de identificação do(a) outorgante.",
+      "bbox": [
+        1323,
+        1215,
+        1773,
+        1284
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "MG-12.345.678",
+          "AB1234567",
+          "12.345.678-9"
+        ],
+        "pattern": "^[A-Z0-9][A-Z0-9.\\- ]{3,14}$"
+      }
+    },
+    {
+      "field_id": "outorgante_cpf",
+      "label": "CPF do(a) outorgante",
+      "description": "CPF do(a) outorgante, no formato 000.000.000-00 (pode ser declarado).",
+      "bbox": [
+        1979,
+        1215,
+        2331,
+        1284
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "123.456.789-09",
+          "987.654.321-00",
+          "456.789.123-10"
+        ],
+        "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "outorgante_endereco",
+      "label": "Endereço do(a) outorgante",
+      "description": "Endereço completo do(a) outorgante (rua, número, cidade, país).",
+      "bbox": [
+        414,
+        1294,
+        2289,
+        1363
+      ],
+      "data_type": "address",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' º°./,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "outorgado_nome",
+      "label": "Nome do(a) outorgado(a), procurador(a)",
+      "description": "Nome completo do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        353,
+        1465,
+        2289,
+        1534
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "outorgado_nacionalidade",
+      "label": "Nacionalidade do(a) outorgado(a), procurador(a)",
+      "description": "Nacionalidade declarada do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        506,
+        1544,
+        855,
+        1613
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "BRASILEIRO(A)",
+          "BRASILEIRO(A) NATURALIZADO(A)",
+          "PORTUGUÊS(A)",
+          "BELGA",
+          "ITALIANO(A)",
+          "FRANCÊS(A)"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgado_estado_civil",
+      "label": "Estado civil do(a) outorgado(a), procurador(a)",
+      "description": "Estado civil do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        1197,
+        1544,
+        1593,
+        1613
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "SOLTEIRO(A)",
+          "CASADO(A)",
+          "DIVORCIADO(A)",
+          "VIÚVO(A)",
+          "UNIÃO ESTÁVEL"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgado_profissao",
+      "label": "Profissão do(a) outorgado(a), procurador(a)",
+      "description": "Profissão ou ocupação do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        1888,
+        1544,
+        2331,
+        1613
+      ],
+      "data_type": "occupation"
+    },
+    {
+      "field_id": "outorgado_tipo_documento",
+      "label": "Tipo de documento do(a) outorgado(a), procurador(a)",
+      "description": "Tipo do documento de identificação apresentado pelo(a) outorgado(a), procurador(a).",
+      "bbox": [
+        455,
+        1623,
+        1049,
+        1692
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CARTEIRA DE IDENTIDADE (RG)",
+          "PASSAPORTE",
+          "CARTEIRA NACIONAL DE HABILITAÇÃO (CNH)",
+          "CARTEIRA RNM/RNE (ESTRANGEIRO)"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgado_numero_documento",
+      "label": "Número do documento do(a) outorgado(a), procurador(a)",
+      "description": "Número do documento de identificação do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        1323,
+        1623,
+        1773,
+        1692
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "MG-12.345.678",
+          "AB1234567",
+          "12.345.678-9"
+        ],
+        "pattern": "^[A-Z0-9][A-Z0-9.\\- ]{3,14}$"
+      }
+    },
+    {
+      "field_id": "outorgado_cpf",
+      "label": "CPF do(a) outorgado(a), procurador(a)",
+      "description": "CPF do(a) outorgado(a), procurador(a), no formato 000.000.000-00 (pode ser declarado).",
+      "bbox": [
+        1979,
+        1623,
+        2331,
+        1692
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "123.456.789-09",
+          "987.654.321-00",
+          "456.789.123-10"
+        ],
+        "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "outorgado_endereco",
+      "label": "Endereço do(a) outorgado(a), procurador(a)",
+      "description": "Endereço completo do(a) outorgado(a), procurador(a) (rua, número, cidade, país).",
+      "bbox": [
+        414,
+        1702,
+        2289,
+        1771
+      ],
+      "data_type": "address",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' º°./,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "endereco_imovel",
+      "label": "Endereço do imóvel",
+      "description": "Endereço (rua, número, bairro) do imóvel a ser comprado pelo(a) outorgante.",
+      "bbox": [
+        200,
+        2046,
+        1158,
+        2113
+      ],
+      "data_type": "address",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' º°./,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "municipio_imovel",
+      "label": "Município do imóvel",
+      "description": "Município onde está situado o imóvel a ser comprado.",
+      "bbox": [
+        1460,
+        2046,
+        2127,
+        2113
+      ],
+      "data_type": "municipality",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "data_validade",
+      "label": "Data de validade da procuração",
+      "description": "Data-limite de validade da procuração, no formato DD/MM/AAAA.",
+      "bbox": [
+        448,
+        2745,
+        844,
+        2812
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "data_fechamento",
+      "label": "Data de fechamento do instrumento",
+      "description": "Data (dia/mês/ano) em que o instrumento é assinado, repetindo a data da lavratura.",
+      "bbox": [
+        596,
+        2843,
+        1096,
+        2912
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "assinatura_outorgante",
+      "label": "Assinatura do outorgante",
+      "description": "Assinatura do(a) outorgante ao final do instrumento.",
+      "bbox": [
+        367,
+        3029,
+        1283,
+        3137
+      ],
+      "data_type": "signature"
+    }
+  ]
+}

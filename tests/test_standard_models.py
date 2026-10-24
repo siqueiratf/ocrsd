@@ -42,6 +42,8 @@ def _build_documents_root(root: Path) -> None:
                {"template_id": "legacy", "dpi": 300, "page_size_px": [600, 800],
                 "fields": [{"field_id": "campo", "label": "Campo", "data_type": "text", "bbox": [20, 20, 300, 60]}]})
 
+    _write_json(root / "catalogo.json", {"orgaos": {"outros": {"sigla": "Outros", "nome": "Outros"}}, "documentos": {}})
+
 
 class StandardModelsTestCase(unittest.TestCase):
     standard_edits = False
@@ -80,7 +82,7 @@ class FlagOffTests(StandardModelsTestCase):
         headers = self.workspace()
         model = self.create_custom_model(headers)
         response = self.client.post(f'/api/v1/models/{model["id"]}/standard',
-                                     json={"key": "novo_padrao", "label": "Novo Padrão", "description": ""}, headers=headers)
+                                     json={"key": "novo_padrao", "label": "Novo Padrão", "description": "", "orgao": "outros"}, headers=headers)
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(response.json()["error"]["code"], "standard_edits_disabled")
         self.assertFalse((self.documents_root / "novo_padrao").exists())
@@ -105,7 +107,7 @@ class FlagOnTests(StandardModelsTestCase):
         headers = self.workspace()
         model = self.create_custom_model(headers, label="Certidão Especial")
         response = self.client.post(f'/api/v1/models/{model["id"]}/standard',
-                                     json={"key": "certidao_especial", "label": "Certidão Especial", "description": "Teste"},
+                                     json={"key": "certidao_especial", "label": "Certidão Especial", "description": "Teste", "orgao": "outros"},
                                      headers=headers)
         self.assertEqual(response.status_code, 201, response.text)
         body = response.json()
@@ -130,15 +132,66 @@ class FlagOnTests(StandardModelsTestCase):
                                            "fields": ["nome"], "count": 1, "seed": 1})
         self.assertEqual(validated.status_code, 200, validated.text)
 
+        catalog = json.loads((self.documents_root / "catalogo.json").read_text(encoding="utf-8"))
+        entry = catalog["documentos"]["certidao_especial"]
+        self.assertEqual(entry["orgao"], "outros")
+        self.assertEqual(entry["label"], "Certidão Especial")
+        self.assertEqual(entry["status"], "disponivel")
+
+        response = self.client.get("/api/v1/catalog")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("certidao_especial", response.json()["documentos"])
+
+    def test_promote_flips_planned_entry_to_disponivel_and_keeps_other_fields(self):
+        headers = self.workspace()
+        catalog = json.loads((self.documents_root / "catalogo.json").read_text(encoding="utf-8"))
+        catalog["documentos"]["planejado_teste"] = {"orgao": "outros", "label": "Planejado", "description": "",
+                                                     "referencia": "Fonte externa", "categoria": "Testes",
+                                                     "prioridade": "alta", "status": "planejado"}
+        (self.documents_root / "catalogo.json").write_text(json.dumps(catalog), encoding="utf-8")
+        model = self.create_custom_model(headers, label="Documento Planejado")
+        response = self.client.post(f'/api/v1/models/{model["id"]}/standard',
+                                     json={"key": "planejado_teste", "label": "Documento Promovido", "description": "", "orgao": "outros"},
+                                     headers=headers)
+        self.assertEqual(response.status_code, 201, response.text)
+        updated = json.loads((self.documents_root / "catalogo.json").read_text(encoding="utf-8"))
+        entry = updated["documentos"]["planejado_teste"]
+        self.assertEqual(entry["status"], "disponivel")
+        self.assertEqual(entry["label"], "Documento Promovido")
+        self.assertEqual(entry["referencia"], "Fonte externa")
+        self.assertEqual(entry["categoria"], "Testes")
+
+    def test_promote_unknown_orgao_is_rejected(self):
+        headers = self.workspace()
+        model = self.create_custom_model(headers)
+        response = self.client.post(f'/api/v1/models/{model["id"]}/standard',
+                                     json={"key": "orgao_invalido", "label": "Órgão Inválido", "description": "", "orgao": "fantasma"},
+                                     headers=headers)
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertFalse((self.documents_root / "orgao_invalido").exists())
+
+    def test_model_template_download_for_builtin_and_custom(self):
+        token_headers = self.workspace()
+        cookie_headers = {"Cookie": f'ocrsd_workspace={token_headers["X-Workspace-Token"]}'}
+        builtin = self.client.get("/modelos/sample/template.pdf", headers=cookie_headers)
+        self.assertEqual(builtin.status_code, 200, builtin.text)
+        self.assertEqual(builtin.headers["content-type"], "application/pdf")
+        self.assertIn("attachment", builtin.headers["content-disposition"])
+
+        model = self.create_custom_model(token_headers, label="Baixável")
+        custom = self.client.get(f'/modelos/{model["id"]}/template.pdf', headers=cookie_headers)
+        self.assertEqual(custom.status_code, 200, custom.text)
+        self.assertEqual(custom.headers["content-type"], "application/pdf")
+
     def test_promote_duplicate_key_conflicts(self):
         headers = self.workspace()
         model = self.create_custom_model(headers)
         first = self.client.post(f'/api/v1/models/{model["id"]}/standard',
-                                 json={"key": "duplicado", "label": "Duplicado", "description": ""}, headers=headers)
+                                 json={"key": "duplicado", "label": "Duplicado", "description": "", "orgao": "outros"}, headers=headers)
         self.assertEqual(first.status_code, 201, first.text)
         other = self.create_custom_model(headers, label="Outro modelo")
         second = self.client.post(f'/api/v1/models/{other["id"]}/standard',
-                                  json={"key": "duplicado", "label": "Duplicado outra vez", "description": ""}, headers=headers)
+                                  json={"key": "duplicado", "label": "Duplicado outra vez", "description": "", "orgao": "outros"}, headers=headers)
         self.assertEqual(second.status_code, 409, second.text)
         self.assertEqual(second.json()["error"]["code"], "standard_exists")
         metadata = json.loads((self.documents_root / "duplicado" / "modelo.json").read_text(encoding="utf-8"))
@@ -148,7 +201,7 @@ class FlagOnTests(StandardModelsTestCase):
         headers = self.workspace()
         model = self.create_custom_model(headers)
         response = self.client.post(f'/api/v1/models/{model["id"]}/standard',
-                                     json={"key": "../evil", "label": "Chave perigosa", "description": ""}, headers=headers)
+                                     json={"key": "../evil", "label": "Chave perigosa", "description": "", "orgao": "outros"}, headers=headers)
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(response.json()["id"], "evil")
         self.assertTrue((self.documents_root / "evil").is_dir())
@@ -159,7 +212,7 @@ class FlagOnTests(StandardModelsTestCase):
         checkbox_field = {"field_id": "chk", "label": "Chk", "data_type": "checkbox", "bbox": [1, 1, 50, 50]}
         model = self.create_custom_model(headers, field=checkbox_field)
         response = self.client.post(f'/api/v1/models/{model["id"]}/standard',
-                                     json={"key": "invalido", "label": "Inválido", "description": ""}, headers=headers)
+                                     json={"key": "invalido", "label": "Inválido", "description": "", "orgao": "outros"}, headers=headers)
         self.assertEqual(response.status_code, 422, response.text)
         self.assertFalse((self.documents_root / "invalido").exists())
 

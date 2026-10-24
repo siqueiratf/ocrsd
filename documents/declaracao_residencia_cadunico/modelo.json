@@ -1,0 +1,4 @@
+{
+  "active_mapping": "declaracao_residencia_cadunico_v1",
+  "source": "https://mds.gov.br/webarquivos/MDS/2_Acoes_e_Programas/Cadastro_Unico/Arquivos/Modelo_Declaracao_de_Residencia.pdf (Ministério do Desenvolvimento e Assistência Social, Modelo de Declaração de Residência do Cadastro Único, página 1 'Responsável Familiar'; acesso em 23/10/2026). Página recortada e reaproveitada como PDF A4 de uma página via PyMuPDF show_pdf_page; nenhuma redação foi necessária pois o modelo de origem já está em branco (sem dados de exemplo, sem marca d'água, sem QR code ou imagem). A página 2 do PDF original (variante 'Representante Legal') foi descartada, por não se tratar do modelo padrão."
+}

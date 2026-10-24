@@ -172,6 +172,16 @@ class ResolutionTests(unittest.TestCase):
         self.assertEqual(resolve_field({"field_id": "numero_registro", "label": "Número do registro", "data_type": "integer"},
                                        "declaracao_obito"), Binding("death_registration.number"))
 
+    def test_semantic_false_disables_inference(self):
+        from src.semantic.plan import semantic_plan
+        from src.web.services import semantic_errors
+        field = {"field_id": "nome_ultimo_conjuge", "label": "Nome do último cônjuge", "data_type": "person_name"}
+        self.assertIsNotNone(resolve_field(field, "certidao_obito"))
+        field["semantic"] = False
+        self.assertIsNone(resolve_field(field, "certidao_obito"))
+        self.assertEqual(semantic_errors(field, "certidao_obito"), [])
+        self.assertIsNone(semantic_plan([field], "certidao_obito").decisions["nome_ultimo_conjuge"].binding)
+
     def test_twins_are_presented_from_booleans(self):
         certidao = _fields(CERTIDAO)
         self.assertEqual(present_text(certidao["gemeos"], Binding("birth.twins"), True), "SIM")

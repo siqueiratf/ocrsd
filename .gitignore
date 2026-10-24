@@ -19,8 +19,7 @@ DNV_58027/
 examples/
 *.zip
 *.pdf
-!documents/dnv/template.pdf
-!documents/certidao_nascimento/certidao_nascimento.pdf
+!documents/*/*.pdf
 documents/*/dataset/*
 !documents/*/dataset/.gitkeep
 assets/handwriting/*.bin

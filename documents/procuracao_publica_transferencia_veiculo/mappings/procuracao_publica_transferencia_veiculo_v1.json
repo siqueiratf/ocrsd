@@ -1,0 +1,712 @@
+{
+  "template_id": "procuracao_publica_transferencia_veiculo",
+  "dpi": 300,
+  "page_size_px": [
+    2481,
+    3508
+  ],
+  "source_template": "documents/procuracao_publica_transferencia_veiculo/template.pdf",
+  "reference_manual": "Itamaraty, modelo de procuração pública 'Transferência de veículo' (Consulado-Geral do Brasil em Bruxelas).",
+  "fields": [
+    {
+      "field_id": "numero_livro",
+      "label": "Número do livro",
+      "description": "Número do livro de procurações do Consulado em que este instrumento é lavrado.",
+      "bbox": [
+        379,
+        602,
+        608,
+        671
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 999
+      }
+    },
+    {
+      "field_id": "numero_folha",
+      "label": "Número da folha",
+      "description": "Número da folha do livro de procurações em que este instrumento é lavrado.",
+      "bbox": [
+        864,
+        602,
+        1093,
+        671
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 400
+      }
+    },
+    {
+      "field_id": "numero_ato",
+      "label": "Número do ato",
+      "description": "Número de ordem do ato no livro de procurações.",
+      "bbox": [
+        1313,
+        602,
+        1605,
+        671
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 9999
+      }
+    },
+    {
+      "field_id": "data_lavratura",
+      "label": "Data da lavratura",
+      "description": "Data em que o instrumento de procuração é lavrado, por extenso.",
+      "bbox": [
+        298,
+        710,
+        1131,
+        779
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "EXTENSO_PALAVRAS"
+      }
+    },
+    {
+      "field_id": "nome_autoridade_consular",
+      "label": "Nome da autoridade consular",
+      "description": "Nome de quem lavra o ato (Cônsul ou funcionário consular com fé pública).",
+      "bbox": [
+        478,
+        771,
+        1145,
+        840
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "cargo_autoridade_consular",
+      "label": "Cargo da autoridade consular",
+      "description": "Cargo de quem lavra o ato na Repartição Consular.",
+      "bbox": [
+        1180,
+        771,
+        1722,
+        840
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CÔNSUL-GERAL",
+          "CÔNSUL",
+          "VICE-CÔNSUL",
+          "CHEFE DO SETOR CONSULAR"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgante_nome",
+      "label": "Nome do(a) outorgante",
+      "description": "Nome completo do(a) outorgante.",
+      "bbox": [
+        353,
+        1056,
+        2289,
+        1125
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "outorgante_nacionalidade",
+      "label": "Nacionalidade do(a) outorgante",
+      "description": "Nacionalidade declarada do(a) outorgante.",
+      "bbox": [
+        506,
+        1136,
+        855,
+        1205
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "BRASILEIRO(A)",
+          "BRASILEIRO(A) NATURALIZADO(A)",
+          "PORTUGUÊS(A)",
+          "BELGA",
+          "ITALIANO(A)",
+          "FRANCÊS(A)"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgante_estado_civil",
+      "label": "Estado civil do(a) outorgante",
+      "description": "Estado civil do(a) outorgante.",
+      "bbox": [
+        1197,
+        1136,
+        1593,
+        1205
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "SOLTEIRO(A)",
+          "CASADO(A)",
+          "DIVORCIADO(A)",
+          "VIÚVO(A)",
+          "UNIÃO ESTÁVEL"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgante_profissao",
+      "label": "Profissão do(a) outorgante",
+      "description": "Profissão ou ocupação do(a) outorgante.",
+      "bbox": [
+        1888,
+        1136,
+        2331,
+        1205
+      ],
+      "data_type": "occupation"
+    },
+    {
+      "field_id": "outorgante_tipo_documento",
+      "label": "Tipo de documento do(a) outorgante",
+      "description": "Tipo do documento de identificação apresentado pelo(a) outorgante.",
+      "bbox": [
+        455,
+        1215,
+        1049,
+        1284
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CARTEIRA DE IDENTIDADE (RG)",
+          "PASSAPORTE",
+          "CARTEIRA NACIONAL DE HABILITAÇÃO (CNH)",
+          "CARTEIRA RNM/RNE (ESTRANGEIRO)"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgante_numero_documento",
+      "label": "Número do documento do(a) outorgante",
+      "description": "Número do documento de identificação do(a) outorgante.",
+      "bbox": [
+        1323,
+        1215,
+        1773,
+        1284
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "MG-12.345.678",
+          "AB1234567",
+          "12.345.678-9"
+        ],
+        "pattern": "^[A-Z0-9][A-Z0-9.\\- ]{3,14}$"
+      }
+    },
+    {
+      "field_id": "outorgante_cpf",
+      "label": "CPF do(a) outorgante",
+      "description": "CPF do(a) outorgante, no formato 000.000.000-00 (pode ser declarado).",
+      "bbox": [
+        1979,
+        1215,
+        2331,
+        1284
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "123.456.789-09",
+          "987.654.321-00",
+          "456.789.123-10"
+        ],
+        "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "outorgante_endereco",
+      "label": "Endereço do(a) outorgante",
+      "description": "Endereço completo do(a) outorgante (rua, número, cidade, país).",
+      "bbox": [
+        414,
+        1294,
+        2289,
+        1363
+      ],
+      "data_type": "address",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' º°./,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "outorgado_nome",
+      "label": "Nome do(a) outorgado(a), procurador(a)",
+      "description": "Nome completo do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        353,
+        1465,
+        2289,
+        1534
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "outorgado_nacionalidade",
+      "label": "Nacionalidade do(a) outorgado(a), procurador(a)",
+      "description": "Nacionalidade declarada do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        506,
+        1544,
+        855,
+        1613
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "BRASILEIRO(A)",
+          "BRASILEIRO(A) NATURALIZADO(A)",
+          "PORTUGUÊS(A)",
+          "BELGA",
+          "ITALIANO(A)",
+          "FRANCÊS(A)"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgado_estado_civil",
+      "label": "Estado civil do(a) outorgado(a), procurador(a)",
+      "description": "Estado civil do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        1197,
+        1544,
+        1593,
+        1613
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "SOLTEIRO(A)",
+          "CASADO(A)",
+          "DIVORCIADO(A)",
+          "VIÚVO(A)",
+          "UNIÃO ESTÁVEL"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgado_profissao",
+      "label": "Profissão do(a) outorgado(a), procurador(a)",
+      "description": "Profissão ou ocupação do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        1888,
+        1544,
+        2331,
+        1613
+      ],
+      "data_type": "occupation"
+    },
+    {
+      "field_id": "outorgado_tipo_documento",
+      "label": "Tipo de documento do(a) outorgado(a), procurador(a)",
+      "description": "Tipo do documento de identificação apresentado pelo(a) outorgado(a), procurador(a).",
+      "bbox": [
+        455,
+        1623,
+        1049,
+        1692
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CARTEIRA DE IDENTIDADE (RG)",
+          "PASSAPORTE",
+          "CARTEIRA NACIONAL DE HABILITAÇÃO (CNH)",
+          "CARTEIRA RNM/RNE (ESTRANGEIRO)"
+        ]
+      }
+    },
+    {
+      "field_id": "outorgado_numero_documento",
+      "label": "Número do documento do(a) outorgado(a), procurador(a)",
+      "description": "Número do documento de identificação do(a) outorgado(a), procurador(a).",
+      "bbox": [
+        1323,
+        1623,
+        1773,
+        1692
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "MG-12.345.678",
+          "AB1234567",
+          "12.345.678-9"
+        ],
+        "pattern": "^[A-Z0-9][A-Z0-9.\\- ]{3,14}$"
+      }
+    },
+    {
+      "field_id": "outorgado_cpf",
+      "label": "CPF do(a) outorgado(a), procurador(a)",
+      "description": "CPF do(a) outorgado(a), procurador(a), no formato 000.000.000-00 (pode ser declarado).",
+      "bbox": [
+        1979,
+        1623,
+        2331,
+        1692
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "123.456.789-09",
+          "987.654.321-00",
+          "456.789.123-10"
+        ],
+        "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "outorgado_endereco",
+      "label": "Endereço do(a) outorgado(a), procurador(a)",
+      "description": "Endereço completo do(a) outorgado(a), procurador(a) (rua, número, cidade, país).",
+      "bbox": [
+        414,
+        1702,
+        2289,
+        1771
+      ],
+      "data_type": "address",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' º°./,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "descricao_veiculo",
+      "label": "Descrição do veículo",
+      "description": "Marca e modelo do veículo objeto da transferência.",
+      "bbox": [
+        1149,
+        1928,
+        1815,
+        1993
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.-]+$",
+        "allowed_values": [
+          "FIAT UNO 1.0",
+          "VOLKSWAGEN GOL 1.6",
+          "CHEVROLET ONIX 1.0",
+          "HONDA CIVIC 2.0",
+          "FORD KA 1.5",
+          "TOYOTA COROLLA 2.0"
+        ]
+      }
+    },
+    {
+      "field_id": "cor_veiculo",
+      "label": "Cor predominante do veículo",
+      "description": "Cor predominante do veículo objeto da transferência.",
+      "bbox": [
+        200,
+        1983,
+        575,
+        2048
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "BRANCA",
+          "PRATA",
+          "PRETA",
+          "CINZA",
+          "VERMELHA",
+          "AZUL",
+          "VERDE"
+        ]
+      }
+    },
+    {
+      "field_id": "chassi_veiculo",
+      "label": "Chassi do veículo",
+      "description": "Número do chassi (VIN) do veículo, com 17 caracteres alfanuméricos.",
+      "bbox": [
+        740,
+        1983,
+        1365,
+        2048
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-HJ-NPR-Z0-9]{17}$",
+        "allowed_values": [
+          "9BWZZZ377VT004251",
+          "9BD111019M4567890",
+          "93YBSY210LJ712345"
+        ]
+      }
+    },
+    {
+      "field_id": "renavam",
+      "label": "Código RENAVAM",
+      "description": "Código RENAVAM do veículo (11 algarismos).",
+      "bbox": [
+        1764,
+        1983,
+        2223,
+        2048
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 11,
+        "pattern": "^[0-9]{11}$"
+      }
+    },
+    {
+      "field_id": "placa_veiculo",
+      "label": "Placa do veículo",
+      "description": "Placa do veículo, no padrão antigo (AAA-0000) ou Mercosul (AAA0A00).",
+      "bbox": [
+        310,
+        2038,
+        685,
+        2103
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^([A-Z]{3}-[0-9]{4}|[A-Z]{3}[0-9][A-Z][0-9]{2})$",
+        "allowed_values": [
+          "ABC-1234",
+          "XYZ9A87",
+          "JQV-5021"
+        ]
+      }
+    },
+    {
+      "field_id": "municipio_veiculo",
+      "label": "Município de emplacamento",
+      "description": "Município onde o veículo está emplacado/licenciado.",
+      "bbox": [
+        859,
+        2038,
+        1442,
+        2103
+      ],
+      "data_type": "municipality",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "uf_veiculo",
+      "label": "UF de emplacamento",
+      "description": "UF onde o veículo está emplacado/licenciado.",
+      "bbox": [
+        1610,
+        2038,
+        1840,
+        2103
+      ],
+      "data_type": "uf",
+      "validation": {
+        "allowed_values": [
+          "AC",
+          "AL",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          "MA",
+          "MT",
+          "MS",
+          "MG",
+          "PA",
+          "PB",
+          "PR",
+          "PE",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SC",
+          "SP",
+          "SE",
+          "TO"
+        ]
+      }
+    },
+    {
+      "field_id": "estado_detran",
+      "label": "Estado do DETRAN competente",
+      "description": "Nome por extenso do estado do DETRAN responsável pela transferência (deveria coincidir com a UF de emplacamento do veículo).",
+      "bbox": [
+        1331,
+        2203,
+        1873,
+        2268
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "ACRE",
+          "ALAGOAS",
+          "AMAPÁ",
+          "AMAZONAS",
+          "BAHIA",
+          "CEARÁ",
+          "DISTRITO FEDERAL",
+          "ESPÍRITO SANTO",
+          "GOIÁS",
+          "MARANHÃO",
+          "MATO GROSSO",
+          "MATO GROSSO DO SUL",
+          "MINAS GERAIS",
+          "PARÁ",
+          "PARAÍBA",
+          "PARANÁ",
+          "PERNAMBUCO",
+          "PIAUÍ",
+          "RIO DE JANEIRO",
+          "RIO GRANDE DO NORTE",
+          "RIO GRANDE DO SUL",
+          "RONDÔNIA",
+          "RORAIMA",
+          "SANTA CATARINA",
+          "SÃO PAULO",
+          "SERGIPE",
+          "TOCANTINS"
+        ]
+      }
+    },
+    {
+      "field_id": "sigla_uf_detran",
+      "label": "Sigla do DETRAN competente",
+      "description": "Sigla da UF do DETRAN responsável pela transferência (deveria coincidir com a UF de emplacamento do veículo).",
+      "bbox": [
+        2089,
+        2203,
+        2264,
+        2268
+      ],
+      "data_type": "uf",
+      "validation": {
+        "allowed_values": [
+          "AC",
+          "AL",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          "MA",
+          "MT",
+          "MS",
+          "MG",
+          "PA",
+          "PB",
+          "PR",
+          "PE",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SC",
+          "SP",
+          "SE",
+          "TO"
+        ]
+      }
+    },
+    {
+      "field_id": "municipio_sigla_detran",
+      "label": "Município e sigla do DETRAN",
+      "description": "Município e sigla do estado onde fica o posto do DETRAN responsável pela transferência, no formato Município-SG.",
+      "bbox": [
+        273,
+        2258,
+        981,
+        2323
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+-[A-Z]{2}$",
+        "allowed_values": [
+          "São Paulo-SP",
+          "Rio de Janeiro-RJ",
+          "Belo Horizonte-MG",
+          "Porto Alegre-RS",
+          "Recife-PE"
+        ],
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "data_fechamento",
+      "label": "Data de fechamento do instrumento",
+      "description": "Data (dia/mês/ano) em que o instrumento é assinado, repetindo a data da lavratura.",
+      "bbox": [
+        596,
+        2461,
+        1096,
+        2530
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "assinatura_outorgante",
+      "label": "Assinatura do outorgante",
+      "description": "Assinatura do(a) outorgante ao final do instrumento.",
+      "bbox": [
+        367,
+        2646,
+        1283,
+        2755
+      ],
+      "data_type": "signature"
+    }
+  ]
+}

@@ -213,8 +213,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
              description="Grava o template e o mapeamento do modelo personalizado em documents/<chave>/, tornando-o um modelo padrão "
                          "versionável no repositório. Requer OCRSD_STANDARD_EDITS=true e um mapeamento sem pendências.")
     async def promote_model(model_id: Identifier, payload: ModelPromote, owner_id: Annotated[str, Depends(workspace_required)]):
-        document = promote_document_model(catalog, store, model_id, owner_id, payload.key, payload.label, payload.description)
+        document = promote_document_model(catalog, store, model_id, owner_id, payload.key, payload.label, payload.description,
+                                          payload.orgao, payload.documentacao, payload.categoria)
         return next(item for item in catalog.document_models([]) if item.id == document.key)
+
+    @app.get("/api/v1/catalog", tags=["Catálogo"])
+    async def catalog_endpoint():
+        return catalog.catalog_data()
 
     @app.put("/api/v1/models/{model_id}", response_model=DocumentModelResponse, tags=["Modelos"])
     async def update_model(model_id: Identifier, payload: ModelUpdate, owner_id: Annotated[str, Depends(workspace_required)]):

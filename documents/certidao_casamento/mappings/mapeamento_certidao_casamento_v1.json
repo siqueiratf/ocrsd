@@ -1,0 +1,237 @@
+{
+  "template_id": "certidao_casamento",
+  "dpi": 300,
+  "page_size_px": [
+    2481,
+    3508
+  ],
+  "source_template": "documents/certidao_casamento/certidao_casamento.pdf",
+  "reference_manual": "Arte vetorial pré-existente no repositório (Adobe Illustrator CS3), no padrão do modelo único de certidão de casamento do RCPN; metadados internos citam 'Proposta 02'. Removido texto oculto residual ('Reis') e o número de matrícula de exemplo pré-impresso, que conflitariam com o preenchimento sintético.",
+  "fields": [
+    {
+      "field_id": "nomes",
+      "label": "Nomes",
+      "description": "Nomes dos cônjuges, conforme constam no topo da certidão.",
+      "bbox": [
+        375,
+        804,
+        2105,
+        946
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "matricula",
+      "label": "Matrícula",
+      "description": "Matrícula do registro civil no formato 000000.00.00.0000.0.00000.000.0000000-00.",
+      "bbox": [
+        625,
+        988,
+        1917,
+        1067
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[0-9]{6}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}\\.[0-9]\\.[0-9]{5}\\.[0-9]{3}\\.[0-9]{7}-[0-9]{2}$",
+        "mask": "######.##.##.####.#.#####.###.#######-##"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "filiacao",
+      "label": "Filiação e qualificação dos cônjuges",
+      "description": "Nomes, prenomes, datas e locais de nascimento, nacionalidade, profissão, domicílio dos cônjuges e suas filiações.",
+      "bbox": [
+        336,
+        1115,
+        2143,
+        1615
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "max_length": 600
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "data_celebracao_extenso",
+      "label": "Data da celebração do casamento (por extenso)",
+      "description": "Data da celebração do casamento escrita por extenso.",
+      "bbox": [
+        336,
+        1656,
+        1564,
+        1747
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "EXTENSO_PALAVRAS"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "dia_celebracao",
+      "label": "Dia",
+      "description": "Dia numérico da celebração.",
+      "bbox": [
+        1607,
+        1656,
+        1730,
+        1748
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 31,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "mes_celebracao",
+      "label": "Mês",
+      "description": "Mês numérico da celebração.",
+      "bbox": [
+        1771,
+        1655,
+        1895,
+        1747
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1,
+        "max_value": 12,
+        "pattern": "^[0-9]{1,2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "ano_celebracao",
+      "label": "Ano",
+      "description": "Ano numérico da celebração.",
+      "bbox": [
+        1936,
+        1656,
+        2143,
+        1747
+      ],
+      "data_type": "integer",
+      "validation": {
+        "min_value": 1900,
+        "max_value": 2100,
+        "pattern": "^[0-9]{4}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "presidente_celebracao",
+      "label": "Nome do presidente da celebração",
+      "description": "Nome de quem presidiu a celebração do casamento.",
+      "bbox": [
+        336,
+        1788,
+        1489,
+        1879
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "regime_bens",
+      "label": "Regime de bens do casamento",
+      "description": "Regime de bens adotado no casamento.",
+      "bbox": [
+        1532,
+        1788,
+        2143,
+        1879
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "COMUNHÃO PARCIAL DE BENS",
+          "COMUNHÃO UNIVERSAL DE BENS",
+          "SEPARAÇÃO TOTAL DE BENS",
+          "SEPARAÇÃO OBRIGATÓRIA DE BENS",
+          "PARTICIPAÇÃO FINAL NOS AQUESTOS"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "documentos_apresentados",
+      "label": "Relação dos documentos apresentados ao oficial do registro",
+      "description": "Lista dos documentos apresentados ao oficial do registro.",
+      "bbox": [
+        336,
+        1920,
+        2143,
+        2068
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "max_length": 300
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "nome_apos_casamento",
+      "label": "Nome que cada um dos cônjuges passou a utilizar",
+      "description": "Nome que cada um dos cônjuges passou a utilizar, quando houver alteração.",
+      "bbox": [
+        336,
+        2110,
+        2143,
+        2259
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.4
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "observacoes_averbacoes",
+      "label": "Observações / Averbações",
+      "description": "Observações e averbações registrais.",
+      "bbox": [
+        336,
+        2298,
+        2148,
+        2614
+      ],
+      "data_type": "text",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' /.,;:-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "max_length": 300,
+        "blank_probability": 0.5
+      },
+      "semantic": false
+    }
+  ]
+}

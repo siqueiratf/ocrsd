@@ -115,9 +115,19 @@ class Catalog:
                 break
             except FileExistsError:
                 next_version += 1
-        update_standard_metadata(document.root, active_mapping=target.stem, label=document.label)
+        from src.document_catalog import load_catalog
+
+        updates: dict[str, Any] = {"active_mapping": target.stem}
+        if key not in load_catalog(self.settings.documents)["documentos"]:
+            updates["label"] = document.label
+        update_standard_metadata(document.root, **updates)
         self.reload()
         return target.stem
+
+    def catalog_data(self) -> dict:
+        from src.document_catalog import load_catalog
+
+        return load_catalog(self.settings.documents)
 
     def custom(self, key: str, owner_id: str | None = None) -> dict:
         database = self.settings.storage.resolve() / "jobs.sqlite3"
@@ -208,10 +218,12 @@ class Catalog:
 
     def document_types(self, custom: list[dict]) -> list[dict]:
         result = [{"id": item.key, "label": item.label, "builtin": True, "active_mapping": item.active_mapping.stem,
+                   "orgao": item.orgao, "documentacao": item.documentacao or None, "categoria": item.categoria or None,
                    "mappings": [{"id": path.stem, "label": path.stem.replace("_", " ")}
                                 for path in sorted(item.mappings, key=lambda path: path != item.active_mapping)]}
                   for item in self.types.values()]
         result.extend({"id": row["id"], "label": row["label"], "builtin": False, "active_mapping": row["mapping_id"],
+                       "orgao": None, "documentacao": None, "categoria": None,
                        "mappings": [{"id": row["mapping_id"], "label": row["mapping_id"].replace("_", " ")}]}
                       for row in custom)
         return result
@@ -227,7 +239,8 @@ class Catalog:
             builtins.append(DocumentModelResponse(id=item.key, label=item.label, description=item.description or "Modelo padrão do OCRSD",
                                                   status="published", version=1, field_count=len(fields),
                                                   mapping_id=item.active_mapping.stem, builtin=True,
-                                                  editable=self.settings.standard_edits))
+                                                  editable=self.settings.standard_edits, orgao=item.orgao,
+                                                  documentacao=item.documentacao or None, categoria=item.categoria or None))
         return builtins + [custom_model(row) for row in custom]
 
     def validate(self, options: GenerationOptions, owner_id: str | None = None, definition: dict | None = None,
@@ -419,7 +432,10 @@ def update_standard_metadata(root: Path, **updates: Any) -> None:
     os.replace(temporary, path)
 
 
-def promote_model(catalog: Catalog, store, model_id: str, owner_id: str, key: str, label: str, description: str):
+def promote_model(catalog: Catalog, store, model_id: str, owner_id: str, key: str, label: str, description: str,
+                  orgao: str, documentacao: str = "", categoria: str = ""):
+    from src.document_catalog import load_catalog, save_catalog
+
     if not catalog.settings.standard_edits:
         raise ServiceError(403, "standard_edits_disabled", STANDARD_EDITS_DISABLED)
     if model_id in catalog.types:
@@ -434,6 +450,9 @@ def promote_model(catalog: Catalog, store, model_id: str, owner_id: str, key: st
         raise ServiceError(422, "invalid_key", "Escolha uma chave de documento válida")
     if key in catalog.types or target.exists():
         raise ServiceError(409, "standard_exists", f"Já existe um modelo padrão com a chave “{key}”")
+    catalog_data = load_catalog(documents_root)
+    if orgao not in catalog_data["orgaos"]:
+        raise ServiceError(422, "invalid_orgao", "Selecione um órgão válido")
     definition = catalog.definition(model_id, model["mapping_id"], owner_id)
     issues = mapping_issues(definition)
     if issues:
@@ -457,6 +476,15 @@ def promote_model(catalog: Catalog, store, model_id: str, owner_id: str, key: st
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
+    existing_entry = catalog_data["documentos"].get(key) or {}
+    entry = {**existing_entry, "orgao": orgao, "label": label, "description": description, "status": "disponivel"}
+    entry.setdefault("prioridade", "media")
+    if documentacao:
+        entry["documentacao"] = documentacao
+    if categoria:
+        entry["categoria"] = categoria
+    catalog_data["documentos"][key] = entry
+    save_catalog(documents_root, catalog_data)
     catalog.reload()
     return catalog.types[key]
 
@@ -736,7 +764,7 @@ def revision(*paths: Path) -> str:
 
 
 def semantic_errors(field: dict, document: str | None = None, custom_definitions: dict | None = None) -> list[str]:
-    if field.get("semantic") in (None, ""):
+    if field.get("semantic") in (None, "", False):
         return []
     key = field.get("semantic")
     if isinstance(key, str) and key.startswith("custom."):

@@ -1,0 +1,352 @@
+{
+  "template_id": "drei_certidao_simplificada",
+  "dpi": 300,
+  "page_size_px": [
+    2481,
+    3508
+  ],
+  "source_template": "documents/drei_certidao_simplificada/template.pdf",
+  "reference_manual": "IN DREI nº 81/2020, Anexo VIII, Modelo de Certidão Simplificada para Empresário e suas Filiais.",
+  "fields": [
+    {
+      "field_id": "nome_empresarial",
+      "label": "Nome Empresarial",
+      "description": "Nome empresarial (nome de registro) do empresário individual certificado.",
+      "bbox": [
+        583,
+        1138,
+        2333,
+        1200
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 80,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "cnpj",
+      "label": "CNPJ",
+      "description": "CNPJ do empresário no formato 00.000.000/0000-00.",
+      "bbox": [
+        258,
+        1350,
+        1271,
+        1412
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "12.345.678/0001-09",
+          "98.765.432/0001-00",
+          "45.678.912/0001-10"
+        ],
+        "pattern": "^[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}/[0-9]{4}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "data_arquivamento_ato_inscricao",
+      "label": "Data de arquivamento do ato de inscrição",
+      "description": "Data em que o ato de inscrição do empresário foi arquivado na Junta Comercial.",
+      "bbox": [
+        1304,
+        1404,
+        1800,
+        1454
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "data_inicio_atividade",
+      "label": "Data de início de atividade",
+      "description": "Data de início da atividade empresarial.",
+      "bbox": [
+        1825,
+        1350,
+        2346,
+        1417
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "endereco_completo",
+      "label": "Endereço completo",
+      "description": "Logradouro e número da sede do empresário.",
+      "bbox": [
+        258,
+        1504,
+        2333,
+        1550
+      ],
+      "data_type": "address",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9' º°./,-]+$",
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "objeto",
+      "label": "Objeto",
+      "description": "Ramo de atuação (atividade principal) do empresário individual.",
+      "bbox": [
+        396,
+        1554,
+        2333,
+        1617
+      ],
+      "data_type": "occupation",
+      "validation": {}
+    },
+    {
+      "field_id": "capital_valor",
+      "label": "Capital",
+      "description": "Valor do capital do empresário, em reais.",
+      "bbox": [
+        258,
+        1738,
+        1792,
+        1817
+      ],
+      "data_type": "decimal",
+      "validation": {
+        "min_value": 1000,
+        "max_value": 5000000,
+        "decimals": 2,
+        "pattern": "^[0-9]{1,8},[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "ultimo_arquivamento_data",
+      "label": "Data do último arquivamento",
+      "description": "Data do último ato arquivado desse empresário nesta Junta Comercial.",
+      "bbox": [
+        250,
+        2142,
+        542,
+        2221
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "ultimo_arquivamento_numero",
+      "label": "Número do último arquivamento",
+      "description": "Número do protocolo do último ato arquivado desse empresário.",
+      "bbox": [
+        554,
+        2142,
+        917,
+        2221
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 9
+      }
+    },
+    {
+      "field_id": "ultimo_arquivamento_ato",
+      "label": "Ato/eventos do último arquivamento",
+      "description": "Tipo do último ato ou evento arquivado (ex.: alteração, transformação, extinção).",
+      "bbox": [
+        938,
+        2142,
+        1792,
+        2221
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "INSCRIÇÃO",
+          "ALTERAÇÃO",
+          "TRANSFORMAÇÃO",
+          "EXTINÇÃO",
+          "CISÃO",
+          "INCORPORAÇÃO"
+        ]
+      }
+    },
+    {
+      "field_id": "nome_empresario",
+      "label": "Nome do empresário",
+      "description": "Nome completo da pessoa física titular do empresário individual.",
+      "bbox": [
+        633,
+        2508,
+        2333,
+        2562
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "identidade_rg",
+      "label": "Identidade (RG)",
+      "description": "Número do documento de identidade (RG) do empresário.",
+      "bbox": [
+        458,
+        2575,
+        1292,
+        2629
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "12.345.678-9",
+          "98.765.432-1",
+          "45.678.912-3"
+        ],
+        "pattern": "^[0-9]{1,2}\\.[0-9]{3}\\.[0-9]{3}-[0-9A-Za-z]$"
+      }
+    },
+    {
+      "field_id": "cpf_titular",
+      "label": "CPF",
+      "description": "CPF do empresário no formato 000.000.000-00.",
+      "bbox": [
+        1400,
+        2575,
+        2333,
+        2629
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "123.456.789-09",
+          "987.654.321-00",
+          "456.789.123-10"
+        ],
+        "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "estado_civil",
+      "label": "Estado civil",
+      "description": "Estado civil do empresário.",
+      "bbox": [
+        467,
+        2642,
+        783,
+        2696
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "SOLTEIRO(A)",
+          "CASADO(A)",
+          "VIÚVO(A)",
+          "DIVORCIADO(A)"
+        ]
+      }
+    },
+    {
+      "field_id": "regime_bens",
+      "label": "Regime de bens",
+      "description": "Regime de bens do empresário, quando casado.",
+      "bbox": [
+        1092,
+        2642,
+        2333,
+        2696
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "COMUNHÃO PARCIAL DE BENS",
+          "COMUNHÃO UNIVERSAL DE BENS",
+          "SEPARAÇÃO DE BENS",
+          "PARTICIPAÇÃO FINAL NOS AQUESTOS"
+        ],
+        "blank_probability": 0.4
+      }
+    },
+    {
+      "field_id": "numero_protocolo",
+      "label": "Número do protocolo",
+      "description": "Número do protocolo do pedido de certidão nesta Junta Comercial.",
+      "bbox": [
+        638,
+        2875,
+        1458,
+        2929
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 10
+      }
+    },
+    {
+      "field_id": "municipio_emissao",
+      "label": "Município de emissão",
+      "description": "Município da sede da Junta Comercial que expede a certidão.",
+      "bbox": [
+        646,
+        3000,
+        1021,
+        3071
+      ],
+      "data_type": "municipality",
+      "validation": {}
+    },
+    {
+      "field_id": "data_emissao",
+      "label": "Data de emissão",
+      "description": "Data de expedição da certidão, por extenso.",
+      "bbox": [
+        1042,
+        3000,
+        1438,
+        3071
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD de mês de AAAA"
+      }
+    },
+    {
+      "field_id": "uf_junta_comercial",
+      "label": "UF da Junta Comercial",
+      "description": "Unidade da Federação à qual pertence a Junta Comercial emissora.",
+      "bbox": [
+        692,
+        704,
+        1167,
+        767
+      ],
+      "data_type": "uf",
+      "validation": {}
+    },
+    {
+      "field_id": "nome_secretario_geral",
+      "label": "Nome do Secretário-Geral",
+      "description": "Nome completo do Secretário-Geral da Junta Comercial que assina a certidão.",
+      "bbox": [
+        1017,
+        3213,
+        1583,
+        3271
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    }
+  ]
+}

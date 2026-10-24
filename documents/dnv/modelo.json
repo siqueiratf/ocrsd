@@ -1,5 +1,3 @@
 {
-  "active_mapping": "mapeamento_seguindo_norma",
-  "label": "Declaração de Nascido Vivo (DNV)",
-  "description": "Formulário oficial do SINASC preenchido com dados fictícios e coerentes de mãe, recém-nascido, gestação e parto."
+  "active_mapping": "mapeamento_seguindo_norma"
 }

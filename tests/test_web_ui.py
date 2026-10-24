@@ -217,7 +217,7 @@ class InterfaceTests(unittest.TestCase):
         self.assertNotIn(job_id, self.page("/resultados", cookie=other).text)
 
         reused = self.page(f"/geracao?job={job_id}")
-        self.assertIn("CERTIDAO NASCIMENTO", reused.text)
+        self.assertIn("Certidão de Nascimento", reused.text)
         reused_id = re.search(r'name="draft_id" value="([0-9a-f]+)"', reused.text).group(1)
         reused_state = self.app.state.store.wizard_draft(reused_id, self.app.state.store.workspace(self.cookie))
         self.assertEqual(reused_state["fields"], ["cpf", "matricula", "sexo"])
@@ -344,7 +344,7 @@ class InterfaceTests(unittest.TestCase):
                                          follow_redirects=False).status_code, 303)
         copied = self.hx("POST", "/modelos/certidao_nascimento/copia")
         copy_id = re.fullmatch(r"/modelos/([0-9a-f]{32})/editor", copied.headers["hx-redirect"]).group(1)
-        self.assertIn("CERTIDAO NASCIMENTO — cópia", self.page(f"/modelos/{copy_id}/editor").text)
+        self.assertIn("Certidão de Nascimento — cópia", self.page(f"/modelos/{copy_id}/editor").text)
         self.assertEqual(self.hx("POST", f"/modelos/{copy_id}/excluir").headers["hx-redirect"], "/modelos")
         self.assertEqual(self.page(f"/modelos/{copy_id}/editor").status_code, 404)
 

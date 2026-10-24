@@ -421,6 +421,8 @@
     ], open)
   }
 
+  const NO_MEANING = '__nenhum__'
+
   function semanticSpec(item) {
     const value = item?.semantic
     return typeof value === 'string' ? { key: value } : value && typeof value === 'object' ? { ...value } : {}
@@ -433,6 +435,7 @@
 
   function writeSemantic(item, key, part) {
     if (!key) return setPath(item, 'semantic', undefined)
+    if (key === NO_MEANING) return setPath(item, 'semantic', false)
     const spec = { ...semanticSpec(item), key, part }
     const option = meanings.get(key)
     if (option && option.kind !== 'date') delete spec.format
@@ -446,6 +449,7 @@
     const chosen = meanings.get(spec.key)
     const input = h('select', { 'data-path': 'semantic', 'data-kind': 'semantic' })
     input.add(new Option(inferred ? `Automático (detectado: ${inferred.label})` : 'Automático (sem correspondência)', ''))
+    input.add(new Option('Nenhum (valor independente)', NO_MEANING))
     const groups = new Map()
     for (const option of meanings.values()) {
       if (!groups.has(option.group)) groups.set(option.group, h('optgroup', { label: option.group }))
@@ -453,8 +457,8 @@
     }
     input.append(...groups.values())
     if (spec.key && !chosen) input.add(new Option(spec.key, spec.key))
-    input.value = spec.key || ''
-    const hint = chosen ? chosen.description : inferred ? `Automático · ${inferred.label}` : 'Sem significado, o gerador cria um valor independente para o campo.'
+    input.value = item.semantic === false ? NO_MEANING : spec.key || ''
+    const hint = item.semantic === false ? 'Inferência desativada; o gerador cria um valor independente para o campo.' : chosen ? chosen.description : inferred ? `Automático · ${inferred.label}` : 'Sem significado, o gerador cria um valor independente para o campo.'
     return [
       h('label', { class: 'field', 'data-field-path': 'semantic', title: 'Valor do registro sintético coerente que preenche este campo' },
         h('span', { text: 'Significado' }), input, h('small', { class: 'hint', text: hint }), h('small', { class: 'field-message', 'data-message': 'semantic', hidden: true })),

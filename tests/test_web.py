@@ -4,6 +4,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -118,6 +119,42 @@ class WebTests(unittest.TestCase):
                 self.assert_contract(response, "/api/v1/document-types/{document_type}/mappings/{mapping_id}")
         result = subprocess.run([sys.executable, "-c", "import sys; from src.web.api import create_app; assert 'tkinter' not in sys.modules; assert 'torch' not in sys.modules"], capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def workspace_cookie(self) -> str:
+        response = self.client.get("/modelos")
+        return re.search(r"ocrsd_workspace=([^;]+)", response.headers["set-cookie"]).group(1)
+
+    def test_generation_wizard_groups_models_by_orgao_with_hover_actions(self):
+        headers = {"Cookie": f"ocrsd_workspace={self.workspace_cookie()}"}
+        page = self.client.get("/geracao", headers=headers)
+        self.assertEqual(page.status_code, 200, page.text)
+        self.assertIn('class="wizard-org-group"', page.text)
+        self.assertIn('class="wizard-model-actions"', page.text)
+        self.assertIn("/modelos/certidao_nascimento_cnj/template.pdf", page.text)
+        page = self.client.get("/geracao", headers=headers, params={"modelo": "certidao_nascimento_cnj"})
+        self.assertEqual(page.status_code, 200, page.text)
+        self.assertIn('<details class="wizard-org-group" open>', page.text)
+        catalog = Catalog(self.settings)
+        documentacao = catalog.types["certidao_nascimento_cnj"].documentacao
+        self.assertTrue(documentacao)
+        self.assertIn(f'href="{documentacao}"', page.text)
+        self.assertIn('target="_blank"', page.text)
+
+    def test_model_template_download(self):
+        headers = {"Cookie": f"ocrsd_workspace={self.workspace_cookie()}"}
+        response = self.client.get("/modelos/certidao_nascimento_cnj/template.pdf", headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/pdf")
+        self.assertIn("attachment", response.headers["content-disposition"])
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        missing = self.client.get("/modelos/documento-inexistente/template.pdf", headers=headers)
+        self.assertEqual(missing.status_code, 404)
+
+    def test_catalog_endpoint_lists_orgaos_and_documentos_including_planned(self):
+        data = self.client.get("/api/v1/catalog").json()
+        self.assertIn("cnj", data["orgaos"])
+        self.assertEqual(data["documentos"]["certidao_nascimento_cnj"]["status"], "disponivel")
+        self.assertTrue(any(item["status"] == "planejado" for item in data["documentos"].values()))
 
     def test_strict_validation_and_bounded_body(self):
         self.settings.max_count = 10

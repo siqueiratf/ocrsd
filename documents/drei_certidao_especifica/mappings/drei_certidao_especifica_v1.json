@@ -1,0 +1,423 @@
+{
+  "template_id": "drei_certidao_especifica",
+  "dpi": 300,
+  "page_size_px": [
+    2481,
+    3508
+  ],
+  "source_template": "documents/drei_certidao_especifica/template.pdf",
+  "reference_manual": "IN DREI nº 81/2020 (consolidada). A estrutura e a definição legal da Certidão Específica (relato de até três informações solicitadas pelo requerente, com referência aos respectivos atos, números e datas de arquivamento) correspondem ao conteúdo dos arts. 3º, 8º e 9º da IN DREI nº 20/2013, consolidado pela IN DREI nº 81/2020, que é a norma vigente citada como fundamento legal pelas Juntas Comerciais para a emissão deste tipo de certidão. O Anexo VIII da IN DREI nº 81/2020 não traz um formulário fixo para este tipo (apenas para a Certidão Simplificada); o layout deste template foi composto a partir dessa definição legal, reaproveitando o cabeçalho/rodapé padrão (SINREM, Junta Comercial, protocolo, assinatura do Secretário-Geral) do modelo oficial de Certidão Simplificada do mesmo Anexo VIII.",
+  "fields": [
+    {
+      "field_id": "uf_junta_comercial",
+      "label": "UF da Junta Comercial",
+      "description": "Unidade da Federação à qual pertence a Junta Comercial emissora.",
+      "bbox": [
+        767,
+        242,
+        1058,
+        292
+      ],
+      "data_type": "uf",
+      "validation": {}
+    },
+    {
+      "field_id": "nome_empresarial",
+      "label": "Nome Empresarial",
+      "description": "Nome empresarial do titular do(s) ato(s) certificado(s).",
+      "bbox": [
+        253,
+        892,
+        2228,
+        958
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 80,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "cnpj",
+      "label": "CNPJ",
+      "description": "CNPJ da empresa certificada, no formato 00.000.000/0000-00.",
+      "bbox": [
+        253,
+        1033,
+        1224,
+        1100
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "12.345.678/0001-09",
+          "98.765.432/0001-00",
+          "45.678.912/0001-10"
+        ],
+        "pattern": "^[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}/[0-9]{4}-[0-9]{2}$"
+      }
+    },
+    {
+      "field_id": "nire",
+      "label": "NIRE",
+      "description": "Número de Identificação do Registro de Empresas na Junta Comercial.",
+      "bbox": [
+        1257,
+        1033,
+        2228,
+        1100
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "35200012345",
+          "41200067890",
+          "29200054321"
+        ],
+        "pattern": "^[0-9]{11}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "info1_item",
+      "label": "Item certificado (1)",
+      "description": "Dado do ato arquivado que o requerente solicitou que fosse certificado.",
+      "bbox": [
+        386,
+        1262,
+        1203,
+        1325
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "Nome empresarial",
+          "Objeto social",
+          "Capital social",
+          "Prazo de duração",
+          "Endereço da sede",
+          "Administrador(es)",
+          "Sócio(s) e participação no capital"
+        ]
+      }
+    },
+    {
+      "field_id": "info1_teor",
+      "label": "Teor certificado (1)",
+      "description": "Conteúdo certificado para o item solicitado, conforme consta do ato arquivado.",
+      "bbox": [
+        1594,
+        1262,
+        2228,
+        1325
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 50,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "info1_ato",
+      "label": "Ato de referência (1)",
+      "description": "Tipo do ato arquivado em que consta a informação certificada.",
+      "bbox": [
+        569,
+        1354,
+        1028,
+        1417
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CONSTITUIÇÃO",
+          "ALTERAÇÃO CONTRATUAL",
+          "TRANSFORMAÇÃO",
+          "EXTINÇÃO",
+          "CISÃO",
+          "INCORPORAÇÃO",
+          "ATA DE ASSEMBLEIA"
+        ]
+      }
+    },
+    {
+      "field_id": "info1_numero_arquivamento",
+      "label": "Número do arquivamento (1)",
+      "description": "Número do arquivamento do ato que contém a informação certificada.",
+      "bbox": [
+        1294,
+        1354,
+        1586,
+        1417
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 9
+      }
+    },
+    {
+      "field_id": "info1_data_arquivamento",
+      "label": "Data de arquivamento (1)",
+      "description": "Data de arquivamento do ato que contém a informação certificada.",
+      "bbox": [
+        1744,
+        1354,
+        2228,
+        1417
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "info2_item",
+      "label": "Item certificado (2)",
+      "description": "Dado do ato arquivado que o requerente solicitou que fosse certificado.",
+      "bbox": [
+        386,
+        1638,
+        1203,
+        1700
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "Nome empresarial",
+          "Objeto social",
+          "Capital social",
+          "Prazo de duração",
+          "Endereço da sede",
+          "Administrador(es)",
+          "Sócio(s) e participação no capital"
+        ]
+      }
+    },
+    {
+      "field_id": "info2_teor",
+      "label": "Teor certificado (2)",
+      "description": "Conteúdo certificado para o item solicitado, conforme consta do ato arquivado.",
+      "bbox": [
+        1594,
+        1638,
+        2228,
+        1700
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 50,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "info2_ato",
+      "label": "Ato de referência (2)",
+      "description": "Tipo do ato arquivado em que consta a informação certificada.",
+      "bbox": [
+        569,
+        1729,
+        1028,
+        1792
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CONSTITUIÇÃO",
+          "ALTERAÇÃO CONTRATUAL",
+          "TRANSFORMAÇÃO",
+          "EXTINÇÃO",
+          "CISÃO",
+          "INCORPORAÇÃO",
+          "ATA DE ASSEMBLEIA"
+        ]
+      }
+    },
+    {
+      "field_id": "info2_numero_arquivamento",
+      "label": "Número do arquivamento (2)",
+      "description": "Número do arquivamento do ato que contém a informação certificada.",
+      "bbox": [
+        1294,
+        1729,
+        1586,
+        1792
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 9
+      }
+    },
+    {
+      "field_id": "info2_data_arquivamento",
+      "label": "Data de arquivamento (2)",
+      "description": "Data de arquivamento do ato que contém a informação certificada.",
+      "bbox": [
+        1744,
+        1729,
+        2228,
+        1792
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "info3_item",
+      "label": "Item certificado (3)",
+      "description": "Dado do ato arquivado que o requerente solicitou que fosse certificado.",
+      "bbox": [
+        386,
+        2013,
+        1203,
+        2075
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "Nome empresarial",
+          "Objeto social",
+          "Capital social",
+          "Prazo de duração",
+          "Endereço da sede",
+          "Administrador(es)",
+          "Sócio(s) e participação no capital"
+        ]
+      }
+    },
+    {
+      "field_id": "info3_teor",
+      "label": "Teor certificado (3)",
+      "description": "Conteúdo certificado para o item solicitado, conforme consta do ato arquivado.",
+      "bbox": [
+        1594,
+        2013,
+        2228,
+        2075
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 50,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "field_id": "info3_ato",
+      "label": "Ato de referência (3)",
+      "description": "Tipo do ato arquivado em que consta a informação certificada.",
+      "bbox": [
+        569,
+        2104,
+        1028,
+        2167
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "CONSTITUIÇÃO",
+          "ALTERAÇÃO CONTRATUAL",
+          "TRANSFORMAÇÃO",
+          "EXTINÇÃO",
+          "CISÃO",
+          "INCORPORAÇÃO",
+          "ATA DE ASSEMBLEIA"
+        ]
+      }
+    },
+    {
+      "field_id": "info3_numero_arquivamento",
+      "label": "Número do arquivamento (3)",
+      "description": "Número do arquivamento do ato que contém a informação certificada.",
+      "bbox": [
+        1294,
+        2104,
+        1586,
+        2167
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 9
+      }
+    },
+    {
+      "field_id": "info3_data_arquivamento",
+      "label": "Data de arquivamento (3)",
+      "description": "Data de arquivamento do ato que contém a informação certificada.",
+      "bbox": [
+        1744,
+        2104,
+        2228,
+        2167
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD/MM/AAAA"
+      }
+    },
+    {
+      "field_id": "numero_protocolo",
+      "label": "Número do protocolo",
+      "description": "Número do protocolo do pedido de certidão nesta Junta Comercial.",
+      "bbox": [
+        624,
+        2521,
+        1249,
+        2575
+      ],
+      "data_type": "digit_sequence",
+      "validation": {
+        "digit_count": 10
+      }
+    },
+    {
+      "field_id": "municipio_emissao",
+      "label": "Município de emissão",
+      "description": "Município da sede da Junta Comercial que expede a certidão.",
+      "bbox": [
+        494,
+        2625,
+        1119,
+        2679
+      ],
+      "data_type": "municipality",
+      "validation": {}
+    },
+    {
+      "field_id": "data_emissao",
+      "label": "Data de emissão",
+      "description": "Data de expedição da certidão, por extenso.",
+      "bbox": [
+        1153,
+        2625,
+        1778,
+        2679
+      ],
+      "data_type": "date",
+      "validation": {
+        "format": "DD de mês de AAAA"
+      }
+    },
+    {
+      "field_id": "nome_secretario_geral",
+      "label": "Nome do Secretário-Geral",
+      "description": "Nome completo do Secretário-Geral da Junta Comercial que assina a certidão.",
+      "bbox": [
+        782,
+        2950,
+        1699,
+        3008
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      }
+    }
+  ]
+}
