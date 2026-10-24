@@ -161,7 +161,7 @@ def _bounded_integer(field: dict, rng: random.Random, context: dict,
         return rng.randint(22, 42)
     if "consultas" in label and "pre-natal" in label:
         return rng.randint(0, 14)
-    if "idade" in label:
+    if re.search(r"(?<![a-z0-9])idade(?![a-z0-9])", label):
         return rng.randint(18, 65)
     if "numero" in label or "número" in label:
         upper = min(999, 10 ** (width or 3) - 1)
@@ -584,7 +584,7 @@ def _random_value(field: dict, rng: random.Random, context: dict) -> str:
         return f"{digits[:5]}-{digits[5:]}"
     if data_type == "cns" or "cartão sus" in label or "cartao sus" in label:
         return "".join(str(rng.randrange(10)) for _ in range(15))
-    if data_type == "integer" or any(word in label for word in ("nº", "numero", "número", "idade", "quantidade")):
+    if data_type == "integer" or re.search(r"(?<![a-z0-9])(nº|numero|número|idade|quantidade)(?![a-z0-9])", label):
         return str(_bounded_integer(field, rng, context))
     if data_type == "decimal" or "peso" in label:
         if data_type == "decimal" and ("min_value" in validation or "max_value" in validation or "decimals" in validation):
