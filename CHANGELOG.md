@@ -2,6 +2,20 @@
 
 ## [Não publicado]
 
+## [V1.0.0] — 2026-10-26
+
+Marco de produção da plataforma web no servidor 2. O histórico anterior de tags
+`V1` e `V1.1.0` permanece preservado no GitHub.
+
+- Interface publicada em `https://ocrsd.onrcpn.org.br/`, com HTTPS na borda
+  institucional e entrada na porta 6000 do servidor 2.
+- Assistente de geração configurado para o Ollama local com
+  `qwen2.5:7b-instruct`; pesos dos modelos de escrita neural montados somente
+  para leitura nos containers.
+- Configurações e volumes separados para desenvolvimento (`ocrsd-dev`) e
+  produção (`ocrsd`), com arquivos de ambiente próprios e validação do branch
+  `develop` no CI.
+
 ### Interface web
 
 - Dicas (`data-tooltip`) centralizadas em `tooltips.js`: uma camada única no top layer do

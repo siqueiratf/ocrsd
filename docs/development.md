@@ -246,12 +246,12 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 sudo systemctl enable --now docker nginx
 sudo git clone https://github.com/siqueiratf/ocrsd.git /opt/ocrsd
 cd /opt/ocrsd
-sudo cp deploy/.env.example deploy/.env
-sudo chmod 600 deploy/.env
-sudo docker compose --env-file deploy/.env config --quiet
-sudo docker compose --env-file deploy/.env up -d --build
-sudo docker compose --env-file deploy/.env ps
-curl --fail http://127.0.0.1:8080/api/v1/health
+sudo cp deploy/.env.production.example deploy/.env.production
+sudo chmod 600 deploy/.env.production
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production config --quiet
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --build
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production ps
+curl --fail http://127.0.0.1:6000/api/v1/health
 ```
 
 Selecione a revisão aprovada com `sudo git checkout REVISAO_APROVADA` antes do build.
@@ -259,10 +259,10 @@ O build instala dependências do lockfile e inclui o catálogo e a interface web
 Downloads exigem saída HTTPS para registries Docker, PyPI e índice PyTorch;
 o funcionamento padrão não precisa de saída da rede privada dos containers.
 A API e o worker usam UID 10001, filesystem somente leitura, volume persistente e
-limites de CPU/memória/processos. O Nginx público do container atende apenas no
-loopback do host, porta 8080. Para outra porta: `sudo env OCRSD_HTTP_PORT=18080 docker compose --env-file deploy/.env up -d`.
+limites de CPU/memória/processos. No servidor 2, a borda institucional encaminha
+HTTPS para o Nginx na porta 6000 do host; a API e o Ollama atendem só em loopback.
 
-As sub-redes `172.30.85.0/24` (API/worker) e `172.30.86.0/24` (entrada web)
+No Compose de desenvolvimento, as sub-redes `172.30.85.0/24` (API/worker) e `172.30.86.0/24` (entrada web)
 são **exemplos operacionais reservados à pilha**, não IPs institucionais. Antes do deploy, verifique conflitos com Docker/VPN/rede local.
 Se precisar alterá-la, atualize `compose.yaml`, o IP confiável em `deploy/Dockerfile`
 e o gateway confiável em `deploy/nginx.conf`, então reconstrua. Só `172.30.85.2` é
@@ -282,7 +282,7 @@ containers usam a rede do host para alcançar o Ollama já instalado em
 `127.0.0.1:11434`; a API e o Ollama não ficam expostos nessa porta pública.
 O proxy da borda deve encaminhar `Host` e aceitar o certificado HTTPS do domínio.
 
-No `deploy/.env` do servidor, mantenha `OCRSD_NEURAL_ENABLED=true` e configure:
+No `deploy/.env.production` do servidor, mantenha `OCRSD_NEURAL_ENABLED=true` e configure:
 
 ```dotenv
 OCRSD_AI_PROVIDER=openai
@@ -296,8 +296,8 @@ containers. Para subir e validar:
 
 ```bash
 cd /opt/ocrsd
-sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env up -d --build --remove-orphans
-sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env ps
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --build --remove-orphans
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production ps
 curl -fsS http://127.0.0.1:6000/api/v1/health
 curl -fsS http://127.0.0.1:6000/api/v1/capabilities
 curl -fsS https://ocrsd.onrcpn.org.br/api/v1/health
@@ -305,9 +305,14 @@ curl -fsS https://ocrsd.onrcpn.org.br/api/v1/health
 
 Nas atualizações desta instância, use sempre o mesmo arquivo Compose. O volume
 nomeado `ocrsd_jobs` conserva o banco e os resultados. Os arquivos de pesos e
-`deploy/.env` não são substituídos pela atualização do código.
+`deploy/.env.production` não são substituídos pela atualização do código. O
+desenvolvimento usa `compose.yaml`, `deploy/.env.development` e o volume
+`ocrsd-dev_jobs`; comandos nesse ambiente não alteram os dados da produção.
 
 #### Histórico da implantação em 8080
+
+Os comandos desta subseção registram a implantação anterior; para operação atual,
+use a publicação em 6000 descrita acima.
 
 A primeira implantação ficou em `/opt/ocrsd` no Ubuntu 22.04 do servidor
 `192.168.3.102`. O Compose v2 foi instalado pelo pacote da distribuição e o projeto
@@ -325,8 +330,8 @@ ssh -N -L 18080:192.168.3.102:8080 ia@192.168.3.102
 ```
 
 Também é possível manter uma sessão interativa com
-`ssh2 -L 18080:192.168.3.102:8080`. Abra `http://127.0.0.1:18080`, importe
-`postman/servidor.postman_environment.json` e execute a collection. Para operar os
+`ssh2 -L 18080:192.168.3.102:8080`. Abra `http://127.0.0.1:18080`, configure
+esse endereço como `baseUrl` no Postman e execute a collection. Para operar os
 serviços no servidor:
 
 ```bash
@@ -431,18 +436,18 @@ nem `/var/lib/ocrsd` diretamente pelo Nginx. A API entrega as páginas e os arqu
 
 ## Operação, atualização e recuperação
 
-Com Compose, na raiz do checkout, use `sudo docker compose --env-file deploy/.env` onde necessário:
+Com Compose, na raiz do checkout, use `sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production` onde necessário:
 
 ```bash
-docker compose --env-file deploy/.env start
-docker compose --env-file deploy/.env stop
-docker compose --env-file deploy/.env restart api web
-docker compose --env-file deploy/.env logs --tail=100 api worker web
-docker compose --env-file deploy/.env logs -f worker
-docker compose --env-file deploy/.env ps
-docker compose --env-file deploy/.env exec worker python -m src.web.worker --health
-docker compose --env-file deploy/.env exec api python -c 'from src.web.jobs import JobStore; from src.web.settings import Settings; s=JobStore(Settings()); print(s.root); print(s.ready())'
-docker compose --env-file deploy/.env exec api df -h /data
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production start
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production stop
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production restart api web
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production logs --tail=100 api worker web
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production logs -f worker
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production ps
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production exec worker python -m src.web.worker --health
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production exec api python -c 'from src.web.jobs import JobStore; from src.web.settings import Settings; s=JobStore(Settings()); print(s.root); print(s.ready())'
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production exec api df -h /data
 ```
 
 `restart` não relê `env_file`; use `up -d --force-recreate api` após mudar configuração.
@@ -455,22 +460,22 @@ separado, mantenha o volume, suspenda novas submissões, drene a fila e só ent�
 o worker. Exemplo no checkout de implantação, com alterações locais revisadas:
 
 ```bash
-sed -i 's/OCRSD_ACCEPTING_JOBS=true/OCRSD_ACCEPTING_JOBS=false/' deploy/.env
-docker compose --env-file deploy/.env up -d --no-deps --force-recreate api
-docker compose --env-file deploy/.env exec api python -c 'import sqlite3; from src.web.settings import Settings; print(sqlite3.connect(Settings().storage / "jobs.sqlite3").execute("SELECT status,COUNT(*) FROM jobs GROUP BY status").fetchall())'
+sed -i 's/OCRSD_ACCEPTING_JOBS=true/OCRSD_ACCEPTING_JOBS=false/' deploy/.env.production
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --no-deps --force-recreate api
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production exec api python -c 'import sqlite3; from src.web.settings import Settings; print(sqlite3.connect(Settings().storage / "jobs.sqlite3").execute("SELECT status,COUNT(*) FROM jobs GROUP BY status").fetchall())'
 ```
 
 Aguarde `queued` e `running` zerarem. Consulte status também pelo Postman. Depois:
 
 ```bash
-docker compose --env-file deploy/.env stop worker
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production stop worker
 git fetch --tags
 git checkout REVISAO_APROVADA
-docker compose --env-file deploy/.env build
-docker compose --env-file deploy/.env up -d
-curl --fail http://127.0.0.1:8080/api/v1/health
-sed -i 's/OCRSD_ACCEPTING_JOBS=false/OCRSD_ACCEPTING_JOBS=true/' deploy/.env
-docker compose --env-file deploy/.env up -d --no-deps --force-recreate api
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production build
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d
+curl --fail http://127.0.0.1:6000/api/v1/health
+sed -i 's/OCRSD_ACCEPTING_JOBS=false/OCRSD_ACCEPTING_JOBS=true/' deploy/.env.production
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --no-deps --force-recreate api
 ```
 
 Não faça `git pull` que modifique código carregado por um worker nativo ativo. No
@@ -493,7 +498,7 @@ contêm saídas, opções e hashes das chaves e precisam de retenção própria.
 A limpeza normal é automática pelo worker. Para executá-la manualmente no Compose:
 
 ```bash
-docker compose --env-file deploy/.env exec api python -c 'from src.web.jobs import JobStore; from src.web.settings import Settings; JobStore(Settings()).cleanup()'
+docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production exec api python -c 'from src.web.jobs import JobStore; from src.web.settings import Settings; JobStore(Settings()).cleanup()'
 ```
 
 Esse comando remove apenas resultados já expirados. Reduzir retenção muda jobs que

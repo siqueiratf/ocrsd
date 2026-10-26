@@ -32,9 +32,12 @@ def expected_content(truth: dict) -> set[str]:
         semantic = field.get("semantic") or {}
         key = semantic.get("key")
         definition = REGISTRY.get(key)
-        if not (field.get("blank") is True and definition and definition.optional
-                and "value" in semantic and semantic["value"] is None
-                and key in snapshot and snapshot[key] is None):
+        condition = field.get("render_condition") or {}
+        condition_key = condition.get("key")
+        optional_blank = (definition and definition.optional and "value" in semantic
+                          and semantic["value"] is None and key in snapshot and snapshot[key] is None)
+        conditional_blank = (condition_key in snapshot and snapshot[condition_key] not in condition.get("values", []))
+        if not (field.get("blank") is True and (optional_blank or conditional_blank)):
             raise AssertionError(f"Campo vazio sem justificativa semântica: {identifier}")
     return filled
 
@@ -45,7 +48,7 @@ def verify_document(key: str, template_name: str, mapping_name: str,
     template = root / template_name
     mapping_path = root / mapping_name
     mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
-    selected = {str(field["field_id"]) for field in mapping["fields"]}
+    selected = {str(field["field_id"]) for field in mapping["fields"] if not field.get("unsupported_reason")}
     generated = generate_dataset(
         template, mapping_path, selected, output / key / "dataset", 1, seed=seed,
     )[0]
@@ -78,10 +81,12 @@ def verify_document(key: str, template_name: str, mapping_name: str,
     if not manifest["alignment"]["success"]:
         raise AssertionError(f"{key}: alinhamento falhou")
     entries = manifest["fields"]
-    if {str(field["field_id"]) for field in entries} != selected:
+    mapped = {str(field["field_id"]) for field in mapping["fields"]}
+    if {str(field["field_id"]) for field in entries} != mapped:
         raise AssertionError(f"{key}: campos ausentes no processamento")
     filled = [field for field in entries if field["filled"]]
-    expected_redacted = expected | {str(field["field_id"]) for field in mapping["fields"] if field.get("always_redact")}
+    expected_redacted = expected | {str(field["field_id"]) for field in mapping["fields"]
+                                    if str(field["field_id"]) in selected and field.get("always_redact")}
     detected = {str(field["field_id"]) for field in filled}
     if detected != expected_redacted:
         raise AssertionError(f"{key}: detecção divergente: ausentes={sorted(expected_redacted - detected)}, "

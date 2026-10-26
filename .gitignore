@@ -26,3 +26,5 @@ assets/handwriting/*.bin
 assets/handwriting/sjvasquez/
 var/
 deploy/.env
+deploy/.env.development
+deploy/.env.production

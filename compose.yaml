@@ -1,9 +1,11 @@
+name: ocrsd-dev
+
 services:
   api:
     build:
       context: .
       dockerfile: deploy/Dockerfile
-    env_file: deploy/.env
+    env_file: deploy/.env.development
     environment:
       OCRSD_STORAGE: /data
       OCRSD_STANDARD_EDITS: "false"
@@ -42,7 +44,7 @@ services:
     networks:
       private:
         ipv4_address: 172.30.85.4
-    env_file: deploy/.env
+    env_file: deploy/.env.development
     environment:
       OCRSD_STORAGE: /data
       OCRSD_STANDARD_EDITS: "false"

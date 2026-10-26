@@ -13,16 +13,18 @@ PDF e ground truth, baixar o ZIP e criar links revogáveis. O motor Python, a CL
 o desktop continuam disponíveis. Os documentos gerados pela web recebem marca
 visível **SINTÉTICO — SEM VALIDADE LEGAL**.
 
-Para testar a pilha completa com Docker Engine e Compose instalados:
+Para desenvolver com Docker Engine e Compose instalados:
 
 ```bash
-cp deploy/.env.example deploy/.env
-docker compose --env-file deploy/.env up -d --build
-docker compose --env-file deploy/.env ps
+cp deploy/.env.development.example deploy/.env.development
+docker compose --env-file deploy/.env.development up -d --build
+docker compose --env-file deploy/.env.development ps
 curl --fail http://127.0.0.1:8080/api/v1/health
 ```
 
-Abra **http://127.0.0.1:8080**. A publicação fica restrita ao computador local.
+Abra **http://127.0.0.1:8080**. O Compose de desenvolvimento usa o projeto
+`ocrsd-dev` e o volume `ocrsd-dev_jobs`, separados da produção no servidor 2.
+A publicação fica restrita ao computador local.
 O Compose monta `assets/handwriting` somente para leitura e habilita os modelos
 neurais quando os pesos completos estão presentes. Ajuste
 `OCRSD_HANDWRITING_ASSETS` se os pesos forem mantidos fora do checkout.
@@ -35,7 +37,7 @@ Preserve esse cookie: esta versão não integra login institucional nem recupera
 são opcionais, podem impedir downloads, expiram com o job e podem ser revogados. A
 chave do compartilhamento fica no fragmento da URL e é removida após a leitura.
 O OpenAPI está em `/api/openapi.json` e a documentação interativa em `/api/docs`.
-`docker compose --env-file deploy/.env logs -f api worker web` mostra os logs; `docker compose --env-file deploy/.env stop`
+`docker compose --env-file deploy/.env.development logs -f api worker web` mostra os logs; `docker compose --env-file deploy/.env.development stop`
 interrompe os serviços preservando os dados. Não use `down -v` se precisar
 preservar jobs e resultados.
 
@@ -76,8 +78,8 @@ uv run --no-sync python -m src.web.worker
 A interface fica em `http://127.0.0.1:8000` e a API em `/api/v1`. Os jobs ficam
 em `var/web/`; feche o worker com Ctrl+C, aguardando o job atual terminar.
 API e worker devem usar as mesmas variáveis `OCRSD_*`; a execução direta não lê
-`deploy/.env` automaticamente. Para carregá-las no shell, use
-`set -a; . deploy/.env; set +a` antes de iniciar cada processo.
+`deploy/.env.development` automaticamente. Para carregá-las no shell, use
+`set -a; . deploy/.env.development; set +a` antes de iniciar cada processo.
 
 Importe [a coleção Postman](postman/ocrsd.postman_collection.json) e
 [o ambiente local](postman/local.postman_environment.json). Ajuste `baseUrl`
@@ -100,6 +102,33 @@ Após alterar contratos, regenere a coleção com
 os limites, os comandos para instalar em Linux, HTTPS, systemd, atualizações e
 recuperação. O deploy institucional exige revisão de rede, domínio, recursos e
 permissões pela equipe responsável; os arquivos não publicam serviços internos.
+A produção usa `deploy/compose.ssh2.yaml`, `deploy/.env.production`, o volume
+`ocrsd_jobs` e a URL `https://ocrsd.onrcpn.org.br/`.
+
+O branch `develop` concentra as próximas mudanças e roda a validação no GitHub.
+O branch `main` registra versões aprovadas para produção; cada publicação recebe
+uma tag `V*`. O servidor 2 deve fazer checkout da tag aprovada antes da
+atualização do Compose de produção. Os arquivos `.env.development` e
+`.env.production` são locais a cada ambiente e não entram no Git.
+
+### Publicação em produção
+
+O push para `main` executa testes, smoke e conferência do Postman no GitHub
+Actions. O push de uma tag `V*` repete as verificações e cria a release com
+artefatos. Nenhum desses fluxos faz deploy automático no servidor 2.
+Depois de confirmar que o CI e a release passaram, execute no servidor:
+
+```bash
+cd /opt/ocrsd
+git fetch origin --tags
+git checkout V1.0.0 # substitua pela tag aprovada
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --build --remove-orphans
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production ps
+curl -fsS https://ocrsd.onrcpn.org.br/api/v1/health
+```
+
+Mantenha `deploy/.env.production` e os pesos locais no servidor. O volume
+`ocrsd_jobs` preserva banco, histórico e resultados entre atualizações.
 
 ## Instalação
 

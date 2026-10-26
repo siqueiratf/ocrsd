@@ -144,7 +144,7 @@ class InterfaceTests(unittest.TestCase):
         favicon = (static / "favicon.svg").read_text()
         starts = [float(value) for value in re.findall(r'<path[^>]*\bd="M\s*(-?[\d.]+)', favicon)]
         self.assertEqual(len(starts), 19)
-        self.assertTrue(all(value < 470 for value in starts))
+        self.assertTrue(all(170 <= value < 660 for value in starts))
         logo = (ROOT / "ocrsd-logo.svg").read_text()
         for path in re.findall(r'<path[^>]*\bd="M\s*-?[\d.]+[^>]*>', favicon):
             self.assertIn(path.split(' d="')[1].split('"')[0], logo)

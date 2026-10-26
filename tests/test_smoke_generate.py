@@ -37,6 +37,15 @@ class SmokeGroundTruthTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(AssertionError):
                 expected_content(truth)
 
+    def test_conditional_blank_matches_record(self):
+        field = {"field_id": "local_externo", "value": "", "blank": True,
+                 "render_condition": {"key": "birth.occurrence_type", "values": ["Domicílio", "Outros"]}}
+        truth = {"semantic_record": {"birth.occurrence_type": "Hospital"}, "fields": [field]}
+        self.assertEqual(expected_content(truth), set())
+        truth["semantic_record"]["birth.occurrence_type"] = "Domicílio"
+        with self.assertRaises(AssertionError):
+            expected_content(truth)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ services:
       dockerfile: deploy/Dockerfile
     command: [uvicorn, src.web.api:create_app, --factory, --host, 127.0.0.1, --port, "8000", --proxy-headers, --forwarded-allow-ips, 127.0.0.1]
     network_mode: host
-    env_file: .env
+    env_file: .env.production
     environment:
       OCRSD_STORAGE: /data
       OCRSD_STANDARD_EDITS: "false"
@@ -36,7 +36,7 @@ services:
       dockerfile: deploy/Dockerfile
     command: [python, -m, src.web.worker]
     network_mode: host
-    env_file: .env
+    env_file: .env.production
     environment:
       OCRSD_STORAGE: /data
       OCRSD_STANDARD_EDITS: "false"
