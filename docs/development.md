@@ -272,13 +272,50 @@ diretamente pela internet. Não publique a porta 8000 nem o volume de jobs.
 
 ### Instância atual do servidor 2
 
-A primeira implantação está em `/opt/ocrsd` no Ubuntu 22.04 do servidor
+#### Publicação em `ocrsd.onrcpn.org.br`
+
+A borda institucional termina HTTPS em `https://ocrsd.onrcpn.org.br/` e encaminha
+para a porta 6000 do servidor 2. Nesta máquina, use
+`deploy/compose.ssh2.yaml`: o Nginx escuta em 6000, a API escuta somente em
+`127.0.0.1:8000` e o worker compartilha o volume `ocrsd_jobs`. Os três
+containers usam a rede do host para alcançar o Ollama já instalado em
+`127.0.0.1:11434`; a API e o Ollama não ficam expostos nessa porta pública.
+O proxy da borda deve encaminhar `Host` e aceitar o certificado HTTPS do domínio.
+
+No `deploy/.env` do servidor, mantenha `OCRSD_NEURAL_ENABLED=true` e configure:
+
+```dotenv
+OCRSD_AI_PROVIDER=openai
+OCRSD_AI_BASE_URL=http://127.0.0.1:11434/v1
+OCRSD_AI_MODEL=qwen2.5:7b-instruct
+```
+
+O modelo de linguagem precisa aparecer em `ollama list`. Os pesos de escrita
+neural ficam em `assets/handwriting/` no host, montado somente para leitura nos
+containers. Para subir e validar:
+
+```bash
+cd /opt/ocrsd
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env up -d --build --remove-orphans
+sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env ps
+curl -fsS http://127.0.0.1:6000/api/v1/health
+curl -fsS http://127.0.0.1:6000/api/v1/capabilities
+curl -fsS https://ocrsd.onrcpn.org.br/api/v1/health
+```
+
+Nas atualizações desta instância, use sempre o mesmo arquivo Compose. O volume
+nomeado `ocrsd_jobs` conserva o banco e os resultados. Os arquivos de pesos e
+`deploy/.env` não são substituídos pela atualização do código.
+
+#### Histórico da implantação em 8080
+
+A primeira implantação ficou em `/opt/ocrsd` no Ubuntu 22.04 do servidor
 `192.168.3.102`. O Compose v2 foi instalado pelo pacote da distribuição e o projeto
 mantém API, worker e Nginx de entrada em containers próprios, com o volume `ocrsd_jobs`.
 O Nginx de entrada escuta somente em `192.168.3.102:8080`; a API não publica porta no host.
 O container preexistente `chandra-ocr-vllm`, na porta 8010, não faz parte desta pilha.
 
-A VPN atual encaminha SSH, mas a política de rede bloqueia TCP 8080 antes de chegar
+A VPN encaminhava SSH, mas a política de rede bloqueava TCP 8080 antes de chegar
 ao host. O firewall local está inativo, portanto a validação externa deve usar um
 túnel até que a infraestrutura libere uma rota aprovada ou publique HTTPS. Na
 estação com a VPN conectada, mantenha este comando aberto:
@@ -301,7 +338,7 @@ sudo docker compose --env-file deploy/.env stop
 sudo docker compose --env-file deploy/.env start
 ```
 
-Ainda não há FQDN institucional, registro DNS ou certificado TLS configurado. Para
+Na implantação inicial ainda não havia FQDN institucional, registro DNS ou certificado TLS configurado. Para
 publicação sem túnel, a infraestrutura deve fornecer o domínio aprovado e decidir
 se a terminação HTTPS ficará neste host ou em uma borda institucional. Se o Nginx
 ficar no mesmo host, altere `OCRSD_BIND_ADDRESS` para `127.0.0.1`, recrie o serviço `web`
