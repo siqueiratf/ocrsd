@@ -1,0 +1,497 @@
+{
+  "template_id": "cnpj_quadro_socios_administradores",
+  "dpi": 300,
+  "page_size_px": [
+    2480,
+    3508
+  ],
+  "source_template": "Reconstrução do quadro \"Consultar QSA\" do Comprovante de Inscrição e de Situação Cadastral do CNPJ (Receita Federal), com colunas do leiaute público de sócios dos Dados Abertos do CNPJ",
+  "reference_manual": "https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/cadastros/consultas/dados-publicos-cnpj",
+  "fields": [
+    {
+      "field_id": "cnpj",
+      "label": "CNPJ",
+      "description": "CNPJ da pessoa jurídica cujo quadro de sócios e administradores é consultado, no formato 00.000.000/0000-00.",
+      "bbox": [
+        218,
+        534,
+        1034,
+        633
+      ],
+      "data_type": "text",
+      "validation": {
+        "mask": "##.###.###/####-##",
+        "pattern": "^[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}/[0-9]{4}-[0-9]{2}$"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "nome_empresarial",
+      "label": "Nome Empresarial",
+      "description": "Nome empresarial (razão social) da pessoa jurídica à qual o quadro de sócios se refere.",
+      "bbox": [
+        1061,
+        534,
+        2263,
+        633
+      ],
+      "data_type": "text",
+      "validation": {
+        "max_length": 80,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "capital_social",
+      "label": "Capital Social (R$)",
+      "description": "Valor do capital social integralizado da pessoa jurídica, em reais.",
+      "bbox": [
+        218,
+        709,
+        1034,
+        808
+      ],
+      "data_type": "decimal",
+      "validation": {
+        "min_value": 1000,
+        "max_value": 5000000,
+        "decimals": 2
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_1_nome",
+      "label": "Nome do sócio/administrador 1",
+      "description": "Nome completo do sócio ou administrador da linha 1 do quadro.",
+      "bbox": [
+        218,
+        993,
+        865,
+        1124
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_1_qualificacao",
+      "label": "Qualificação do sócio/administrador 1",
+      "description": "Papel exercido pelo sócio/administrador da linha 1, conforme a Tabela de Qualificação de Sócios e Administradores da Receita Federal.",
+      "bbox": [
+        875,
+        993,
+        1235,
+        1124
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "Sócio-Administrador",
+          "Sócio",
+          "Administrador",
+          "Diretor",
+          "Presidente",
+          "Sócio-Gerente"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_1_representante_legal",
+      "label": "Representante legal do sócio/administrador 1",
+      "description": "Nome do representante legal do sócio da linha 1, preenchido apenas quando o sócio é pessoa jurídica ou incapaz.",
+      "bbox": [
+        1245,
+        993,
+        1687,
+        1124
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.85
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_1_nome_exterior",
+      "label": "Nome no exterior do sócio/administrador 1",
+      "description": "Nome do sócio da linha 1 tal como registrado em seu país de origem, aplicável somente a sócio estrangeiro sem CPF.",
+      "bbox": [
+        1697,
+        993,
+        2016,
+        1124
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.9
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_1_pais_origem",
+      "label": "País de origem do sócio/administrador 1",
+      "description": "País de origem do sócio da linha 1, aplicável somente a sócio estrangeiro sem CPF.",
+      "bbox": [
+        2026,
+        993,
+        2263,
+        1124
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "Portugal",
+          "Estados Unidos",
+          "Argentina",
+          "Espanha",
+          "Itália",
+          "Alemanha",
+          "Uruguai",
+          "Paraguai"
+        ],
+        "blank_probability": 0.9
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_2_nome",
+      "label": "Nome do sócio/administrador 2",
+      "description": "Nome completo do sócio ou administrador da linha 2 do quadro.",
+      "bbox": [
+        218,
+        1134,
+        865,
+        1266
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_2_qualificacao",
+      "label": "Qualificação do sócio/administrador 2",
+      "description": "Papel exercido pelo sócio/administrador da linha 2, conforme a Tabela de Qualificação de Sócios e Administradores da Receita Federal.",
+      "bbox": [
+        875,
+        1134,
+        1235,
+        1266
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "Sócio-Administrador",
+          "Sócio",
+          "Administrador",
+          "Diretor",
+          "Presidente",
+          "Sócio-Gerente"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_2_representante_legal",
+      "label": "Representante legal do sócio/administrador 2",
+      "description": "Nome do representante legal do sócio da linha 2, preenchido apenas quando o sócio é pessoa jurídica ou incapaz.",
+      "bbox": [
+        1245,
+        1134,
+        1687,
+        1266
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.85
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_2_nome_exterior",
+      "label": "Nome no exterior do sócio/administrador 2",
+      "description": "Nome do sócio da linha 2 tal como registrado em seu país de origem, aplicável somente a sócio estrangeiro sem CPF.",
+      "bbox": [
+        1697,
+        1134,
+        2016,
+        1266
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.9
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_2_pais_origem",
+      "label": "País de origem do sócio/administrador 2",
+      "description": "País de origem do sócio da linha 2, aplicável somente a sócio estrangeiro sem CPF.",
+      "bbox": [
+        2026,
+        1134,
+        2263,
+        1266
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "Portugal",
+          "Estados Unidos",
+          "Argentina",
+          "Espanha",
+          "Itália",
+          "Alemanha",
+          "Uruguai",
+          "Paraguai"
+        ],
+        "blank_probability": 0.9
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_3_nome",
+      "label": "Nome do sócio/administrador 3",
+      "description": "Nome completo do sócio ou administrador da linha 3 do quadro.",
+      "bbox": [
+        218,
+        1276,
+        865,
+        1408
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_3_qualificacao",
+      "label": "Qualificação do sócio/administrador 3",
+      "description": "Papel exercido pelo sócio/administrador da linha 3, conforme a Tabela de Qualificação de Sócios e Administradores da Receita Federal.",
+      "bbox": [
+        875,
+        1276,
+        1235,
+        1408
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "Sócio-Administrador",
+          "Sócio",
+          "Administrador",
+          "Diretor",
+          "Presidente",
+          "Sócio-Gerente"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_3_representante_legal",
+      "label": "Representante legal do sócio/administrador 3",
+      "description": "Nome do representante legal do sócio da linha 3, preenchido apenas quando o sócio é pessoa jurídica ou incapaz.",
+      "bbox": [
+        1245,
+        1276,
+        1687,
+        1408
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.85
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_3_nome_exterior",
+      "label": "Nome no exterior do sócio/administrador 3",
+      "description": "Nome do sócio da linha 3 tal como registrado em seu país de origem, aplicável somente a sócio estrangeiro sem CPF.",
+      "bbox": [
+        1697,
+        1276,
+        2016,
+        1408
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.9
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_3_pais_origem",
+      "label": "País de origem do sócio/administrador 3",
+      "description": "País de origem do sócio da linha 3, aplicável somente a sócio estrangeiro sem CPF.",
+      "bbox": [
+        2026,
+        1276,
+        2263,
+        1408
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "Portugal",
+          "Estados Unidos",
+          "Argentina",
+          "Espanha",
+          "Itália",
+          "Alemanha",
+          "Uruguai",
+          "Paraguai"
+        ],
+        "blank_probability": 0.9
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_4_nome",
+      "label": "Nome do sócio/administrador 4",
+      "description": "Nome completo do sócio ou administrador da linha 4 do quadro.",
+      "bbox": [
+        218,
+        1418,
+        865,
+        1549
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR"
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_4_qualificacao",
+      "label": "Qualificação do sócio/administrador 4",
+      "description": "Papel exercido pelo sócio/administrador da linha 4, conforme a Tabela de Qualificação de Sócios e Administradores da Receita Federal.",
+      "bbox": [
+        875,
+        1418,
+        1235,
+        1549
+      ],
+      "data_type": "enum",
+      "validation": {
+        "allowed_values": [
+          "Sócio-Administrador",
+          "Sócio",
+          "Administrador",
+          "Diretor",
+          "Presidente",
+          "Sócio-Gerente"
+        ]
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_4_representante_legal",
+      "label": "Representante legal do sócio/administrador 4",
+      "description": "Nome do representante legal do sócio da linha 4, preenchido apenas quando o sócio é pessoa jurídica ou incapaz.",
+      "bbox": [
+        1245,
+        1418,
+        1687,
+        1549
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.85
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_4_nome_exterior",
+      "label": "Nome no exterior do sócio/administrador 4",
+      "description": "Nome do sócio da linha 4 tal como registrado em seu país de origem, aplicável somente a sócio estrangeiro sem CPF.",
+      "bbox": [
+        1697,
+        1418,
+        2016,
+        1549
+      ],
+      "data_type": "person_name",
+      "validation": {
+        "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
+        "allow_digits": false,
+        "portuguese_rules": true,
+        "language": "pt-BR",
+        "blank_probability": 0.9
+      },
+      "semantic": false
+    },
+    {
+      "field_id": "socio_4_pais_origem",
+      "label": "País de origem do sócio/administrador 4",
+      "description": "País de origem do sócio da linha 4, aplicável somente a sócio estrangeiro sem CPF.",
+      "bbox": [
+        2026,
+        1418,
+        2263,
+        1549
+      ],
+      "data_type": "text",
+      "validation": {
+        "allowed_values": [
+          "Portugal",
+          "Estados Unidos",
+          "Argentina",
+          "Espanha",
+          "Itália",
+          "Alemanha",
+          "Uruguai",
+          "Paraguai"
+        ],
+        "blank_probability": 0.9
+      },
+      "semantic": false
+    }
+  ]
+}
