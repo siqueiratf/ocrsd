@@ -361,6 +361,17 @@ class PlacementTest(unittest.TestCase):
 
 
 class CustomProposalTest(unittest.TestCase):
+    def test_official_death_sex_boxes_keep_order_when_ocr_misreads_labels(self):
+        elements = ({"label": "", "code": None, "bbox": [1381, 720, 1404, 737]},
+                    {"label": "M-Mase.", "code": None, "bbox": [1381, 744, 1404, 761]},
+                    {"label": "i-ignorado", "code": None, "bbox": [1381, 770, 1404, 788]})
+        candidate = FieldCandidate("c001", "Sexo", (1320, 705, 1405, 718), (1320, 705, 1510, 790),
+                                   "checkbox", elements=elements, number="10")
+        analysis = PageAnalysis(0, 300, (2550, 3300), 12, "tesseract", (candidate,))
+        match = Match("c001", "deceased.sex", "matched", "rule", 1.0, (), "Sexo na DO")
+        proposal = validate_mapping(build_proposal(analysis, [match], "do"))
+        self.assertEqual([item["value"] for item in proposal["fields"][0]["elements"]], ["M", "F", "I"])
+
     def test_approved_definition_is_embedded_for_generation(self):
         spec = {"key": "custom.registro.volume", "label": "Volume", "description": "Volume do registro",
                 "data_type": "text", "generator": {"type": "choices", "values": ["A", "B"]}, "status": "approved"}

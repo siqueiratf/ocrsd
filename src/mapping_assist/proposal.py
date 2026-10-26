@@ -64,7 +64,8 @@ def _data_type(candidate: FieldCandidate, key: str | None, proposal: dict | None
     return (proposal or {}).get("data_type") or guess_data_type(candidate)
 
 
-def _elements(candidate: FieldCandidate, field_id: str, scale: float, size: tuple[int, int], key: str | None = None) -> list[dict]:
+def _elements(candidate: FieldCandidate, field_id: str, scale: float, size: tuple[int, int], key: str | None = None,
+              context: str | None = None) -> list[dict]:
     elements, used = [], set()
     if candidate.kind == "digit_sequence":
         ordered = sorted(candidate.elements, key=lambda item: (item.get("index") is None, item.get("index") or 0))
@@ -73,10 +74,19 @@ def _elements(candidate: FieldCandidate, field_id: str, scale: float, size: tupl
                 elements.append({"element_id": f"{field_id}_{position}", "index": position,
                                  "label": f"{candidate.label} {position}", "bbox": box})
     elif candidate.kind == "checkbox":
-        for position, element in enumerate(candidate.elements):
+        ordered = list(candidate.elements)
+        official_do_sex = (context == "declaracao_obito" and key == "deceased.sex" and candidate.number == "10"
+                           and normalize(candidate.label) == "sexo" and len(ordered) == 3
+                           and max(item["bbox"][0] for item in ordered) - min(item["bbox"][0] for item in ordered)
+                           <= min(item["bbox"][2] - item["bbox"][0] for item in ordered))
+        if official_do_sex:
+            ordered.sort(key=lambda item: item["bbox"][1])
+        for position, element in enumerate(ordered):
             label = str(element.get("label") or element.get("code") or f"Opção {position + 1}").strip()
             value = str(element.get("code") or label).strip()
-            if key in REGISTRY and REGISTRY[key].kind == "sex":
+            if official_do_sex:
+                value, label = (("M", "M - Masc."), ("F", "F - Fem."), ("I", "I - Ignorado"))[position]
+            elif key in REGISTRY and REGISTRY[key].kind == "sex":
                 value = _sex_value(label, value) or value
             identifier = f"{field_id}_{_slug(value) or position}"
             identifier = identifier if identifier not in used else f"{identifier}_{position}"
@@ -117,7 +127,7 @@ def build_proposal(analysis: PageAnalysis, matches: list[Match], document: str |
             issues.append("opção de seleção isolada; associe-a ao campo correspondente ou rejeite-a")
             key = None
         field = {"field_id": field_id, "label": label, "description": label, "data_type": data_type, "bbox": box}
-        elements = _elements(candidate, field_id, scale, size, key) if data_type in {"checkbox", "digit_sequence"} else []
+        elements = _elements(candidate, field_id, scale, size, key, context) if data_type in {"checkbox", "digit_sequence"} else []
         if data_type == "checkbox" and len(elements) < 2:
             data_type = field["data_type"] = "text"
             elements = []
