@@ -30,7 +30,7 @@ Marco de produção da plataforma web no servidor 2. O histórico anterior de ta
   renderizadas no servidor, sem etapa de build nem dependências Node.
 - Cabeçalho com o logotipo oficial do LabREC em SVG, extraído de `labrec.pdf`, com
   link para a Galeria de Modelos, e o nome OCRSD em destaque com o significado
-  “Only Civil Registry Synthetic Dataset”.
+  “Open Civil Registry Synthetic Dataset”.
 - Rodapé na cor da faixa inferior de `labrec.pdf`, com o logotipo do Registro Civil
   em SVG extraído do mesmo arquivo.
 - Navegação horizontal, visual LabREC revisado, layout responsivo e componentes
