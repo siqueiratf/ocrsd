@@ -33,4 +33,6 @@ jobs:
             up -d --build --remove-orphans
           docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production ps
       - name: Check the production health endpoint
-        run: curl -fsS https://ocrsd.onrcpn.org.br/api/v1/health
+        # The public domain is not reachable from inside server 2 (hairpin NAT),
+        # so this checks the local Nginx port the edge forwards to instead.
+        run: curl -fsS http://127.0.0.1:6000/api/v1/health
