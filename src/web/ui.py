@@ -23,6 +23,7 @@ from pydantic import BaseModel, ValidationError
 from starlette.datastructures import FormData, UploadFile
 
 from src.document_types import safe_document_type_key
+from src.fonts import FONT_FAMILIES
 from src.web.models import GenerationOptions, Identifier, ModelPromote, ModelUpdate, SemanticDefinitionCreate, ShareCreate, Writing
 from src.web.palette import (CUSTOM_BASES, EDITOR_OPTIONS, GENERATION_RULES, ICON_NAMES, LAYOUT_PALETTE, PALETTE, TYPE_LABELS,
                              custom_field_config, custom_palette)
@@ -125,7 +126,8 @@ def validated(model: type[BaseModel], data: dict) -> Any:
 
 
 def writing_state(form: FormData) -> dict:
-    return {"model": text(form, "model") or "font", "handwriting": "handwriting" in form,
+    return {"model": text(form, "model") or "font", "font_family": text(form, "font_family") or "caveat",
+            "handwriting": "handwriting" in form,
             "text_handwriting": "text_handwriting" in form, "intensity": parsed(form, "intensity", float, 0.65),
             "writer": parsed(form, "writer", int), "bias": parsed(form, "bias", float, 0.75),
             "color": text(form, "color") or "#193787", "width": parsed(form, "width", float, 1.5),
@@ -151,7 +153,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
     templates.env.filters.update(data=format_date, tamanho=format_size)
     templates.env.globals.update(FILTERS=FILTERS, STATUS=STATUS, ACTIVE=ACTIVE, TYPE_LABELS=TYPE_LABELS,
                                  PAGE_SIZES=PAGE_SIZES, ORIENTATIONS=ORIENTATIONS, GENERATION_MODES=GENERATION_MODES,
-                                 STANDARD_EDITS=settings.standard_edits)
+                                 STANDARD_EDITS=settings.standard_edits, FONT_FAMILIES=FONT_FAMILIES)
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
     @functools.lru_cache(maxsize=128)

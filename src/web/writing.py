@@ -1,13 +1,16 @@
 import re
 
+from src.fonts import FONT_FAMILIES, is_typed
 from src.neural_handwriting import ALPHABET
 from src.web.models import Writing
 
 NEURAL_CHARACTERS = ALPHABET[1:]
 MODEL_INFO = {
-    "font": {"label": "Fonte manuscrita", "kind": "Renderizador local", "writers": 0, "bias": None,
-             "description": "Fonte manuscrita com variação controlada. Números usam caneta e textos usam grafite.",
-             "charset": "Letras com acentos, números e pontuação comum", "version": "Fonte Caveat incluída no OCRSD"},
+    "font": {"label": "Fonte local", "kind": "Renderizador local", "writers": 0, "bias": None,
+             "description": "Fontes manuscritas ou digitadas, embutidas no OCRSD. Com fontes que imitam escrita à mão, "
+                             "números usam caneta e textos usam grafite; com fontes digitadas, tudo é impresso.",
+             "charset": "Letras com acentos, números e pontuação comum",
+             "version": "Fontes incluídas no OCRSD: Caveat, Homemade Apple, Courier Prime, Arimo e Tinos"},
     "sjvasquez": {"label": "Síntese neural · 13 estilos", "kind": "Rede neural recorrente", "writers": 13, "bias": 0.75,
                   "description": "Modelo de síntese de escrita com 13 estilos de escritor pré-gravados.",
                   "charset": "Sem acentos, sem Q, X e Z maiúsculos e sem barra", "version": "sjvasquez/handwriting-synthesis"},
@@ -27,6 +30,8 @@ def model_defaults(model: str, current: dict | None = None) -> dict:
         defaults["bias"] = MODEL_INFO[model]["bias"]
     if current:
         defaults.update(handwriting=current.get("handwriting", True), text_handwriting=current.get("text_handwriting", True))
+        if model == "font" and current.get("font_family") in FONT_FAMILIES:
+            defaults["font_family"] = current["font_family"]
     return defaults
 
 
@@ -54,6 +59,9 @@ def writing_summary(writing: dict | None) -> str:
         return "Combinação de modelos disponível somente no desktop"
     info = MODEL_INFO.get(writing["model"], MODEL_INFO["font"])
     if writing["model"] == "font":
-        return f"{info['label']} · variação {round(writing['intensity'] * 100)}%"
+        family = FONT_FAMILIES.get(writing.get("font_family") or "caveat", FONT_FAMILIES["caveat"])
+        if is_typed(family.key):
+            return f"Fonte digitada · {family.label}"
+        return f"Fonte manuscrita · {family.label} · variação {round(writing['intensity'] * 100)}%"
     writer = "escritor aleatório" if writing.get("writer") is None else f"escritor {writing['writer']}"
     return f"{writing['model']} · {writer} · {writing['width']:g} px"

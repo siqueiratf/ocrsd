@@ -163,6 +163,15 @@ class SyntheticValueTests(unittest.TestCase):
         self.assertGreater(alpha.max(), 0)
         self.assertLess(abs(float(rgb[:, 0].mean()) - float(rgb[:, 2].mean())), 12)
 
+    def test_renders_handwriting_with_homemade_apple_font(self):
+        image = render_handwritten_text(
+            "Ana Beatriz", 260, 48, random.Random(12), intensity=0.7, medium="pencil", font_family="homemade_apple",
+        )
+
+        self.assertEqual(image.mode, "RGBA")
+        self.assertEqual(image.size, (260, 48))
+        self.assertGreater(np.asarray(image.getchannel("A")).sum(), 0)
+
     def test_renders_checkbox_mark_as_handwriting(self):
         image, metadata = render_checkbox_mark(
             48, 48, random.Random(19), style=random_handwriting_style(random.Random(19)),
@@ -313,6 +322,30 @@ class SyntheticDatasetTests(unittest.TestCase):
 
             with fitz.open(generated[0].pdf_path) as result:
                 self.assertIn("123.456.789-09", result[0].get_text())
+
+    def test_typed_font_family_prints_text_without_handwriting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / "template.pdf"
+            document = fitz.open()
+            document.new_page(width=300, height=300)
+            document.save(template)
+            document.close()
+            mapping = root / "mapping.json"
+            mapping.write_text(json.dumps({
+                "template_id": "typed", "dpi": 72, "page_size_px": [300, 300],
+                "fields": [{"field_id": "name", "label": "Nome", "data_type": "person_name", "bbox": [20, 20, 280, 60]}],
+            }), encoding="utf-8")
+
+            generated = generate_dataset(template, mapping, {"name"}, root / "out", 1, seed=11, font_family="arimo")
+
+            self.assertEqual(len(generated), 1)
+            item = generated[0]
+            self.assertTrue(item.values["name"])
+            with fitz.open(item.pdf_path) as result:
+                self.assertIn(item.values["name"], result[0].get_text())
+            manifest = json.loads((root / "out" / "dataset.json").read_text())
+            self.assertEqual(manifest["handwriting"]["font_family"], "arimo")
 
     def test_generates_pdf_ground_truth_and_manifest(self):
         with tempfile.TemporaryDirectory() as directory:

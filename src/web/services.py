@@ -34,9 +34,13 @@ AI_SETUP_HINT = ("Para habilitar, defina OCRSD_AI_PROVIDER=openai e mantenha um 
                  "(por exemplo, Ollama) com o modelo {model} disponível.")
 ASSISTANT_TTL = 60.0
 ASSISTANT_TIMEOUT = 2.0
-STANDARD_PRESETS = (("padrao_fonte_natural", "Fonte manuscrita · natural", 0.65),
-                    ("padrao_fonte_regular", "Fonte manuscrita · regular", 0.25),
-                    ("padrao_fonte_variada", "Fonte manuscrita · variada", 0.95))
+STANDARD_PRESETS = (("padrao_fonte_natural", "Fonte manuscrita · natural", "caveat", 0.65),
+                    ("padrao_fonte_regular", "Fonte manuscrita · regular", "caveat", 0.25),
+                    ("padrao_fonte_variada", "Fonte manuscrita · variada", "caveat", 0.95),
+                    ("padrao_fonte_homemade_apple", "Homemade Apple · natural", "homemade_apple", 0.65),
+                    ("padrao_digitada_courier_prime", "Digitada · Courier Prime", "courier_prime", 0.65),
+                    ("padrao_digitada_arimo", "Digitada · Arimo", "arimo", 0.65),
+                    ("padrao_digitada_tinos", "Digitada · Tinos", "tinos", 0.65))
 
 
 class ServiceError(Exception):
@@ -185,8 +189,9 @@ class Catalog:
         ]
 
     def presets(self) -> list[PresetResponse]:
-        result = [PresetResponse(id=identifier, label=label, writing=Writing(intensity=intensity), filter_preset="none", available=True)
-                  for identifier, label, intensity in STANDARD_PRESETS]
+        result = [PresetResponse(id=identifier, label=label, writing=Writing(intensity=intensity, font_family=font_family),
+                                 filter_preset="none", available=True)
+                  for identifier, label, font_family, intensity in STANDARD_PRESETS]
         available = {m["id"] for m in self.models() if m["available"]}
         for preset in list_presets(self.settings.documents / "writing_presets.json"):
             settings = preset.get("settings", {})
@@ -197,6 +202,7 @@ class Catalog:
                     writer = settings.get("writer")
                     writing = Writing(
                         model=settings.get("model", "font"),
+                        font_family=settings.get("font_family", "caveat"),
                         writer=None if writer in (None, "", "Aleatório") else int(writer),
                         bias=settings.get("bias", 0.75), color=settings.get("pen_color", "#193787"),
                         width=settings.get("pen_width", 1.5), pressure=settings.get("pen_pressure", 0.25),
@@ -266,7 +272,7 @@ class Catalog:
         if options.writing.model != "font" and (options.writing.handwriting or options.writing.text_handwriting):
             from src.neural_handwriting import NeuralPen
             try:
-                NeuralPen(**options.writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity"}))
+                NeuralPen(**options.writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity", "font_family"}))
             except ValueError as exc:
                 raise ServiceError(422, "writing_incompatible", f"Configuração de escrita inválida: {exc}") from exc
             conflicts = writing_issues(definition, options.fields, options.writing)
@@ -885,9 +891,10 @@ def cached_handwriting_model(name: str):
 
 def render_writing_samples(writing: Writing, texts: list[str], variation: int = 0) -> list[dict]:
     from PIL import Image
+    from src.fonts import is_typed
     from src.neural_handwriting import NeuralPen, prepare_text
     from src.synthetic_dataset import (is_numeric_text, random_handwriting_style, render_handwritten_numeric,
-                                       render_handwritten_text, render_neural_text)
+                                       render_handwritten_text, render_neural_text, render_typed_text)
 
     variation_rng = random.Random(42 + variation * 7919)
     writer = writing.writer if writing.writer is not None else variation_rng.randrange(13 if writing.model == "sjvasquez" else 512)
@@ -899,9 +906,12 @@ def render_writing_samples(writing: Writing, texts: list[str], variation: int = 
             if writing.model == "font":
                 numeric = is_numeric_text(text)
                 rng = random.Random(seed)
-                style = random_handwriting_style(rng, intensity=writing.intensity, medium="pen" if numeric else "pencil")
-                image = (render_handwritten_numeric(text, 520, 116, rng, style=style, intensity=writing.intensity) if numeric
-                         else render_handwritten_text(text, 520, 116, rng, style=style, intensity=writing.intensity, medium="pencil"))
+                if is_typed(writing.font_family):
+                    image = render_typed_text(text, 520, 116, font_family=writing.font_family)
+                else:
+                    style = random_handwriting_style(rng, intensity=writing.intensity, medium="pen" if numeric else "pencil")
+                    image = (render_handwritten_numeric(text, 520, 116, rng, style=style, intensity=writing.intensity, font_family=writing.font_family) if numeric
+                             else render_handwritten_text(text, 520, 116, rng, style=style, intensity=writing.intensity, medium="pencil", font_family=writing.font_family))
             else:
                 rendered = prepare_text(text, writing.text_policy)
                 pen = NeuralPen(model=writing.model, writer=writer, bias=writing.bias, color=writing.color, width=writing.width,
@@ -1092,7 +1102,7 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
 
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
     writing = options.writing
-    pen = None if writing.model == "font" or not (writing.handwriting or writing.text_handwriting) else NeuralPen(**writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity"}))
+    pen = None if writing.model == "font" or not (writing.handwriting or writing.text_handwriting) else NeuralPen(**writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity", "font_family"}))
     def finalize_document(index: int, total: int, document) -> None:
         data = json.loads(document.json_path.read_text())
         data.update(source_template=options.document_type, synthetic=True, notice=NOTICE,
@@ -1107,7 +1117,7 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
     documents = generate_dataset(
         template, mapping, set(options.fields), output, options.count, options.seed,
         handwriting=writing.handwriting, text_handwriting=writing.text_handwriting,
-        handwriting_intensity=writing.intensity, neural_pen=pen,
+        handwriting_intensity=writing.intensity, neural_pen=pen, font_family=writing.font_family,
         realistic_filters=options.filter_preset != "none", filter_preset=options.filter_preset if options.filter_preset != "none" else "medium",
         progress_callback=finalize_document, record_factory=factory,
     )

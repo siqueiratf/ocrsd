@@ -1,6 +1,7 @@
 {% from "macros.html" import icon %}
 {% set neural = writing.model != 'font' %}
 {% set details = info[writing.model] %}
+{% set typed = not neural and FONT_FAMILIES[writing.font_family or 'caveat'].category == 'typed' %}
 <input type="hidden" name="modelo_atual" value="{{ writing.model }}">
 <section class="config-section">
   <h2>Comportamento da escrita</h2>
@@ -31,18 +32,34 @@
   </label>
   <input type="hidden" name="intensity" value="{{ writing.intensity }}">
   {% else %}
-  <label class="field">Variação controlada <output id="intensidade-saida">{{ (writing.intensity * 100)|round|int }}%</output>
-    <input type="range" name="intensity" min="0" max="1" step="0.05" value="{{ writing.intensity }}" data-saida="intensidade-saida">
-    <small class="hint">Controla inclinação, espaçamento e tamanho dos caracteres em cada documento.</small>
+  <label class="field">Fonte
+    <select name="font_family" data-font-family>
+      <optgroup label="Fontes que imitam escrita à mão">
+        {% for key, family in FONT_FAMILIES.items() if family.category == 'handwriting' %}
+        <option value="{{ key }}" {% if (writing.font_family or 'caveat') == key %}selected{% endif %}>{{ family.label }}</option>
+        {% endfor %}
+      </optgroup>
+      <optgroup label="Fontes digitadas">
+        {% for key, family in FONT_FAMILIES.items() if family.category == 'typed' %}
+        <option value="{{ key }}" {% if writing.font_family == key %}selected{% endif %}>{{ family.label }}</option>
+        {% endfor %}
+      </optgroup>
+    </select>
+    <small class="hint">Fontes que imitam escrita à mão variam de documento para documento. Fontes digitadas imprimem o texto de forma idêntica, sem variação nem manuscrito.</small>
+  </label>
+  <label class="field {{ 'is-disabled' if typed }}">Variação controlada <output id="intensidade-saida">{{ (writing.intensity * 100)|round|int }}%</output>
+    <input type="range" name="intensity" min="0" max="1" step="0.05" value="{{ writing.intensity }}" data-saida="intensidade-saida" {{ 'disabled' if typed }}>
+    <small class="hint">{% if typed %}Não se aplica a fontes digitadas.{% else %}Controla inclinação, espaçamento e tamanho dos caracteres em cada documento.{% endif %}</small>
   </label>
   {% for name, value in (("bias", writing.bias), ("color", writing.color), ("width", writing.width), ("pressure", writing.pressure), ("dropout", writing.dropout), ("text_policy", writing.text_policy)) %}
   <input type="hidden" name="{{ name }}" value="{{ value }}">
   {% endfor %}
   {% endif %}
-  <fieldset class="check-row">
+  <fieldset class="check-row {{ 'is-disabled' if typed }}">
     <legend>Escrita manuscrita em</legend>
-    <label class="check"><input type="checkbox" name="handwriting" {% if writing.handwriting %}checked{% endif %}>Números</label>
-    <label class="check"><input type="checkbox" name="text_handwriting" {% if writing.text_handwriting %}checked{% endif %}>Textos</label>
+    <label class="check"><input type="checkbox" name="handwriting" {% if writing.handwriting %}checked{% endif %} {{ 'disabled' if typed }}>Números</label>
+    <label class="check"><input type="checkbox" name="text_handwriting" {% if writing.text_handwriting %}checked{% endif %} {{ 'disabled' if typed }}>Textos</label>
+    {% if typed %}<small class="hint">Fontes digitadas imprimem todos os campos; esta opção não se aplica.</small>{% endif %}
   </fieldset>
 </section>
 <section class="config-section">
@@ -74,7 +91,7 @@
   </div>
   {% endfor %}
   {% else %}
-  <p class="hint">A fonte manuscrita define a tinta automaticamente, como na geração: caneta azul nos números e grafite nos textos. Cor, espessura, pressão e falhas se aplicam aos modelos neurais.</p>
+  <p class="hint">{% if typed %}Fontes digitadas usam tinta preta fixa, sem variação. Cor, espessura, pressão e falhas se aplicam somente aos modelos neurais.{% else %}A fonte manuscrita define a tinta automaticamente, como na geração: caneta azul nos números e grafite nos textos. Cor, espessura, pressão e falhas se aplicam aos modelos neurais.{% endif %}</p>
   {% endif %}
   <button type="button" class="btn btn-sm" hx-post="/presets/escrita/controles" hx-vals='{"acao": "padroes"}' hx-target="#controles-modelo">{{ icon('reload') }}Restaurar padrões do modelo</button>
 </section>

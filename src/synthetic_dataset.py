@@ -23,6 +23,7 @@ from src.document_types import build_dataset_run_dir, infer_document_type_key
 from src.document_filters import apply_realistic_filters_to_pdf
 from src.field_rules import (DATE_PARTS, DNV_TEST_PREFIX, SEPARATED_DATE, SEX_VALUES, TEXT_TYPES, apply_shared_rules, dnv_metadata,
                               document_number, format_date, format_dnv, masked_value, sex_text)
+from src.fonts import DEFAULT_FONT_FAMILY, font_path, is_typed
 from src.neural_handwriting import NeuralPen, load_model, prepare_text, render_strokes
 from src.semantic import REGISTRY, VERSION as SEMANTIC_VERSION, SemanticRecord
 from src.semantic.assisted import ai_binding_key, serialize_ai_values
@@ -37,6 +38,7 @@ from src.writing_presets import document_id_with_preset
 
 ASSETS_ROOT = Path(__file__).resolve().parent.parent / "assets"
 HANDWRITING_FONT = ASSETS_ROOT / "fonts" / "Caveat-Regular.ttf"
+TYPED_FONT_ALIAS_PREFIX = "ocrsd-typed-"
 NUMERIC_CHARACTERS = frozenset("0123456789.,:/- ")
 LOCATION_PREFIXES = {"occurrence": ("birth.place", "death.place"), "residence": ("mother.residence", "deceased.residence"),
                      "registry": ("registration.office", "death_registration.office")}
@@ -271,10 +273,11 @@ def _apply_pencil_texture(mask: np.ndarray, rng: random.Random, intensity: float
 
 
 def _render_glyph(character: str, height: int, style: HandwritingStyle,
-                  rng: random.Random, intensity: float, medium: str = "pen") -> Image.Image:
+                  rng: random.Random, intensity: float, medium: str = "pen",
+                  font_family: str = DEFAULT_FONT_FAMILY) -> Image.Image:
     scale = 4
     font_size = max(12, round(height * scale * 1.08 * style.size_scale))
-    font = ImageFont.truetype(str(HANDWRITING_FONT), font_size)
+    font = ImageFont.truetype(str(font_path(font_family)), font_size)
     bbox = font.getbbox(character or " ", stroke_width=1)
     width = max(round(height * scale * 0.20), bbox[2] - bbox[0] + 10 * scale)
     glyph = Image.new("L", (width, height * scale + 12 * scale), 0)
@@ -310,15 +313,17 @@ def _render_glyph(character: str, height: int, style: HandwritingStyle,
 
 def render_handwritten_text(text: str, width: int, height: int, rng: random.Random,
                             style: HandwritingStyle | None = None,
-                            intensity: float = 0.65, medium: str = "pencil") -> Image.Image:
-    if not HANDWRITING_FONT.is_file():
-        raise FileNotFoundError(f"Fonte manuscrita não encontrada: {HANDWRITING_FONT}")
+                            intensity: float = 0.65, medium: str = "pencil",
+                            font_family: str = DEFAULT_FONT_FAMILY) -> Image.Image:
+    font_file = font_path(font_family)
+    if not font_file.is_file():
+        raise FileNotFoundError(f"Fonte manuscrita não encontrada: {font_file}")
     if medium not in {"pen", "pencil"}:
         raise ValueError(f"Material de escrita desconhecido: {medium}")
     width, height = max(1, int(width)), max(1, int(height))
     intensity = min(1.0, max(0.0, intensity))
     style = style or random_handwriting_style(rng, intensity, medium=medium)
-    glyphs = [_render_glyph(character, height, style, rng, intensity, medium=medium) for character in text]
+    glyphs = [_render_glyph(character, height, style, rng, intensity, medium=medium, font_family=font_family) for character in text]
     gap = max(0, round(height * 0.025 * style.spacing_scale))
     content_width = sum(glyph.width for glyph in glyphs) + gap * max(0, len(glyphs)-1)
     mask = Image.new("L", (max(width, content_width + 4), height), 0)
@@ -344,12 +349,24 @@ def render_handwritten_text(text: str, width: int, height: int, rng: random.Rand
 
 def render_handwritten_numeric(text: str, width: int, height: int, rng: random.Random,
                                style: HandwritingStyle | None = None,
-                               intensity: float = 0.65) -> Image.Image:
+                               intensity: float = 0.65, font_family: str = DEFAULT_FONT_FAMILY) -> Image.Image:
     if not is_numeric_text(text):
         raise ValueError("O renderizador manuscrito aceita somente números e separadores")
     return render_handwritten_text(
-        text, width, height, rng, style=style, intensity=intensity, medium="pen",
+        text, width, height, rng, style=style, intensity=intensity, medium="pen", font_family=font_family,
     )
+
+
+def render_typed_text(text: str, width: int, height: int, font_family: str = DEFAULT_FONT_FAMILY) -> Image.Image:
+    width, height = max(1, int(width)), max(1, int(height))
+    font_size = max(8, round(height * 0.62))
+    font = ImageFont.truetype(str(font_path(font_family)), font_size)
+    mask = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.text((max(2, round(width * 0.03)), height // 2), text, font=font, fill=255, anchor="lm")
+    rgba = Image.new("RGBA", (width, height), (13, 13, 13, 0))
+    rgba.putalpha(mask)
+    return rgba
 
 
 def _fit_mark_image(image: Image.Image, width: int, height: int, variant: str) -> Image.Image:
@@ -418,7 +435,8 @@ def render_checkbox_mark(width: int, height: int, rng: random.Random,
                          intensity: float = 0.65,
                          neural_pen: NeuralPen | None = None,
                          handwriting_model=None,
-                         render_rng: random.Random | None = None) -> tuple[Image.Image, dict]:
+                         render_rng: random.Random | None = None,
+                         font_family: str = DEFAULT_FONT_FAMILY) -> tuple[Image.Image, dict]:
     width, height = max(1, int(width)), max(1, int(height))
     variant = rng.choice(("middle_stroke", "upper_stroke", "vertical_stroke", "x"))
     character = "x" if variant == "x" else "I"
@@ -439,7 +457,7 @@ def render_checkbox_mark(width: int, height: int, rng: random.Random,
         }
     else:
         image = render_handwritten_text(
-            character, width, height, rng, style=style, intensity=intensity, medium="pen",
+            character, width, height, rng, style=style, intensity=intensity, medium="pen", font_family=font_family,
         )
         metadata = {"backend": "font", "mark_variant": variant, "requested_value": character}
     image = image.rotate(rotation, resample=Image.Resampling.BICUBIC, expand=True)
@@ -668,12 +686,14 @@ def _safe_name(value: str) -> str:
 
 
 def _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
-                        numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset, style_preset_uid) -> dict:
+                        numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset, style_preset_uid,
+                        font_family: str = DEFAULT_FONT_FAMILY) -> dict:
     return {"handwriting": handwriting, "handwriting_intensity": handwriting_intensity,
             "text_handwriting": text_handwriting, "neural_pen": asdict(neural_pen) if neural_pen else None,
             "numeric_neural_pen": asdict(numeric_neural_pen) if numeric_neural_pen else None,
             "text_neural_pen": asdict(text_neural_pen) if text_neural_pen else None,
-            "realistic_filters": realistic_filters, "filter_preset": filter_preset, "style_preset_uid": style_preset_uid}
+            "realistic_filters": realistic_filters, "filter_preset": filter_preset, "style_preset_uid": style_preset_uid,
+            "font_family": font_family}
 
 
 def generate_document(template_path: Path, field_map: dict, selected_ids: set[str],
@@ -684,6 +704,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                       text_neural_pen: NeuralPen | None = None,
                       handwriting_model=None, realistic_filters: bool = False,
                       filter_preset: str = "medium",
+                      font_family: str = DEFAULT_FONT_FAMILY,
                       style_preset_uid: str | None = None,
                       generation_metadata: dict | None = None,
                       record_factory: RecordFactory | None = None) -> SyntheticDocument:
@@ -695,7 +716,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                         "selected_ids": sorted(selected_ids),
                         "options": _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
                                                        numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset,
-                                                       style_preset_uid)}
+                                                       style_preset_uid, font_family)}
     output_dir.mkdir(parents=True, exist_ok=True)
     document = fitz.open(template_path)
     if len(document) == 0:
@@ -790,12 +811,34 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             return ai_store[binding.key]
         return record.value(binding.key)
 
+    typed_font = is_typed(font_family)
+    typed_alias = TYPED_FONT_ALIAS_PREFIX + font_family
+    typed_path = str(font_path(font_family))
+
+    def insert_printed(rect: fitz.Rect, text: str, font_size: float | None, fontname: str, color: tuple[float, float, float],
+                       fontfile: str | None = None) -> bool:
+        size = font_size or max(5.0, min(11.0, rect.height * 0.62))
+        while size >= 1.0:
+            kwargs = {"fontfile": fontfile} if fontfile else {}
+            remaining = page.insert_textbox(
+                rect, text, fontsize=size, fontname=fontname, color=color,
+                align=fitz.TEXT_ALIGN_CENTER if len(text) == 1 else fitz.TEXT_ALIGN_LEFT, **kwargs,
+            )
+            if remaining >= 0:
+                return True
+            size *= 0.85
+        return False
+
     def insert_value(rect_values: list[int], text: str, font_size: float | None = None,
                      pencil: bool = False, force_printed: bool = False) -> tuple[str, dict]:
         x1, y1, x2, y2 = rect_values
         rect = fitz.Rect(x1 * point_scale, y1 * point_scale, x2 * point_scale, y2 * point_scale)
         if not text.strip():
             return text, {}
+        if typed_font:
+            if insert_printed(rect, text, font_size, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path):
+                return text, {}
+            raise ValueError(f"Texto não cabe no campo: {text!r}")
         active_pen = numeric_neural_pen if is_numeric_text(text) else text_neural_pen
         neural_enabled = handwriting if is_numeric_text(text) else text_handwriting
         if (
@@ -813,7 +856,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         if not force_printed and handwriting and is_numeric_text(text):
             image = render_handwritten_numeric(
                 text, max(1, x2-x1), max(1, y2-y1), rng,
-                style=handwriting_style, intensity=handwriting_intensity,
+                style=handwriting_style, intensity=handwriting_intensity, font_family=font_family,
             )
             stream = io.BytesIO()
             image.save(stream, format="PNG")
@@ -822,21 +865,14 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         if not force_printed and text_handwriting and pencil:
             image = render_handwritten_text(
                 text, max(1, x2-x1), max(1, y2-y1), rng,
-                style=pencil_style, intensity=handwriting_intensity, medium="pencil",
+                style=pencil_style, intensity=handwriting_intensity, medium="pencil", font_family=font_family,
             )
             stream = io.BytesIO()
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
             return text, {}
-        size = font_size or max(5.0, min(11.0, rect.height * 0.62))
-        while size >= 1.0:
-            remaining = page.insert_textbox(
-                rect, text, fontsize=size, fontname="helv", color=(0.05, 0.15, 0.55),
-                align=fitz.TEXT_ALIGN_CENTER if len(text) == 1 else fitz.TEXT_ALIGN_LEFT,
-            )
-            if remaining >= 0:
-                return text, {}
-            size *= 0.85
+        if insert_printed(rect, text, font_size, "helv", (0.05, 0.15, 0.55)):
+            return text, {}
         raise ValueError(f"Texto não cabe no campo: {text!r}")
 
     for field in field_map.get("fields", []):
@@ -874,16 +910,20 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                 mark_metadata = {}
                 if checked:
                     ex1, ey1, ex2, ey2 = element["bbox"]
-                    image, mark_metadata = render_checkbox_mark(
-                        ex2-ex1, ey2-ey1, rng, style=handwriting_style,
-                        intensity=handwriting_intensity, neural_pen=numeric_neural_pen,
-                        handwriting_model=handwriting_models.get(numeric_neural_pen.model) if numeric_neural_pen else None,
-                        render_rng=render_rng,
-                    )
-                    stream = io.BytesIO()
-                    image.save(stream, format="PNG")
                     rect = fitz.Rect(*(v * point_scale for v in element["bbox"]))
-                    page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
+                    if typed_font and numeric_neural_pen is None:
+                        insert_printed(rect, "X", None, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path)
+                        mark_metadata = {"rendering": {"backend": "font", "mark_variant": "x", "requested_value": "X"}}
+                    else:
+                        image, mark_metadata = render_checkbox_mark(
+                            ex2-ex1, ey2-ey1, rng, style=handwriting_style,
+                            intensity=handwriting_intensity, neural_pen=numeric_neural_pen,
+                            handwriting_model=handwriting_models.get(numeric_neural_pen.model) if numeric_neural_pen else None,
+                            render_rng=render_rng, font_family=font_family,
+                        )
+                        stream = io.BytesIO()
+                        image.save(stream, format="PNG")
+                        page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
                 element_entries.append({**element, "checked": checked, **mark_metadata})
             value = ",".join(str(item.get("value") or item["element_id"]) for item in selected_elements)
             values[field_id] = value
@@ -976,6 +1016,7 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
                      realistic_filters: bool = False,
                      filter_preset: str = "medium",
                      style_preset_uid: str | None = None,
+                     font_family: str = DEFAULT_FONT_FAMILY,
                      progress_callback: Callable[[int, int, SyntheticDocument], None] | None = None,
                      record_factory: Callable[[int, int, str | None, SemanticPlan, list[str]], SemanticRecord] | None = None,
                      ) -> list[SyntheticDocument]:
@@ -996,7 +1037,8 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
     seed = secrets.randbits(32) if seed is None else seed
     rng = random.Random(seed)
     options = _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
-                                  numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset, style_preset_uid)
+                                  numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset, style_preset_uid,
+                                  font_family)
     output_dir.mkdir(parents=True, exist_ok=True)
     mapping_bytes = (json.dumps(field_map, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
     mapping_hash = hashlib.sha256(mapping_bytes).hexdigest()
@@ -1027,7 +1069,7 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
             text_neural_pen=text_neural_pen if split_neural_pens else None,
             handwriting_model=handwriting_model,
             realistic_filters=realistic_filters, filter_preset=filter_preset,
-            style_preset_uid=style_preset_uid,
+            style_preset_uid=style_preset_uid, font_family=font_family,
             generation_metadata={"manifest": "dataset.json", "seed": seed, "index": index,
                                  "mapping_sha256": mapping_hash, "template_sha256": reproduction["template_sha256"]},
             record_factory=None if record_factory is None else partial(record_factory, index),
@@ -1052,6 +1094,7 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
             "enabled": handwriting, "numbers_enabled": handwriting,
             "text_enabled": text_handwriting,
             "intensity": handwriting_intensity,
+            "font_family": font_family,
         },
         "visual_filters": {"enabled": realistic_filters, "preset": filter_preset},
         "style_preset_uid": style_preset_uid,

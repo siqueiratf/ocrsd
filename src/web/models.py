@@ -4,6 +4,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.fonts import FONT_FAMILY_KEYS
+
 Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,100}$")]
 
 
@@ -13,6 +15,7 @@ class StrictModel(BaseModel):
 
 class Writing(StrictModel):
     model: Literal["font", "sjvasquez", "aaron1259", "wpvnteam"] = "font"
+    font_family: Literal[*FONT_FAMILY_KEYS] = "caveat"
     handwriting: bool = True
     text_handwriting: bool = True
     intensity: float = Field(default=0.65, ge=0, le=1)
