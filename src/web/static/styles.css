@@ -518,6 +518,9 @@ body:has(.wizard-fields-page) .page { padding-bottom: 12px; }
 .wizard-field small { display: block; color: #64748b; font-size: .7rem; overflow: hidden; text-overflow: ellipsis; }
 .wizard-count { max-width: 360px; }
 .wizard-count input { font-size: 1.55rem; font-weight: 700; }
+.wizard-style-section { margin-bottom: 24px; }
+.wizard-style-section h3 { margin: 0 0 10px; font-size: .95rem; color: #172b45; }
+.wizard-style-copy b { display: flex; align-items: center; gap: 6px; }
 .wizard-style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 .wizard-style { border: 2px solid #e2e8f0; border-radius: 12px; overflow: hidden; cursor: pointer; }
 .wizard-style:has(input:checked) { border-color: #16446f; box-shadow: 0 0 0 3px #eaf2fc; }

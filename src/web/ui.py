@@ -248,6 +248,29 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             return None
         return f'/presets/escrita/{item["id"]}/amostra.png?linhas={rows}&v={preview_key(Writing.model_validate(item["writing"]), rows)}'
 
+    STYLE_SECTION_CAP = 6
+
+    def style_sections(styles: list[dict], selected: str | None) -> list[dict]:
+        groups = [
+            {"key": "neural", "title": "Síntese neural", "styles": []},
+            {"key": "handwriting", "title": "Fontes que imitam escrita à mão", "styles": []},
+            {"key": "typed", "title": "Fontes digitadas", "styles": []},
+        ]
+        by_key = {group["key"]: group for group in groups}
+        for item in styles:
+            writing = item["writing"]
+            if writing["model"] != "font":
+                by_key["neural"]["styles"].append(item)
+            else:
+                family = FONT_FAMILIES.get(writing.get("font_family") or "caveat", FONT_FAMILIES["caveat"])
+                by_key[family.category]["styles"].append(item)
+        for group in groups:
+            group["styles"].sort(key=lambda item: (not item.get("recommended"), item["id"] != selected,
+                                                   item["kind"] != "meu", item["title"]))
+            group["styles"] = group["styles"][:STYLE_SECTION_CAP]
+        groups.sort(key=lambda group: not any(item.get("recommended") for item in group["styles"]))
+        return [group for group in groups if group["styles"]]
+
     def strip_presets(owner_id: str, selected: str) -> list[dict]:
         usable = [item for item in presets(owner_id) if item["writing"] and item["available"]]
         ordered = sorted(usable, key=lambda item: (item["id"] != selected, item["kind"] == "padrao", -(item["updated_at"] or 0)))
@@ -263,6 +286,11 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         return {"document_type": "", "mapping_id": "", "fields": [], "count": 10 if settings.max_count is None else min(10, settings.max_count),
                 "preset": "padrao_fonte_natural", "filter_preset": "none", "generation_mode": "traditional", "step": 1}
 
+    def recommended_preset(owner_id: str, document_type: str) -> str:
+        types = catalog.document_types([row for row in store.list_models(owner_id) if row["status"] == "published"])
+        found = next((item for item in types if item["id"] == document_type), None)
+        return (found or {}).get("escrita_recomendada", "padrao_fonte_natural")
+
     def assistant_summary() -> dict:
         if probe is None:
             return {"available": False, "provider": settings.ai_provider, "model": settings.ai_model, "detail": "Assistente de IA desativado",
@@ -277,7 +305,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         state = {**wizard_initial(), "document_type": options.document_type, "mapping_id": options.mapping_id,
                  "fields": list(options.fields), "count": options.count, "filter_preset": options.filter_preset,
                  "generation_mode": options.generation_mode,
-                 "preset": "original_snapshot", "writing_snapshot": options.writing.model_dump(),
+                 "preset": "original_snapshot", "preset_chosen": True, "writing_snapshot": options.writing.model_dump(),
                  "original_preset_name": reference["name"] if reference else "Configuração original", "step": 6}
         try:
             state["mapping_id"] = catalog.active_mapping(options.document_type, owner_id)
@@ -356,12 +384,14 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             groups.setdefault(field["group"], []).append(field)
         if "Outros campos" in groups and len(groups) > 1:
             groups["Outros campos"] = groups.pop("Outros campos")
-        styles = [{**item, "thumbnail": preset_thumbnail(item, 1)} for item in presets(owner_id) if item["writing"] and item["available"]]
-        styles.sort(key=lambda item: (item["id"] != "padrao_fonte_natural", item["id"] != state.get("preset"), item["kind"] != "meu", item["title"]))
+        recommended = current["escrita_recomendada"] if current else "padrao_fonte_natural"
+        styles = [{**item, "thumbnail": preset_thumbnail(item, 1), "recommended": item["id"] == recommended}
+                  for item in presets(owner_id) if item["writing"] and item["available"]]
         if state.get("writing_snapshot"):
             styles.insert(0, {"id": "original_snapshot", "title": state.get("original_preset_name") or "Configuração original",
                               "summary": writing_summary(state["writing_snapshot"]), "thumbnail": f"/geracao/{identifier}/amostra.png",
-                              "writing": state["writing_snapshot"]})
+                              "writing": state["writing_snapshot"], "recommended": False, "kind": "original"})
+        style_groups = style_sections(styles, state.get("preset"))
         notices = []
         if state.get("original_mapping_missing") and not mapping:
             notices.append("O modelo original não está mais disponível. Selecione outro documento antes de gerar.")
@@ -397,7 +427,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         return {"draft_id": identifier, "state": state, "wizard_step": step, "wizard_error": error,
                 "wizard_notice": " ".join(notices),
                 "types": types, "model_groups": model_groups(types, current), "model_info": models, "current_type": current, "mapping": mapping,
-                "definition": definition, "fields": fields, "groups": groups, "styles": styles,
+                "definition": definition, "fields": fields, "groups": groups, "styles": styles, "style_groups": style_groups,
                 "selected_style": selected_style, "assistant": assistant, "selectable": [field for field in fields if not field["blocked"]],
                 "ai_hint": ai_hint, "max_count": settings.max_count, "unpublished": unpublished}
 
@@ -895,7 +925,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             state = wizard_initial()
             if rascunho and store.draft(owner_id):
                 old = store.draft(owner_id)
-                state.update({key: old[key] for key in ("document_type", "mapping_id", "fields", "count", "preset", "filter_preset", "generation_mode", "step") if key in old})
+                state.update({key: old[key] for key in ("document_type", "mapping_id", "fields", "count", "preset", "preset_chosen", "filter_preset", "generation_mode", "step") if key in old})
             elif job:
                 state = reused_state(owner_id, owned_job(owner_id, job))
             elif configuracao:
@@ -903,9 +933,13 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 state.update({key: old[key] for key in ("document_type", "mapping_id", "fields", "count", "filter_preset", "generation_mode") if key in old})
             if modelo:
                 state["document_type"] = modelo
+                if not state.get("preset_chosen"):
+                    state["preset"] = recommended_preset(owner_id, modelo)
             identifier = store.create_wizard_draft(owner_id, state)
         if modelo and draft and modelo != state.get("document_type"):
             state.update(document_type=modelo, mapping_id="", fields=[], step=1)
+            if not state.get("preset_chosen"):
+                state["preset"] = recommended_preset(owner_id, modelo)
         if state.get("document_type") and not state.get("mapping_id"):
             try:
                 state["mapping_id"] = catalog.active_mapping(state["document_type"], owner_id)
@@ -916,6 +950,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             chosen = find_preset(owner_id, preset)
             if chosen["writing"] and chosen["available"]:
                 state["preset"] = preset
+                state["preset_chosen"] = True
                 store.save_wizard_draft(identifier, owner_id, state)
                 etapa = 4
         etapa = max(1, min(6, etapa))
@@ -973,6 +1008,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                     raise ServiceError(422, "validation_error", "Este mapeamento ainda não possui campos")
                 if state["document_type"] != document_type or state["mapping_id"] != mapping_id:
                     state.update(document_type=document_type, mapping_id=mapping_id, fields=[], step=1)
+                    if not state.get("preset_chosen"):
+                        state["preset"] = selected.get("escrita_recomendada", "padrao_fonte_natural")
             elif step == 2:
                 definition = catalog.definition(state["document_type"], state["mapping_id"], owner_id)
                 allowed = {str(field["field_id"]) for field in definition["fields"]}
@@ -1010,6 +1047,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 if conflicts:
                     raise ServiceError(422, "writing_incompatible", writing_message(writing, conflicts))
                 state["preset"] = "original_snapshot" if snapshot else chosen["id"]
+                state["preset_chosen"] = True
             else:
                 value = text(form, "filter_preset")
                 if value not in FILTERS:

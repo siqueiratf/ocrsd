@@ -225,11 +225,12 @@ class Catalog:
     def document_types(self, custom: list[dict]) -> list[dict]:
         result = [{"id": item.key, "label": item.label, "builtin": True, "active_mapping": item.active_mapping.stem,
                    "orgao": item.orgao, "documentacao": item.documentacao or None, "categoria": item.categoria or None,
+                   "escrita_recomendada": item.escrita_recomendada,
                    "mappings": [{"id": path.stem, "label": path.stem.replace("_", " ")}
                                 for path in sorted(item.mappings, key=lambda path: path != item.active_mapping)]}
                   for item in self.types.values()]
         result.extend({"id": row["id"], "label": row["label"], "builtin": False, "active_mapping": row["mapping_id"],
-                       "orgao": None, "documentacao": None, "categoria": None,
+                       "orgao": None, "documentacao": None, "categoria": None, "escrita_recomendada": "padrao_fonte_natural",
                        "mappings": [{"id": row["mapping_id"], "label": row["mapping_id"].replace("_", " ")}]}
                       for row in custom)
         return result

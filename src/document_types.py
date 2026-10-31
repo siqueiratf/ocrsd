@@ -70,6 +70,11 @@ class DocumentType:
         return value.strip() if isinstance(value, str) else ""
 
     @property
+    def escrita_recomendada(self) -> str:
+        value = self.catalog_entry.get("escrita_recomendada")
+        return value.strip() if isinstance(value, str) and value.strip() else "padrao_fonte_natural"
+
+    @property
     def active_mapping(self) -> Path:
         name = self.metadata.get("active_mapping")
         return next((path for path in self.mappings if path.stem == name), self.mappings[0])

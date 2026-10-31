@@ -40,7 +40,8 @@
       "referencia": "Manual de instruções para o preenchimento da DNV, 4ª edição",
       "categoria": "Registro civil",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_fonte_natural"
     },
     "do": {
       "orgao": "ms",
@@ -50,7 +51,8 @@
       "referencia": "Manual de preenchimento da DO, Ministério da Saúde (2022)",
       "categoria": "Registro civil",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_fonte_natural"
     },
     "certidao_nascimento": {
       "orgao": "cnj",
@@ -60,7 +62,8 @@
       "referencia": "Provimento CNJ nº 63/2017 (modelo anterior ao Provimento 182/2024)",
       "categoria": "Registro civil",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "certidao_casamento": {
       "orgao": "cnj",
@@ -70,7 +73,8 @@
       "referencia": "Provimento CNJ nº 63/2017 (modelo anterior ao Provimento 182/2024)",
       "categoria": "Registro civil",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "certidao_nascimento_cnj": {
       "orgao": "cnj",
@@ -80,7 +84,8 @@
       "referencia": "Provimento nº 182/2024, Anexo IV",
       "categoria": "Registro civil",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "certidao_casamento_cnj": {
       "orgao": "cnj",
@@ -90,7 +95,8 @@
       "referencia": "Provimento nº 182/2024, Anexo V",
       "categoria": "Registro civil",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "certidao_obito": {
       "orgao": "cnj",
@@ -100,7 +106,8 @@
       "referencia": "Provimento nº 182/2024, Anexo VI",
       "categoria": "Registro civil",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "certidao_inteiro_teor": {
       "orgao": "cnj",
@@ -111,7 +118,8 @@
       "categoria": "Registro civil",
       "prioridade": "alta",
       "status": "planejado",
-      "observacoes": "Template em var/wip/certidao_inteiro_teor; falta remover a marca d'água “MODELO” da metade inferior."
+      "observacoes": "Template em var/wip/certidao_inteiro_teor; falta remover a marca d'água “MODELO” da metade inferior.",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "certidao_natimorto": {
       "orgao": "cnj",
@@ -122,7 +130,8 @@
       "categoria": "Registro civil",
       "prioridade": "alta",
       "status": "disponivel",
-      "variante_de": "certidao_obito"
+      "variante_de": "certidao_obito",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_amplos_poderes": {
       "orgao": "mre",
@@ -132,7 +141,8 @@
       "referencia": "Itamaraty, Consulado-Geral do Brasil em Bruxelas, modelo de procuração pública \"Plenos poderes - simplificada\"",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_bancos_gerais": {
       "orgao": "mre",
@@ -142,7 +152,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_movimentacao_conta": {
       "orgao": "mre",
@@ -152,7 +163,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_encerramento_conta": {
       "orgao": "mre",
@@ -162,7 +174,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_financiamento": {
       "orgao": "mre",
@@ -172,7 +185,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_habilitacao_casamento": {
       "orgao": "mre",
@@ -182,7 +196,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_divorcio_consensual": {
       "orgao": "mre",
@@ -192,7 +207,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_divorcio_judicial": {
       "orgao": "mre",
@@ -202,7 +218,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_compra_imovel": {
       "orgao": "mre",
@@ -212,7 +229,8 @@
       "referencia": "Itamaraty, Consulado-Geral do Brasil em Bruxelas, modelo de procuração pública \"Imóvel - compra de\"",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_venda_imovel": {
       "orgao": "mre",
@@ -222,7 +240,8 @@
       "referencia": "Itamaraty, Consulado-Geral do Brasil em Bruxelas, modelo de procuração pública \"Imóvel - venda de\"",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_locacao_imovel": {
       "orgao": "mre",
@@ -232,7 +251,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_regularizacao_imovel": {
       "orgao": "mre",
@@ -242,7 +262,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_emancipacao_menor": {
       "orgao": "mre",
@@ -252,7 +273,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_reconhecimento_paternidade": {
       "orgao": "mre",
@@ -262,7 +284,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_passaporte_menor": {
       "orgao": "mre",
@@ -272,7 +295,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_inventario_arrolamento": {
       "orgao": "mre",
@@ -282,7 +306,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_guarda_menor": {
       "orgao": "mre",
@@ -292,7 +317,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_dissolucao_uniao_estavel": {
       "orgao": "mre",
@@ -302,7 +328,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_movimentacao_pensao_inss": {
       "orgao": "mre",
@@ -312,7 +339,8 @@
       "referencia": "Itamaraty, Consulado-Geral do Brasil em Bruxelas, modelo de procuração pública \"INSS - recebimento de pensão do\"",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_transferencia_veiculo": {
       "orgao": "mre",
@@ -322,7 +350,8 @@
       "referencia": "Itamaraty, Consulado-Geral do Brasil em Bruxelas, modelo de procuração pública \"Transferência de veículo\"",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_recebimento_salarios": {
       "orgao": "mre",
@@ -332,7 +361,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_recebimento_seguro": {
       "orgao": "mre",
@@ -342,7 +372,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_homologacao_casamento_estrangeiro": {
       "orgao": "mre",
@@ -352,7 +383,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "procuracao_publica_modelo_editavel": {
       "orgao": "mre",
@@ -362,7 +394,8 @@
       "referencia": "Modelos de procuração pública do Itamaraty (consulados e embaixadas)",
       "categoria": "Cartórios / procurações",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "cnpj_comprovante_inscricao": {
       "orgao": "rfb",
@@ -372,7 +405,8 @@
       "referencia": "Receita Federal — informações gerais sobre o CNPJ",
       "categoria": "Receita / tributário",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "cnpj_documento_basico_entrada": {
       "orgao": "rfb",
@@ -382,7 +416,8 @@
       "referencia": "Receita Federal — informações gerais sobre o CNPJ",
       "categoria": "Receita / tributário",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "cnpj_ficha_cadastral_pj": {
       "orgao": "rfb",
@@ -392,7 +427,8 @@
       "referencia": "Receita Federal — informações gerais sobre o CNPJ",
       "categoria": "Receita / tributário",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "cnpj_quadro_socios_administradores": {
       "orgao": "rfb",
@@ -402,7 +438,8 @@
       "referencia": "Receita Federal — informações gerais sobre o CNPJ",
       "categoria": "Receita / tributário",
       "prioridade": "alta",
-      "status": "planejado"
+      "status": "planejado",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "atestado_medico": {
       "orgao": "ms",
@@ -422,7 +459,8 @@
       "referencia": "MDS, Modelo de Declaração de Residência do Cadastro Único, página 1 ('Responsável Familiar')",
       "categoria": "Assistência social",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_fonte_natural"
     },
     "drei_certidao_simplificada": {
       "orgao": "drei",
@@ -432,7 +470,8 @@
       "referencia": "IN DREI nº 81/2020, Anexo VIII, Modelo de Certidão Simplificada para Empresário e suas Filiais",
       "categoria": "Empresas / Junta Comercial",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "drei_certidao_especifica": {
       "orgao": "drei",
@@ -442,7 +481,8 @@
       "referencia": "IN DREI nº 81/2020 (consolidada); definição legal correspondente aos arts. 3º, 8º e 9º da IN DREI nº 20/2013. Sem modelo fixo no Anexo VIII; layout composto a partir da definição legal e do padrão de cabeçalho/rodapé da Certidão Simplificada do mesmo Anexo VIII.",
       "categoria": "Empresas / Junta Comercial",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     },
     "drei_certidao_inteiro_teor_empresarial": {
       "orgao": "drei",
@@ -452,7 +492,8 @@
       "referencia": "IN DREI nº 81/2020 (consolidada); definição legal de certidão de inteiro teor como cópia reprográfica certificada de ato arquivado. Sem modelo fixo no Anexo VIII; layout composto a partir da definição legal e do padrão de cabeçalho/rodapé da Certidão Simplificada do mesmo Anexo VIII.",
       "categoria": "Empresas / Junta Comercial",
       "prioridade": "alta",
-      "status": "disponivel"
+      "status": "disponivel",
+      "escrita_recomendada": "padrao_digitada_arimo"
     }
   }
 }
