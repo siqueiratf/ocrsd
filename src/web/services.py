@@ -588,27 +588,6 @@ def with_approved_semantics(store, owner_id: str, definition: dict) -> dict:
     return {**definition, "semantic_definitions": specs}
 
 
-def mark_pdf(path: Path) -> None:
-    import fitz
-
-    with fitz.open(path) as document:
-        for page in document:
-            for top in (8, page.rect.height / 2, page.rect.height - 30):
-                rect = fitz.Rect(8, top, page.rect.width - 8, top + 23)
-                page.draw_rect(rect, color=(0.7, 0.05, 0.05), fill=(1, 1, 1), fill_opacity=0.88, overlay=True)
-                page.insert_textbox(rect + (0, 4, 0, 0), NOTICE.replace("—", "-"), fontsize=11,
-                                    fontname="hebo", color=(0.7, 0.05, 0.05), align=1, overlay=True)
-        document.set_metadata({"title": NOTICE, "subject": "Uso educacional e de pesquisa"})
-        with tempfile.NamedTemporaryFile(suffix=".pdf", dir=path.parent, delete=False) as temporary:
-            temporary_path = Path(temporary.name)
-        try:
-            document.save(temporary_path, garbage=4, deflate=True, deflate_images=True, deflate_fonts=True, use_objstms=1)
-            temporary_path.replace(path)
-        finally:
-            if temporary_path.exists():
-                temporary_path.unlink()
-
-
 def validate_mapping(definition: dict, page_size: tuple[int, int] | None = None) -> dict:
     if not isinstance(definition, dict) or not isinstance(definition.get("fields"), list):
         raise ServiceError(422, "invalid_mapping", "O mapeamento precisa conter uma lista de campos")
@@ -841,7 +820,6 @@ def preview_generation(template: Path, definition: dict, seed: int) -> str:
                                          Path(directory) / "saida", 1, seed)
         except ValueError as exc:
             raise ServiceError(422, "preview_failed", str(exc)) from exc
-        mark_pdf(documents[0].pdf_path)
         with fitz.open(documents[0].pdf_path) as document:
             page = document[0]
             scale = min(1400 / page.rect.width, 2.2)
@@ -1116,7 +1094,6 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
     writing = options.writing
     pen = None if writing.model == "font" or not (writing.handwriting or writing.text_handwriting) else NeuralPen(**writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity"}))
     def finalize_document(index: int, total: int, document) -> None:
-        mark_pdf(document.pdf_path)
         data = json.loads(document.json_path.read_text())
         data.update(source_template=options.document_type, synthetic=True, notice=NOTICE,
                     generation_seed=data["generation"]["seed"])

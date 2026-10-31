@@ -193,7 +193,7 @@ class WebTests(unittest.TestCase):
             preview = self.client.get(base + f'/artifacts/{pdf["id"]}?download=false', headers=headers)
             self.assertIn("inline", preview.headers["content-disposition"])
             with fitz.open(stream=preview.content, filetype="pdf") as document:
-                self.assertIn("SEM VALIDADE LEGAL", document[0].get_text())
+                self.assertTrue(all("SEM VALIDADE LEGAL" not in page.get_text() for page in document))
                 raster = document[0].get_pixmap().samples
             directory = self.store.directory(job["id"])
             ground_truth = json.loads((directory / "synthetic_0001.json").read_text())
