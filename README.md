@@ -106,26 +106,36 @@ A produção usa `deploy/compose.ssh2.yaml`, `deploy/.env.production`, o volume
 `ocrsd_jobs` e a URL `https://ocrsd.onrcpn.org.br/`.
 
 O branch `develop` concentra as próximas mudanças e roda a validação no GitHub.
-O branch `main` registra versões aprovadas para produção; cada publicação recebe
-uma tag `V*`. O servidor 2 deve fazer checkout da tag aprovada antes da
-atualização do Compose de produção. Os arquivos `.env.development` e
-`.env.production` são locais a cada ambiente e não entram no Git.
+O branch `main` registra versões aprovadas para produção; o fluxo `deploy.yml`
+atualiza o servidor 2 de forma automática após cada commit aprovado em `main`.
+Cada publicação também recebe uma tag `V*` para a release, mas a tag não é mais
+um passo manual de deploy. Os arquivos `.env.development` e `.env.production`
+são locais a cada ambiente e não entram no Git.
 
 ### Publicação em produção
 
-O push para `main` executa testes, smoke e conferência do Postman no GitHub
-Actions. O push de uma tag `V*` repete as verificações e cria a release com
-artefatos. Nenhum desses fluxos faz deploy automático no servidor 2.
-Depois de confirmar que o CI e a release passaram, execute no servidor:
+O push para `main` executa o fluxo `validation.yml` no GitHub Actions: testes,
+smoke e conferência do Postman. Quando esse fluxo termina com sucesso em `main`,
+o fluxo `deploy.yml` inicia e atualiza o servidor 2 de forma automática, sem
+passo manual. O push de uma tag `V*` continua a repetir as verificações e a
+criar a release com artefatos, mas a release em si não aciona o deploy; o
+deploy segue cada commit aprovado em `main`.
 
-```bash
-cd /opt/ocrsd
-git fetch origin --tags
-git checkout V1.0.0 # substitua pela tag aprovada
-sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --build --remove-orphans
-sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production ps
-curl -fsS https://ocrsd.onrcpn.org.br/api/v1/health
-```
+O fluxo `deploy.yml` roda em um executor próprio (self-hosted runner) instalado
+no servidor 2, porque o servidor fica em uma rede privada. Esse executor:
+
+1. Faz checkout do commit que passou nos testes.
+2. Roda `docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --build --remove-orphans`.
+3. Verifica `https://ocrsd.onrcpn.org.br/api/v1/health`.
+
+O executor roda sob a conta de sistema `ocrsd`, membro do grupo `docker`. Essa
+conta não usa `sudo`; o grupo `docker` já dá acesso ao comando `docker compose`.
+Para preparar o executor no servidor 2, siga as instruções de "Runners de
+repositório" (ou de organização) em Settings → Actions → Runners no GitHub, e
+dê ao executor o rótulo `ocrsd-server2`.
+
+Para disparar um deploy manual sem um novo push, use `workflow_dispatch` no
+fluxo `validation.yml`, ou publique um commit vazio em `main`.
 
 Mantenha `deploy/.env.production` e os pesos locais no servidor. O volume
 `ocrsd_jobs` preserva banco, histórico e resultados entre atualizações.

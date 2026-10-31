@@ -1,0 +1,36 @@
+name: Deploy to production
+
+# This workflow starts after "Validate synthetic documents" finishes on main.
+# It waits for a successful test run, then updates server 2 with that commit.
+on:
+  workflow_run:
+    workflows: ["Validate synthetic documents"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: [self-hosted, ocrsd-server2]
+    timeout-minutes: 15
+    concurrency:
+      group: ocrsd-production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Check out the approved commit
+        run: |
+          cd /opt/ocrsd
+          git fetch origin main
+          git checkout --force "${{ github.event.workflow_run.head_sha }}"
+      - name: Build and restart production containers
+        run: |
+          cd /opt/ocrsd
+          docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production \
+            up -d --build --remove-orphans
+          docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production ps
+      - name: Check the production health endpoint
+        run: curl -fsS https://ocrsd.onrcpn.org.br/api/v1/health
