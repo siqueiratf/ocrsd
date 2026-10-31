@@ -56,7 +56,7 @@ arquivos locais, nunca por caminhos recebidos da API.
 
 ## Modelos padrão editáveis
 
-Com `OCRSD_STANDARD_EDITS=true` (padrão em `make web`; `false` em Compose e systemd), o
+Com `OCRSD_STANDARD_EDITS=true` (padrão em `make web`; `false` no Compose), o
 editor passa a oferecer duas ações que gravam diretamente em `documents/` do
 repositório: “Salvar como modelo padrão”, que promove um modelo personalizado do
 espaço de trabalho a um novo `documents/<chave>/` (template, `modelo.json` e
@@ -75,7 +75,7 @@ do que é promovido a padrão.
 A API grava opções e hash da chave em SQLite/WAL e retorna `202`; não executa geração.
 Um único worker por armazenamento, protegido por `flock`, consome a fila com transações
 atômicas. Cada job roda em um subprocesso `spawn`, carrega modelos uma vez para o lote
-e libera a memória ao terminar. Há progresso por documento, seguido de marcação e ZIP.
+e libera a memória ao terminar. Há progresso por documento, seguido da criação do ZIP.
 O cancelamento encerra o subprocesso; saídas incompletas são removidas.
 
 Estados: `queued`, `running`, `succeeded`, `failed`, `cancelled`, `expired`.
@@ -94,7 +94,7 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 
 | Variável | Padrão | Efeito |
 | --- | --- | --- |
-| `OCRSD_STORAGE` | `var/web` | Banco e saídas; `/data` no Compose, `/var/lib/ocrsd` no systemd |
+| `OCRSD_STORAGE` | `var/web` | Banco e saídas; `/data` no Compose |
 | `OCRSD_DOCUMENTS` | catálogo do projeto | Raiz administrada de templates, mapas e presets |
 | `OCRSD_MAX_COUNT` | sem limite (`null`) | Documentos por job; se definido, é um limite absoluto do contrato |
 | `OCRSD_MAX_PENDING` | 20 | Jobs simultaneamente na fila/em execução |
@@ -395,45 +395,6 @@ Importe `postman/servidor.postman_environment.json`, substitua o domínio e exec
 a coleção. Verifique `worker_ready`, criação/conclusão, aviso no PDF, download ZIP e
 cancelamento. Certificados válidos devem funcionar sem desabilitar verificação TLS.
 
-## Alternativa sem Docker
-
-Use Debian 12 com Python 3.11, mantendo código em `/opt/ocrsd`, dados em
-`/var/lib/ocrsd` e processos sem privilégios. Instalação pelo administrador:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y git curl ca-certificates python3.11 python3.11-venv nginx certbot
-sudo useradd --system --home-dir /var/lib/ocrsd --shell /usr/sbin/nologin ocrsd
-sudo install -d -o ocrsd -g ocrsd -m 700 /var/lib/ocrsd
-sudo git clone https://github.com/siqueiratf/ocrsd.git /opt/ocrsd
-sudo python3.11 -m venv /opt/ocrsd-tools
-sudo /opt/ocrsd-tools/bin/pip install uv==0.12.10
-cd /opt/ocrsd
-sudo /opt/ocrsd-tools/bin/uv sync --locked --extra web --python /usr/bin/python3.11
-sudo cp deploy/.env.example /etc/ocrsd.env
-sudo chown root:ocrsd /etc/ocrsd.env
-sudo chmod 640 /etc/ocrsd.env
-sudo cp deploy/ocrsd-api.service deploy/ocrsd-worker.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now ocrsd-api ocrsd-worker
-sudo systemctl status ocrsd-api ocrsd-worker --no-pager
-```
-
-As unidades definem `OCRSD_STORAGE` e variáveis de threads, limite de memória,
-restart e parada graciosa. Para publicar a interface em 8080, mantenha o mesmo proxy
-TLS descrito acima e configure o servidor interno Nginx:
-
-```bash
-sed -e 's/listen 8080;/listen 127.0.0.1:8080;/' -e 's|http://api:8000|http://127.0.0.1:8000|g' deploy/nginx.conf | sudo tee /etc/nginx/conf.d/ocrsd-local.conf
-sudo nginx -t
-sudo systemctl reload nginx
-curl --fail http://127.0.0.1:8080/api/v1/health
-```
-
-Nessa alternativa, a API só confia no proxy em 127.0.0.1. Complete DNS, TLS e testes
-externos com os mesmos passos da seção anterior. Não sirva a pasta do repositório
-nem `/var/lib/ocrsd` diretamente pelo Nginx. A API entrega as páginas e os arquivos estáticos.
-
 ## Operação, atualização e recuperação
 
 Com Compose, na raiz do checkout, use `sudo docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production` onde necessário:
@@ -452,8 +413,8 @@ docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production exe
 
 `restart` não relê `env_file`; use `up -d --force-recreate api` após mudar configuração.
 Worker possui 16 minutos de tolerância no shutdown. Se aumentar timeout, aumente
-também `stop_grace_period` e `TimeoutStopSec`. O serviço reinicia após reboot pelas
-políticas Compose/Docker ou pelas unidades systemd habilitadas.
+também `stop_grace_period`. O serviço reinicia após reboot pela política
+`restart: unless-stopped` do Compose.
 
 Para atualizar sem interromper jobs ativos: prepare/teste a revisão em checkout
 separado, mantenha o volume, suspenda novas submissões, drene a fila e só então troque
@@ -478,20 +439,15 @@ sed -i 's/OCRSD_ACCEPTING_JOBS=false/OCRSD_ACCEPTING_JOBS=true/' deploy/.env.pro
 docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --no-deps --force-recreate api
 ```
 
-Não faça `git pull` que modifique código carregado por um worker nativo ativo. No
-systemd: altere `/etc/ocrsd.env`, reinicie só a API, aguarde a fila esvaziar, pare
-`ocrsd-worker`, faça checkout/sync/build/cópia dos estáticos e reinicie ambas unidades.
-Use `sudo systemctl stop|start|restart ocrsd-api ocrsd-worker` conforme a operação e
-`sudo journalctl -u ocrsd-api -u ocrsd-worker -n 100 -f` para logs. Uma janela curta de
+Não faça `git pull` que modifique código carregado por um worker ativo. Uma janela curta de
 manutenção é preferível a alterar catálogo/pesos durante jobs. Migrações futuras do
 schema deverão incluir backup e política de compatibilidade; esta versão apenas
 cria as tabelas iniciais. Para rollback, restaure a revisão/imagem anterior e um
 backup compatível se houver migração.
 
 Faça backup consistente com API e worker parados, copiando o volume completo para
-armazenamento autorizado, inclusive SQLite/WAL e permissões. No modo nativo, com os
-serviços parados: `sudo tar -czf /CAMINHO_APROVADO/ocrsd-backup.tgz -C /var/lib ocrsd`.
-No Compose, localize o volume com `docker volume ls` e inspecione seu ponto de montagem
+armazenamento autorizado, inclusive SQLite/WAL e permissões. No Compose, com os
+serviços parados, localize o volume com `docker volume ls` e inspecione seu ponto de montagem
 com `docker volume inspect NOME_EXATO`; a cópia é tarefa do administrador. Backups
 contêm saídas, opções e hashes das chaves e precisam de retenção própria.
 
@@ -514,8 +470,8 @@ IP, fila cheia ou reserva de armazenamento. Em 502, confira API/porta/rede do pr
 em falha TLS, confira DNS, validade/caminhos dos certificados e `nginx -t`.
 
 Modelos neurais só devem ser habilitados após instalação/verificação dos pesos e
-medição do consumo no servidor. No modo nativo, use os comandos `make download-*`
-do README durante a preparação, fora do worker. O Compose monta o caminho definido
+medição do consumo no servidor. Use os comandos `make download-*` do README
+durante a preparação, fora do worker. O Compose monta o caminho definido
 em `OCRSD_HANDWRITING_ASSETS` somente para leitura em `/app/assets/handwriting`, na
 API e no worker; o build continua excluindo pesos das imagens. Não baixe modelos
 durante requisições. Fontes, modelos e templates precisam de revisão de licença institucional.

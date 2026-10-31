@@ -273,8 +273,8 @@ TrOCR manuscrito grande, Tesseract e PaddleOCR. O pré-processamento aceita
 | `scripts/` | Validação sintética e publicação de releases |
 | `documents/` | Templates, mapas e presets |
 | `assets/` | Fonte e informações dos modelos de escrita |
-| `docs/` | Relatório técnico e documentação de desenvolvimento |
-| `.github/workflows/` | Validação contínua e publicação |
+| `docs/` | Documentação de desenvolvimento e operação |
+| `.github/workflows/` | Validação contínua, publicação e deploy |
 | `CHANGELOG.md` | Alterações por versão |
 
 As configurações da IDE, os datasets gerados, as saídas e os pesos locais dos
