@@ -31,7 +31,7 @@ from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS,
                               ai_slots, create_blank_model, create_model, duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key,
                               preview_strip, promote_model, render_writing_samples, realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count,
                               render_preview, revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping,
-                              with_approved_semantics, writing_issues, writing_message)
+                              with_approved_semantics, writing_issues, writing_message, count_limit, count_limit_message)
 from src.web.settings import Settings
 from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model_defaults, preset_title, writing_summary
 
@@ -373,6 +373,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                                "description": field.get("description") or "", "official_variable": field.get("official_variable") or "",
                                "bbox": field.get("bbox"), "elements": field.get("elements") or [],
                                "blocked": field.get("unsupported_reason") or (BLOCKED_FIELD if str(field["field_id"]) in blocked else "")})
+        if step == 2 and not state.get("fields"):
+            state["fields"] = [field["id"] for field in fields if not field["blocked"]]
         groups = {}
         for field in fields:
             groups.setdefault(field["group"], []).append(field)
@@ -393,7 +395,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             notices.append("Alguns campos da geração original não existem no mapeamento atual do modelo. Revise a seleção de campos.")
         if state.get("original_model_unavailable") and state.get("preset") == "original_snapshot":
             notices.append("O modelo de escrita original não está disponível. Selecione outro estilo.")
-        if step == 4 and definition:
+        if step == 3 and definition:
             for item in styles:
                 writing = Writing.model_validate(item["writing"])
                 conflicts = writing_issues(definition, state.get("fields", []), writing)
@@ -402,11 +404,14 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 notices.append("O estilo de escrita escolhido não é compatível com os campos selecionados. Escolha outro estilo.")
         selected_style = next((item for item in styles if item["id"] == state.get("preset")), None)
         ai_hint = None
-        if step == 3 and definition and state.get("fields"):
+        ai_fields = set()
+        if step == 4 and definition and state.get("fields"):
             selected_fields = [field for field in definition["fields"] if str(field["field_id"]) in set(state["fields"])]
             if selected_fields:
-                ai_ids = ai_slots({**definition, "fields": selected_fields}, current["id"])
-                ai_hint = {"ai": len(ai_ids), "total": len(selected_fields)}
+                ai_fields = {str(item) for item in ai_slots({**definition, "fields": selected_fields}, current["id"])}
+                ai_hint = {"ai": len(ai_fields), "total": len(selected_fields)}
+        writing = Writing.model_validate(selected_style["writing"]) if selected_style else None
+        max_count = count_limit(writing, settings.max_count) if writing else settings.max_count
         if step == 6 and not state.get("submitted_job") and not error:
             try:
                 if not selected_style:
@@ -423,7 +428,13 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 "types": types, "model_groups": model_groups(types, current), "model_info": models, "current_type": current, "mapping": mapping,
                 "definition": definition, "fields": fields, "groups": groups, "styles": styles, "style_groups": style_groups,
                 "selected_style": selected_style, "assistant": assistant, "selectable": [field for field in fields if not field["blocked"]],
-                "ai_hint": ai_hint, "max_count": settings.max_count, "unpublished": unpublished}
+                "ai_hint": ai_hint, "ai_fields": ai_fields, "max_count": max_count,
+                "count_hint": count_limit_message(writing, settings.max_count) if writing else "", "unpublished": unpublished}
+
+    def wizard_writing(owner_id: str, state: dict) -> Writing:
+        if state.get("preset") == "original_snapshot" and state.get("writing_snapshot"):
+            return Writing.model_validate(state["writing_snapshot"])
+        return Writing.model_validate(preset(owner_id, state["preset"])["writing"])
 
     def wizard_url(identifier: str, step: int) -> str:
         return f"/geracao?draft={identifier}&etapa={step}"
@@ -946,11 +957,11 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 state["preset"] = preset
                 state["preset_chosen"] = True
                 store.save_wizard_draft(identifier, owner_id, state)
-                etapa = 4
+                etapa = 3
         etapa = max(1, min(6, etapa))
         if etapa > state.get("step", 1):
             etapa = state.get("step", 1)
-        assistant = await run_in_threadpool(assistant_summary) if etapa == 3 else None
+        assistant = await run_in_threadpool(assistant_summary) if etapa == 4 else None
         return render(request, "generation.html", page="geracao", **wizard_context(owner_id, state, identifier, etapa, assistant=assistant))
 
     @router.get("/geracao/mapeamento/previa")
@@ -979,13 +990,13 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         if back:
             if step == 2:
                 state["fields"] = [str(value) for value in form.getlist("fields")]
-            elif step == 3:
+            elif step == 4:
                 count = parsed(form, "count", int)
-                if isinstance(count, int) and count >= 1 and (settings.max_count is None or count <= settings.max_count):
+                if isinstance(count, int) and 1 <= count <= count_limit(wizard_writing(owner_id, state), settings.max_count):
                     state["count"] = count
                 if text(form, "generation_mode") in {"traditional", "ai"}:
                     state["generation_mode"] = text(form, "generation_mode")
-            elif step == 4 and text(form, "preset"):
+            elif step == 3 and text(form, "preset"):
                 state["preset"] = "original_snapshot" if text(form, "preset") == "original_snapshot" and state.get("writing_snapshot") else preset(owner_id, text(form, "preset"))["id"]
             elif step == 5 and text(form, "filter_preset") in FILTERS:
                 state["filter_preset"] = text(form, "filter_preset")
@@ -1019,19 +1030,6 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                     raise ServiceError(422, "unsupported_field", f"{unsupported.get('label') or unsupported['field_id']}: {unsupported['unsupported_reason']}")
                 state["fields"] = selected
             elif step == 3:
-                count = parsed(form, "count", int)
-                if not isinstance(count, int) or count < 1 or (settings.max_count is not None and count > settings.max_count):
-                    message = f"Informe de 1 a {settings.max_count} documentos" if settings.max_count is not None else "Informe ao menos 1 documento"
-                    raise ServiceError(422, "validation_error", message)
-                mode = text(form, "generation_mode") or "traditional"
-                if mode not in {"traditional", "ai"}:
-                    raise ServiceError(422, "validation_error", "Selecione um modo de geração válido")
-                if mode == "ai":
-                    assistant = await run_in_threadpool(assistant_summary)
-                    if not assistant["available"]:
-                        raise ServiceError(422, "ai_unavailable", f"Geração assistida por IA indisponível: {assistant['detail']}. {assistant['hint']}".strip())
-                state.update(count=count, generation_mode=mode)
-            elif step == 4:
                 if not text(form, "preset"):
                     raise ServiceError(422, "validation_error", "Selecione um estilo de escrita")
                 snapshot = text(form, "preset") == "original_snapshot" and state.get("writing_snapshot")
@@ -1042,6 +1040,20 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                     raise ServiceError(422, "writing_incompatible", writing_message(writing, conflicts))
                 state["preset"] = "original_snapshot" if snapshot else chosen["id"]
                 state["preset_chosen"] = True
+                state["count"] = min(state.get("count", 1), count_limit(writing, settings.max_count))
+            elif step == 4:
+                count = parsed(form, "count", int)
+                writing = wizard_writing(owner_id, state)
+                if not isinstance(count, int) or count < 1 or count > count_limit(writing, settings.max_count):
+                    raise ServiceError(422, "validation_error", count_limit_message(writing, settings.max_count))
+                mode = text(form, "generation_mode") or "traditional"
+                if mode not in {"traditional", "ai"}:
+                    raise ServiceError(422, "validation_error", "Selecione um modo de geração válido")
+                if mode == "ai":
+                    assistant = await run_in_threadpool(assistant_summary)
+                    if not assistant["available"]:
+                        raise ServiceError(422, "ai_unavailable", f"Geração assistida por IA indisponível: {assistant['detail']}. {assistant['hint']}".strip())
+                state.update(count=count, generation_mode=mode)
             else:
                 value = text(form, "filter_preset")
                 if value not in FILTERS:

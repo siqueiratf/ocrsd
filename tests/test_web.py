@@ -265,11 +265,19 @@ class WebTests(unittest.TestCase):
         self.settings.max_storage_bytes = self.settings.max_job_bytes
         self.assertEqual(self.client.post("/api/v1/jobs", json=self.options.model_dump()).json()["error"]["code"], "storage_quota")
 
-    def test_unlimited_count_has_no_quota_ceiling(self):
+    def test_count_limit_depends_on_the_writing_model(self):
         self.assertIsNone(self.settings.max_count)
         catalog = Catalog(self.settings)
-        self.options.count = 1000
+        self.options.count = 500
         self.assertIs(catalog.validate(self.options), self.options)
+        self.options.count = 501
+        with self.assertRaises(ServiceError) as caught:
+            catalog.validate(self.options)
+        self.assertEqual(caught.exception.code, "quota")
+        neural = self.options.model_copy(update={"writing": Writing(model="sjvasquez"), "count": 151})
+        with self.assertRaises(ServiceError) as caught:
+            catalog.validate(neural)
+        self.assertEqual(caught.exception.code, "quota")
 
     def test_configured_max_count_still_rejects_larger_counts(self):
         catalog = Catalog(self.settings)
@@ -289,7 +297,7 @@ class WebTests(unittest.TestCase):
 
     def test_large_count_job_exceeds_storage_quota_via_scaled_budget(self):
         self.settings.max_storage_bytes = self.settings.job_byte_budget(1)
-        self.options.count = 1000
+        self.options.count = 500
         response = self.client.post("/api/v1/jobs", json=self.options.model_dump())
         self.assertEqual(response.json()["error"]["code"], "storage_quota")
 

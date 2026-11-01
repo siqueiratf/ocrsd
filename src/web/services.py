@@ -260,6 +260,9 @@ class Catalog:
             raise ServiceError(422, "invalid_fields", "Selecione campos existentes, sem repetições")
         if self.settings.max_count is not None and options.count > self.settings.max_count:
             raise ServiceError(422, "quota", f"Limite de {self.settings.max_count} documentos por job")
+        if not replay and options.count > count_limit(options.writing):
+            raise ServiceError(422, "quota", f"Limite de {count_limit(options.writing)} documentos por job "
+                                             f"{'com fontes' if options.writing.model == 'font' else 'com síntese neural'}")
         if not any(m["id"] == options.writing.model and m["available"] for m in self.models()):
             raise ServiceError(422, "model_unavailable", "Modelo não habilitado ou pesos ausentes")
         selected = [field for field in definition["fields"] if field["field_id"] in options.fields]
@@ -308,6 +311,20 @@ def unavailable_custom_fields(definition: dict) -> dict[str, str]:
 
 
 WRITING_SAMPLES = 64
+FONT_COUNT_LIMIT = 500
+NEURAL_COUNT_LIMIT = 150
+
+
+def count_limit(writing: Writing, max_count: int | None = None) -> int:
+    limit = FONT_COUNT_LIMIT if writing.model == "font" else NEURAL_COUNT_LIMIT
+    return limit if max_count is None else min(limit, max_count)
+
+
+def count_limit_message(writing: Writing, max_count: int | None = None) -> str:
+    limit = count_limit(writing, max_count)
+    if max_count is not None and max_count < (FONT_COUNT_LIMIT if writing.model == "font" else NEURAL_COUNT_LIMIT):
+        return f"Informe de 1 a {limit} documentos"
+    return f"Informe de 1 a {limit} documentos {'com fontes' if writing.model == 'font' else 'com síntese neural'}"
 
 
 def writing_issues(definition: dict, field_ids, writing: Writing) -> list[dict]:

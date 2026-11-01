@@ -105,8 +105,8 @@ class GenerationModeTests(unittest.TestCase):
     def wizard(self, generation_mode="traditional", count="2", document_type="dnv", fields=None):
         page = self.hx("GET", f"/geracao?modelo={document_type}")
         draft = re.search(r'name="draft_id" value="([0-9a-f]+)"', page.text).group(1)
-        for step, data in ((1, {"document_type": document_type}), (2, {"fields": fields or FIELDS}), (3, {"count": count, "generation_mode": generation_mode}),
-                           (4, {"preset": "padrao_fonte_natural"}), (5, {"filter_preset": "none"})):
+        for step, data in ((1, {"document_type": document_type}), (2, {"fields": fields or FIELDS}), (3, {"preset": "padrao_fonte_natural"}),
+                           (4, {"count": count, "generation_mode": generation_mode}), (5, {"filter_preset": "none"})):
             response = self.hx("POST", f"/geracao/etapa/{step}", data={"draft_id": draft, **data})
             self.assertEqual(response.status_code, 200, response.text)
         return draft
@@ -146,13 +146,14 @@ class GenerationModeTests(unittest.TestCase):
         draft = re.search(r'name="draft_id" value="([0-9a-f]+)"', page.text).group(1)
         self.hx("POST", "/geracao/etapa/1", data={"draft_id": draft, "document_type": "dnv"})
         self.hx("POST", "/geracao/etapa/2", data={"draft_id": draft, "fields": FIELDS})
-        quantity = self.hx("GET", f"/geracao?draft={draft}&etapa=3")
+        self.hx("POST", "/geracao/etapa/3", data={"draft_id": draft, "preset": "padrao_fonte_natural"})
+        quantity = self.hx("GET", f"/geracao?draft={draft}&etapa=4")
         self.assertIn('name="generation_mode" value="traditional" checked', quantity.text)
         self.assertRegex(quantity.text, r'name="generation_mode" value="ai"\s+disabled')
         self.assertIn("Assistente de IA desativado", quantity.text)
         self.assertIn("OCRSD_AI_PROVIDER=openai", quantity.text)
         self.assertIn("qwen3:1.7b", quantity.text)
-        rejected = self.hx("POST", "/geracao/etapa/3", data={"draft_id": draft, "count": "1", "generation_mode": "ai"})
+        rejected = self.hx("POST", "/geracao/etapa/4", data={"draft_id": draft, "count": "1", "generation_mode": "ai"})
         self.assertEqual(rejected.status_code, 422)
         self.assertIn("indisponível", rejected.text)
         api = self.client.post("/api/v1/jobs", headers={"X-Workspace-Token": self.cookie},
@@ -304,7 +305,7 @@ class BuiltinMetadataTests(unittest.TestCase):
         self.assertRegex(fields, r'name="fields" value="causa" disabled')
         self.assertIn("Sem gerador validado", fields)
         self.assertNotIn('data-overlay-field="causa"', fields)
-        self.assertIn("0 de 1 campos selecionados", fields)
+        self.assertIn("1 de 1 campos selecionados", fields)
         self.assertEqual(self.hx("POST", "/geracao/etapa/2", data={"draft_id": draft, "fields": ["nome", "causa"]}).status_code, 422)
         self.assertEqual(self.hx("POST", "/geracao/etapa/2", data={"draft_id": draft, "fields": ["nome"]}).status_code, 200)
         copied = self.hx("POST", "/modelos/obito_teste/copia")

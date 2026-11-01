@@ -143,7 +143,7 @@ class ResultsTests(unittest.TestCase):
         self.assertEqual((state["document_type"], state["count"], state["fields"]), ("dnv", 1, ["1"]))
         self.assertEqual(state["preset"], "original_snapshot")
         self.assertIn("Documento base", self.request("GET", reused.headers["hx-redirect"]).text)
-        self.assertIn("Configuração original", self.request("GET", f"/geracao?draft={draft}&etapa=4").text)
+        self.assertIn("Configuração original", self.request("GET", f"/geracao?draft={draft}&etapa=3").text)
 
     def test_selective_zip_export_and_validation(self):
         job = self.submit(2)

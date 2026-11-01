@@ -448,7 +448,7 @@ class WebGenericAiEndToEndTests(unittest.TestCase):
         page = self.hx("GET", "/geracao?modelo=procuracao_teste")
         draft = re.search(r'name="draft_id" value="([0-9a-f]+)"', page.text).group(1)
         for step, data in ((1, {"document_type": "procuracao_teste"}), (2, {"fields": fields}),
-                           (3, {"count": "1", "generation_mode": "ai"}), (4, {"preset": "padrao_fonte_natural"}),
+                           (3, {"preset": "padrao_fonte_natural"}), (4, {"count": "1", "generation_mode": "ai"}),
                            (5, {"filter_preset": "none"})):
             response = self.hx("POST", f"/geracao/etapa/{step}", data={"draft_id": draft, **data})
             self.assertEqual(response.status_code, 200, response.text)

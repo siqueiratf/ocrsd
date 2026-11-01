@@ -5,7 +5,7 @@
 {% if retorno %}
 <div class="return-banner" role="status">
   {{ icon('generate') }}<span>Escolha o preset da etapa 4 da geração. O rascunho da geração está preservado.</span>
-  <a class="btn btn-sm" href="{{ '/geracao?draft=' ~ retorno[8:] ~ '&etapa=4' if retorno.startswith('geracao_') else '/geracao?rascunho=1' }}">{{ icon('back') }}Voltar sem alterar</a>
+  <a class="btn btn-sm" href="{{ '/geracao?draft=' ~ retorno[8:] ~ '&etapa=3' if retorno.startswith('geracao_') else '/geracao?rascunho=1' }}">{{ icon('back') }}Voltar sem alterar</a>
 </div>
 {% endif %}
 <div class="page-head page-head-compact">
