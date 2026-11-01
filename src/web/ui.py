@@ -5,6 +5,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 import time
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 from datetime import datetime
@@ -31,7 +32,7 @@ from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS,
                               ai_slots, create_blank_model, create_model, duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key,
                               preview_strip, promote_model, render_writing_samples, realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count,
                               render_preview, revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping,
-                              with_approved_semantics, writing_issues, writing_message, count_limit, count_limit_message)
+                              with_approved_semantics, writing_issues, writing_message, count_limit, count_limit_message, warm_writing_samples)
 from src.web.settings import Settings
 from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model_defaults, preset_title, writing_summary
 
@@ -388,6 +389,10 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                               "summary": writing_summary(state["writing_snapshot"]), "thumbnail": f"/geracao/{identifier}/amostra.png",
                               "writing": state["writing_snapshot"], "recommended": False, "kind": "original"})
         style_groups = style_sections(styles, state.get("preset"))
+        if step == 2 and definition and any(item["writing"].get("model", "font") != "font" for item in styles):
+            # The "Escrita" step checks each neural style against samples of
+            # the selected fields. Make the samples now, so that step opens fast.
+            threading.Thread(target=warm_writing_samples, args=(definition,), daemon=True).start()
         notices = []
         if state.get("original_mapping_missing") and not mapping:
             notices.append("O modelo original não está mais disponível. Selecione outro documento antes de gerar.")
@@ -1265,6 +1270,11 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         if not result["selected_document"]:
             raise ServiceError(404, "not_found", "Documento não encontrado")
         return render(request, "partials/result_workspace.html", result=result)
+
+    @router.post("/resultados/{job_id}/cancelar")
+    async def result_cancel(request: Request, job_id: Identifier, owner_id: Owner):
+        owned_job(owner_id, job_id)
+        return render(request, "partials/result_name.html", job=store.detail(store.cancel(job_id)))
 
     @router.post("/resultados/{job_id}/renomear")
     async def result_rename(request: Request, job_id: Identifier, owner_id: Owner):

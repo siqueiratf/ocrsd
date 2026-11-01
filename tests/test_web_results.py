@@ -47,6 +47,20 @@ class ResultsTests(unittest.TestCase):
         subprocess.run([sys.executable, "-m", "src.web.worker", "--once"], env=environment,
                        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=90, check=True)
 
+    def test_running_job_can_be_cancelled_from_the_results_list(self):
+        job = self.submit(2)
+        queued = self.request("GET", "/resultados/lista").text
+        self.assertNotIn("result-cancel", queued)
+        with self.app.state.store.connection() as db:
+            db.execute("UPDATE jobs SET status='running' WHERE id=?", (job,))
+        running = self.request("GET", "/resultados/lista").text
+        self.assertIn(f'hx-post="/resultados/{job}/cancelar"', running)
+        cancelled = self.request("POST", f"/resultados/{job}/cancelar")
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertNotIn("result-cancel", cancelled.text)
+        self.assertIn("Cancelamento solicitado", cancelled.text)
+        self.assertTrue(self.app.state.store.get(job)["cancel_requested"])
+
     def test_jobs_receive_distinct_seeds_under_concurrency(self):
         from concurrent.futures import ThreadPoolExecutor
 

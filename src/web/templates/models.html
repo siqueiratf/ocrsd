@@ -17,6 +17,13 @@
     <div class="model-thumb">
       <img src="/modelos/{{ model.id }}/previa.png" alt="Prévia de {{ model.label }}" decoding="async">
     </div>
+    <div class="hover-actions">
+      <button type="button" class="hover-action" hx-post="/modelos/{{ model.id }}/copia" hx-disabled-elt="this" aria-label="Duplicar e editar" data-tooltip="Duplicar e editar">{{ icon('pen') }}</button>
+      {% if not model.builtin or model.editable %}<a class="hover-action" href="/modelos/{{ model.id }}/editor" aria-label="Abrir editor" data-tooltip="Abrir editor">{{ icon('settings') }}</a>{% endif %}
+      {% if model.builtin and model.documentacao %}<a class="hover-action" href="{{ model.documentacao }}" target="_blank" rel="noopener noreferrer" aria-label="Abrir documentação" data-tooltip="Abrir documentação">{{ icon('external') }}</a>{% endif %}
+      <a class="hover-action" href="/modelos/{{ model.id }}/template.pdf" download aria-label="Baixar template" data-tooltip="Baixar template vazio (PDF)">{{ icon('download') }}</a>
+      {% if not model.builtin %}<form hx-post="/modelos/{{ model.id }}/excluir" hx-confirm="Excluir o modelo “{{ model.label }}”? Esta ação remove o PDF e o mapeamento personalizados." hx-disabled-elt="find button"><button type="submit" class="hover-action is-danger" aria-label="Excluir modelo" data-tooltip="Excluir modelo">{{ icon('trash') }}</button></form>{% endif %}
+    </div>
     <div class="model-body">
       <div class="tags">
         {% if model.status == 'published' %}<span class="tag tag-green">Publicado</span>{% else %}<span class="tag tag-yellow">Rascunho</span>{% endif %}
@@ -30,18 +37,11 @@
         <div><dt>Modificado</dt><dd>{{ model.updated_at|data if model.updated_at else "Modelo padrão" }}</dd></div>
       </dl>
       <div class="model-actions">
-        {% if model.builtin %}
-        <button type="button" class="btn" hx-post="/modelos/{{ model.id }}/copia" hx-disabled-elt="this" data-tooltip="O modelo padrão fica protegido; a cópia é editável no seu espaço de trabalho">{{ icon('copy') }}Duplicar e editar<span class="spinner htmx-indicator" aria-hidden="true"></span></button>
-        {% endif %}
-        {% if not model.builtin or model.editable %}
-        <a class="btn" href="/modelos/{{ model.id }}/editor">{{ icon('pen') }}Abrir editor</a>
-        {% endif %}
         {% if model.status == 'published' %}
         <a class="btn btn-primary" href="/geracao?modelo={{ model.id|urlencode }}">{{ icon('generate') }}Gerar</a>
         {% else %}
         <a class="btn" href="/modelos/{{ model.id }}/editor" title="Publique o modelo no editor para usá-lo na geração">{{ icon('publish') }}Publicar</a>
         {% endif %}
-        {% if not model.builtin %}<form hx-post="/modelos/{{ model.id }}/excluir" hx-confirm="Excluir o modelo “{{ model.label }}”? Esta ação remove o PDF e o mapeamento personalizados." hx-disabled-elt="find button"><button type="submit" class="btn btn-danger">{{ icon('trash') }}Excluir</button></form>{% endif %}
       </div>
     </div>
   </article>

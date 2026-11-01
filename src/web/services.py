@@ -342,26 +342,42 @@ def writing_issues(definition: dict, field_ids, writing: Writing) -> list[dict]:
 def sampled_writing_issues(fields: str, shared: str, policy: str, numbers: bool, texts: bool, document: str = "",
                            custom: str = "{}") -> tuple:
     from src.neural_handwriting import apply_text_policy, unsupported_characters
-    from src.synthetic_dataset import field_texts, is_numeric_text
     issues = []
-    definitions = json.loads(custom)
     for field in apply_shared_rules({"fields": json.loads(fields), "shared_rules": json.loads(shared)})["fields"]:
         if field.get("render_as_printed"):
             continue
         characters, too_long = set(), False
-        for sample in range(WRITING_SAMPLES):
-            for value in field_texts(field, random.Random(sample),
-                                     {"document": document or None, "semantic_definitions": definitions}):
-                if not value.strip() or not (numbers if is_numeric_text(value) else texts):
-                    continue
-                text = apply_text_policy(value, policy)
-                characters.update(unsupported_characters(text))
-                too_long = too_long or len(text) > 160
+        for value, numeric in field_samples(json.dumps(field, sort_keys=True), document, custom):
+            if not (numbers if numeric else texts):
+                continue
+            text = apply_text_policy(value, policy)
+            characters.update(unsupported_characters(text))
+            too_long = too_long or len(text) > 160
         if characters or too_long:
             issues.append((("field_id", str(field["field_id"])),
                            ("label", field.get("label") or field.get("description") or str(field["field_id"])),
                            ("characters", tuple(sorted(characters))), ("too_long", too_long)))
     return tuple(issues)
+
+
+@functools.lru_cache(maxsize=4096)
+def field_samples(field: str, document: str = "", custom: str = "{}") -> tuple[tuple[str, bool], ...]:
+    # The samples do not depend on the writing style, so all neural styles
+    # and all field selections share them.
+    from src.synthetic_dataset import field_texts, is_numeric_text
+    data, definitions = json.loads(field), json.loads(custom)
+    return tuple((value, is_numeric_text(value)) for sample in range(WRITING_SAMPLES)
+                 for value in field_texts(data, random.Random(sample), {"document": document or None, "semantic_definitions": definitions})
+                 if value.strip())
+
+
+def warm_writing_samples(definition: dict) -> None:
+    custom = json.dumps(definition.get("semantic_definitions") or {}, sort_keys=True)
+    document = str(definition.get("template_id") or "")
+    resolved = apply_shared_rules({"fields": definition.get("fields", []), "shared_rules": definition.get("shared_rules") or {}})
+    for field in resolved["fields"]:
+        if not field.get("render_as_printed"):
+            field_samples(json.dumps(field, sort_keys=True), document, custom)
 
 
 def writing_message(writing: Writing, issues: list[dict]) -> str:

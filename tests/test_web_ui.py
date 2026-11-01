@@ -59,6 +59,18 @@ class InterfaceTests(unittest.TestCase):
         subprocess.run([sys.executable, "-m", "src.web.worker", "--once"], cwd=ROOT, env=environment,
                        capture_output=True, text=True, timeout=90, check=True)
 
+
+    def test_model_cards_show_hover_actions_and_only_generate_button(self):
+        gallery = self.page("/modelos").text
+        card = gallery[gallery.index('/modelos/dnv/previa.png'):]
+        card = card[:card.index("</article>")]
+        self.assertIn('hx-post="/modelos/dnv/copia"', card)
+        self.assertIn('href="/modelos/dnv/template.pdf" download', card)
+        self.assertIn("Abrir documentação", card)
+        actions = card[card.index('class="model-actions"'):]
+        self.assertIn("Gerar", actions)
+        self.assertNotIn("Duplicar e editar", actions)
+        self.assertNotIn("Excluir", actions)
     def test_gallery_deletes_only_custom_models_and_wizard_shows_description(self):
         gallery = self.page("/modelos").text
         self.assertIn("Declaração de Nascido Vivo (DNV)", gallery)

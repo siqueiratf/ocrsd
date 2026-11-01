@@ -228,6 +228,17 @@ class WizardTests(unittest.TestCase):
         self.assertIn('hx-post="/geracao/etapa/4"', page.text)
         self.assertIn('hx-post="/geracao/etapa/3"', self.request("GET", f"/geracao?draft={self.draft}&etapa=3").text)
 
+    def test_realism_choices_swap_the_preview(self):
+        self.advance(1, document_type="dnv", mapping_id=self.mapping)
+        self.advance(2, fields=["1"])
+        self.advance(3, preset="padrao_fonte_natural")
+        self.advance(4, count="1")
+        page = self.request("GET", f"/geracao?draft={self.draft}&etapa=5").text
+        choices = re.findall(r'<input type="radio" name="filter_preset"[^>]*>', page)
+        self.assertEqual(len(choices), 4)
+        for choice in choices:
+            self.assertIn('hx-swap="innerHTML"', choice)
+
     def test_count_above_font_style_limit_is_rejected(self):
         self.advance(1, document_type="dnv", mapping_id=self.mapping)
         fields = re.findall(r'name="fields" value="([^"]+)"', self.request("GET", f"/geracao?draft={self.draft}&etapa=2").text)

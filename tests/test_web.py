@@ -129,7 +129,7 @@ class WebTests(unittest.TestCase):
         page = self.client.get("/geracao", headers=headers)
         self.assertEqual(page.status_code, 200, page.text)
         self.assertIn('class="wizard-org-group"', page.text)
-        self.assertIn('class="wizard-model-actions"', page.text)
+        self.assertIn('class="hover-actions"', page.text)
         self.assertIn("/modelos/certidao_nascimento_cnj/template.pdf", page.text)
         page = self.client.get("/geracao", headers=headers, params={"modelo": "certidao_nascimento_cnj"})
         self.assertEqual(page.status_code, 200, page.text)

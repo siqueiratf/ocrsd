@@ -75,13 +75,14 @@
         <button type="button" class="btn btn-primary" hx-post="/presets/escrita/previa" hx-target="#playground" hx-sync="#playground:drop" hx-indicator="#playground" hx-disabled-elt="this" data-atualizar-previa>{{ icon('reload') }}Atualizar prévia</button>
       </div>
       <p class="playground-stale" data-previa-desatualizada hidden>{{ icon('info') }}<span>A configuração mudou. Atualize a prévia para ver o resultado do motor.</span></p>
+      <div class="playground-frame">
       <div id="playground" class="playground" hx-post="/presets/escrita/previa" hx-trigger="load" hx-sync="#playground:drop" aria-live="polite" aria-busy="false">
         <div class="sample-rows">
           {% for label, sample in samples %}
           <div class="sample-row"><div class="sample-ref"><b>{{ label }}</b><span class="mono">{{ sample }}</span></div><div class="sample-cells"><div class="sample-cell sample-loading"></div></div></div>
           {% endfor %}
         </div>
-      </div>
+      </div><span class="loading-dots" role="status" aria-label="Carregando prévia"><span></span><span></span><span></span></span></div>
     </section>
   </div>
 </form>
