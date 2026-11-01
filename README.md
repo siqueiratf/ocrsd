@@ -52,7 +52,7 @@ make web
 
 No modo local, esse alvo habilita automaticamente todos os modelos neurais cujos
 pesos estejam presentes em `assets/handwriting`. Abra **http://127.0.0.1:8000**.
-Se a porta 8000 estiver ocupada, use `make web PORT=8001`. `make web` também
+Se a porta 8000 estiver ocupada, use `make web PORT=8001`. Para usar a IA do servidor 2 em vez da GPU local, conecte a VPN e use `make web AI=ssh2`. `make web` também
 habilita `OCRSD_STANDARD_EDITS`, que adiciona ao editor as ações “Salvar como
 modelo padrão” e “Salvar nova versão do padrão”; ambas gravam em
 `documents/<chave>/` do repositório, então confira o diff e rode

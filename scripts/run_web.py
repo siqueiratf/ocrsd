@@ -6,6 +6,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -33,6 +34,36 @@ def configured_port(name: str, default: int) -> int:
     return port
 
 
+def open_ai_tunnel(destination: str) -> tuple[str, str, tempfile.TemporaryDirectory]:
+    # The tunnel keeps OCRSD_AI_BASE_URL on loopback, so the remote server
+    # needs no OCRSD_AI_ALLOW_REMOTE. ssh asks for the password in this
+    # terminal, or uses SSH_ASKPASS when it is set.
+    port = configured_port("OCRSD_AI_SSH_PORT", 11435)
+    ensure_port(port)
+    target = os.getenv("OCRSD_AI_SSH_TARGET", "127.0.0.1:11434")
+    folder = tempfile.TemporaryDirectory(prefix="ocrsd-ai-ssh-")
+    control = str(Path(folder.name) / "control")
+    print(f"Abrindo o túnel SSH da IA: 127.0.0.1:{port} → {destination} ({target})", flush=True)
+    opened = subprocess.run(["ssh", "-f", "-N", "-M", "-S", control,
+                             "-o", "ExitOnForwardFailure=yes", "-o", "ConnectTimeout=15",
+                             "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3",
+                             *os.getenv("OCRSD_AI_SSH_OPTIONS", "").split(),
+                             "-L", f"127.0.0.1:{port}:{target}", destination])
+    if opened.returncode != 0:
+        folder.cleanup()
+        raise SystemExit(f"Não foi possível abrir o túnel SSH até {destination}. Verifique a VPN e a senha.")
+    os.environ["OCRSD_AI_BASE_URL"] = f"http://127.0.0.1:{port}/v1"
+    return destination, control, folder
+
+
+def close_ai_tunnel(tunnel: tuple[str, str, tempfile.TemporaryDirectory] | None) -> None:
+    if tunnel is None:
+        return
+    destination, control, folder = tunnel
+    subprocess.run(["ssh", "-S", control, "-O", "exit", destination], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    folder.cleanup()
+
+
 def stop(processes: list[tuple[str, subprocess.Popen]]) -> None:
     for _, process in processes:
         if process.poll() is None:
@@ -53,6 +84,15 @@ def main() -> int:
     os.environ.setdefault("OCRSD_AI_PROVIDER", "openai")
     api_port = configured_port("OCRSD_API_PORT", 8000)
     ensure_port(api_port)
+    destination = os.getenv("OCRSD_AI_SSH", "").strip()
+    tunnel = open_ai_tunnel(destination) if destination else None
+    try:
+        return serve(api_port)
+    finally:
+        close_ai_tunnel(tunnel)
+
+
+def serve(api_port: int) -> int:
     environment = {**os.environ, "PYTHONUNBUFFERED": "1"}
     commands = [
         ("API", [sys.executable, "-m", "uvicorn", "src.web.api:create_app", "--factory", "--host", "127.0.0.1", "--port", str(api_port)]),
@@ -64,6 +104,8 @@ def main() -> int:
             processes.append((name, subprocess.Popen(command, cwd=ROOT, env=environment, start_new_session=True)))
         print(f"\nOCRSD Web disponível em http://127.0.0.1:{api_port}", flush=True)
         print(f"API em http://127.0.0.1:{api_port}/api/docs", flush=True)
+        if os.getenv("OCRSD_AI_SSH"):
+            print(f"IA em {os.environ['OCRSD_AI_BASE_URL']} (servidor {os.environ['OCRSD_AI_SSH']}, modelo {os.getenv('OCRSD_AI_MODEL', 'padrão')})", flush=True)
         print("Pressione Ctrl+C para encerrar a API e o worker.\n", flush=True)
         while True:
             for name, process in processes:

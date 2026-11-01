@@ -21,6 +21,14 @@ TEXT_POLICY ?= normalize
 THREADS ?= 1
 PORT ?=
 API_PORT ?= $(if $(strip $(PORT)),$(PORT),8000)
+AI ?= local
+SSH2 ?= ia@192.168.3.102
+SSH2_AI_MODEL ?= qwen2.5:7b-instruct
+# The ssh2 account uses a password. If the askpass helper exists, ssh reads
+# the password from it; if not, ssh asks for the password in the terminal.
+SSH2_ASKPASS ?= $(HOME)/.ssh/ia_askpass
+SSH2_AUTH_ENV = $(if $(wildcard $(SSH2_ASKPASS)),SSH_ASKPASS='$(SSH2_ASKPASS)' SSH_ASKPASS_REQUIRE=force OCRSD_AI_SSH_OPTIONS='-o PubkeyAuthentication=no',)
+WEB_AI_ENV = $(if $(filter ssh2,$(AI)),OCRSD_AI_SSH='$(SSH2)' OCRSD_AI_MODEL='$(SSH2_AI_MODEL)' $(SSH2_AUTH_ENV),)
 
 .PHONY: help dataset dataset-font dataset-sjvasquez dataset-aaron1259 dataset-wpvnteam
 .PHONY: download-sjvasquez download-aaron1259 download-wpvnteam
@@ -45,6 +53,7 @@ help:
 	  'make smoke                    Valida geracao, alinhamento, recortes e ocultacao.' \
 	  'make web                      Prepara e inicia a interface web, a API e o worker.' \
 	  'make web PORT=8001            Usa outra porta local para a interface e a API.' \
+	  'make web AI=ssh2              Usa a IA (Ollama) do servidor 2 por um tunel SSH.' \
 	  'make web-clean                Inicia web com armazenamento vazio; mantém modelos padrão do catálogo.' \
 	  'make gui                      Abre a interface desktop.' \
 	  '' \
@@ -100,9 +109,9 @@ $(WEB_PY_STAMP): pyproject.toml uv.lock
 	@touch '$(WEB_PY_STAMP)'
 
 web: $(WEB_PY_STAMP)
-	env OCRSD_NEURAL_ENABLED=true OCRSD_API_PORT='$(API_PORT)' $(UV) run --offline --no-sync python -m scripts.run_web
+	env $(WEB_AI_ENV) OCRSD_NEURAL_ENABLED=true OCRSD_API_PORT='$(API_PORT)' $(UV) run --offline --no-sync python -m scripts.run_web
 
 web-clean: $(WEB_PY_STAMP)
 	@demo_storage=$$(mktemp -d /tmp/ocrsd-web-clean.XXXXXX); \
 	  trap 'rm -rf "$$demo_storage"' EXIT; \
-	  env OCRSD_STORAGE="$$demo_storage" OCRSD_NEURAL_ENABLED=true OCRSD_API_PORT='$(API_PORT)' $(UV) run --offline --no-sync python -m scripts.run_web
+	  env $(WEB_AI_ENV) OCRSD_STORAGE="$$demo_storage" OCRSD_NEURAL_ENABLED=true OCRSD_API_PORT='$(API_PORT)' $(UV) run --offline --no-sync python -m scripts.run_web

@@ -121,6 +121,9 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 | `OCRSD_AI_RULES_CHARS` | 1800 | Tamanho máximo (em caracteres, cortado em um parágrafo) do `regras.md` do documento enviado ao prompt da geração assistida |
 | `OCRSD_AI_MAX_FIELDS_PER_REQUEST` | 24 | Quantos campos sem vínculo de registro civil entram em cada requisição de geração assistida; o excedente vira requisições adicionais |
 | `OCRSD_AI_SECONDS_PER_DOCUMENT` | 120 | Substitui `OCRSD_JOB_SECONDS_PER_DOCUMENT` no orçamento de tempo do job quando `generation_mode=ai` |
+| `OCRSD_AI_SSH` | vazio | Somente `scripts/run_web.py` (`make web AI=ssh2`): destino SSH, por exemplo `ia@192.168.3.102`. Abre um túnel local até o Ollama remoto e aponta `OCRSD_AI_BASE_URL` para ele |
+| `OCRSD_AI_SSH_PORT` / `OCRSD_AI_SSH_TARGET` | 11435 / `127.0.0.1:11434` | Porta local do túnel e endereço do Ollama visto pelo servidor remoto |
+| `OCRSD_AI_SSH_OPTIONS` | vazio | Opções extras do `ssh` do túnel, separadas por espaço |
 | `OCRSD_MAPPING_MIN_SCORE` / `OCRSD_MAPPING_MIN_MARGIN` | 0.5 / 0.2 | Similaridade mínima e margem para associar um rótulo a uma chave semântica |
 | `OCRSD_STANDARD_EDITS` | false (true em `make web`) | Habilita promover um modelo personalizado a padrão e substituir o mapeamento de um modelo padrão pelo editor; grava em `documents/`. Mantenha `false` em implantações. |
 
@@ -143,7 +146,7 @@ pesos podem mudar resultados. Os testes reais usam fonte local, sem inferência 
 
 ## Geração assistida por IA (local)
 
-Em `/geracao`, etapa 3, "Geração assistida por IA" usa um servidor local compatível
+Em `/geracao`, etapa 4 (Quantidade), "Geração assistida por IA" usa um servidor local compatível
 com a API da OpenAI (Ollama por padrão) para propor os valores de preenchimento, para
 qualquer documento padrão — não apenas DNV/DO. Instalação em Arch Linux:
 
@@ -157,6 +160,15 @@ Defina `OCRSD_AI_PROVIDER=openai` e `OCRSD_AI_MODEL=qwen3:4b` (o `make web` já
 habilita o provedor; o modelo pode ser trocado por variável de ambiente). `scripts/run_web.py`
 mostra "indisponível" na interface quando nenhum servidor responde em
 `OCRSD_AI_BASE_URL` (loopback por padrão).
+
+Para usar o Ollama do servidor 2 em vez da GPU local, conecte a VPN e rode
+`make web AI=ssh2` (ou `make web-clean AI=ssh2`). O `scripts/run_web.py` abre o
+túnel `ssh -L 127.0.0.1:11435:127.0.0.1:11434 ia@192.168.3.102`, define
+`OCRSD_AI_BASE_URL=http://127.0.0.1:11435/v1` para a API e o worker e usa o modelo
+de produção `qwen2.5:7b-instruct` (troque com `SSH2_AI_MODEL=...`). O endereço
+continua em loopback, então `OCRSD_AI_ALLOW_REMOTE` não é necessário. Se
+`~/.ssh/ia_askpass` existir, o `ssh` lê a senha por ele; senão, pede a senha no
+terminal. O túnel fecha junto com o `make web`.
 
 O que é enviado ao modelo: para campos vinculados ao registro civil (DNV/DO), os
 mesmos slots determinísticos de sempre (nome do papel, não a pessoa). Para os demais
