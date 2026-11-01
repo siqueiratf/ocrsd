@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import io
+import functools
 import hashlib
 import random
 import re
@@ -39,6 +40,77 @@ from src.writing_presets import document_id_with_preset
 ASSETS_ROOT = Path(__file__).resolve().parent.parent / "assets"
 HANDWRITING_FONT = ASSETS_ROOT / "fonts" / "Caveat-Regular.ttf"
 TYPED_FONT_ALIAS_PREFIX = "ocrsd-typed-"
+
+# Typed-text (printed-font) placement tuning. Root cause of the issues this fixes:
+# the old `insert_printed` capped font size at 11pt regardless of field height (digits
+# rendered far smaller than the field, digit_height_ratio ~0.34-0.38 in the writing
+# audit), aligned text flush with the box's left edge (left_margin_w ~0.018-0.02), and
+# relied on PyMuPDF's `insert_textbox` top-left anchor with no vertical centring.
+TYPED_TARGET_DIGIT_HEIGHT_FRAC = 0.60  # digits should fill ~55-70% of field height
+TYPED_MIN_FONT_SIZE = 5.0
+TYPED_MAX_FONT_SIZE = 42.0  # ceiling for single-character cells only (see below)
+TYPED_GENERIC_MAX_SIZE = 12.0  # ceiling for ordinary (multi-character) typed fields.
+# (Added after the writing-audit verifier found this: a "fill-in-the-line" field's box
+# is often tall for layout/visual-grid reasons, not because a typed line is meant to
+# fill it -- e.g. a CNPJ quadro-de-socios table cell or a CadUnico address line. Sizing
+# purely from rect.height (as single-character digit/CPF cells correctly do, since
+# those boxes ARE sized to one glyph) made such fields' text balloon to the old
+# TYPED_MAX_FONT_SIZE, and because the target size depends only on geometry, not
+# content, a short value that happened to fit at that huge size (e.g. "Socio") rendered
+# much larger than a long value in the same column that had to shrink to fit (e.g.
+# "Socio-Administrador") -- same box, wildly different apparent sizes. Real typewritten
+# forms run about 8-12pt regardless of box height; capping multi-character fields to
+# TYPED_GENERIC_MAX_SIZE keeps the whole column in that realistic, consistent range.
+# Single-character cells keep TYPED_MAX_FONT_SIZE because their height-to-glyph
+# relationship is the whole point of the earlier digit-size fix.)
+TYPED_SHRINK_FLOOR = 4.5  # preferred legibility floor in points; shrink stops here first.
+# (Tuned down from an initial 6.0pt: the writing audit showed 6.0pt left ~20 long
+# single_line fields -- addresses, "BRASILEIRO(A) NATURALIZADO(A)"-style enum values --
+# clipped mid-word because their natural shrink-to-fit size (~4.6-5.3pt) was just below
+# the floor. 4.5pt is still far more legible than the old code's unbounded shrink, which
+# went under 2pt for these same fields. If a value still doesn't fit at 4.5pt,
+# insert_printed tries once more down to TYPED_HARD_FLOOR; if it STILL doesn't fit, the
+# field is left blank with a `blank_reason` in the ground truth rather than ever drawing
+# text that overflows or clips -- the rendered PDF text must always equal the ground
+# truth, per the writing-audit hard rule.)
+TYPED_SHRINK_STEP = 0.92
+TYPED_HARD_FLOOR = 3.0  # absolute last-resort size, below TYPED_SHRINK_FLOOR; see
+# insert_printed -- OCR training data must never show clipped text, so when even
+# TYPED_SHRINK_FLOOR doesn't fit we try once more down to this hard floor before
+# giving up and leaving the field blank-with-reason instead of drawing over the edge.
+TYPED_LEFT_PAD_HEIGHT_FRAC = 0.18  # left padding, proportional to field height
+TYPED_MIN_LEFT_PAD_PT = 1.4  # minimum left padding in points
+TYPED_LEFT_PAD_MAX_WIDTH_FRAC = 0.15  # cap the height-proportional pad for narrow fields
+TYPED_RIGHT_PAD_PT = 1.0
+
+# Font-handwriting left-alignment tuning (render_handwritten_text). Baseline left
+# margins for pen/pencil presets ran 0.12-0.21 width-fraction when text happened to be
+# narrower than the field and get centred; we target the low end of that same range
+# for a natural "person started writing near the edge" look, not literally flush.
+HANDWRITING_LEFT_PAD_HEIGHT_FRAC = 0.12
+HANDWRITING_MIN_LEFT_PAD_PX = 2
+
+
+@functools.lru_cache(maxsize=16)
+def _typed_digit_height_ratio(fontfile: str) -> float:
+    """Ratio of a rendered digit's ink height to the font's point size, measured from
+    the actual glyph outline (not the font's overall ascender/descender span, which is
+    much taller than a digit and would under-size text). Falls back to a conservative
+    default if the font file can't be read."""
+    try:
+        font = ImageFont.truetype(fontfile, 200)
+        bbox = font.getbbox("0")
+    except Exception:
+        return 0.62
+    if not bbox:
+        return 0.62
+    ratio = (bbox[3] - bbox[1]) / 200.0
+    return max(0.3, min(1.0, ratio))
+
+
+@functools.lru_cache(maxsize=16)
+def _typed_font_face(fontfile: str | None, fontname: str) -> fitz.Font:
+    return fitz.Font(fontfile=fontfile, fontname=None if fontfile else fontname)
 NUMERIC_CHARACTERS = frozenset("0123456789.,:/- ")
 LOCATION_PREFIXES = {"occurrence": ("birth.place", "death.place"), "residence": ("mother.residence", "deceased.residence"),
                      "registry": ("registration.office", "death_registration.office")}
@@ -341,7 +413,19 @@ def render_handwritten_text(text: str, width: int, height: int, rng: random.Rand
         if content.width > width:
             content = content.resize((width, height), Image.Resampling.LANCZOS)
         mask = Image.new("L", (width, height), 0)
-        mask.paste(content, (max(0, (width-content.width)//2), 0))
+        if len(text) <= 1:
+            # Single characters are composite digit-box cells or checkbox marks
+            # (one glyph per box): centring is correct there, like a person filling
+            # one printed cell.
+            x0 = max(0, (width - content.width) // 2)
+        else:
+            # Multi-character fields: a person starts writing near the left edge of
+            # the line, not centred in the box (baseline writing audit showed
+            # left_margin_h 1.56-2.59 -- i.e. text floating in the middle of wide
+            # fields -- vs. the typed-text/real-form norm of a small left margin).
+            left_pad = max(round(HANDWRITING_LEFT_PAD_HEIGHT_FRAC * height), HANDWRITING_MIN_LEFT_PAD_PX)
+            x0 = min(left_pad, max(0, width - content.width))
+        mask.paste(content, (x0, 0))
     rgba = Image.new("RGBA", (width, height), (*style.ink, 0))
     rgba.putalpha(mask)
     return rgba
@@ -358,12 +442,20 @@ def render_handwritten_numeric(text: str, width: int, height: int, rng: random.R
 
 
 def render_typed_text(text: str, width: int, height: int, font_family: str = DEFAULT_FONT_FAMILY) -> Image.Image:
+    """GUI font-preview renderer. Kept in step with `insert_printed`'s placement rules
+    (size from the digit-fill target, left padding proportional to height) so the
+    preview panel shows what document generation will actually produce."""
     width, height = max(1, int(width)), max(1, int(height))
-    font_size = max(8, round(height * 0.62))
-    font = ImageFont.truetype(str(font_path(font_family)), font_size)
+    font_path_str = str(font_path(font_family))
+    digit_ratio = _typed_digit_height_ratio(font_path_str)
+    font_size = max(8, round((TYPED_TARGET_DIGIT_HEIGHT_FRAC * height) / digit_ratio))
+    size_cap = TYPED_MAX_FONT_SIZE if len(text) <= 1 else TYPED_GENERIC_MAX_SIZE
+    font_size = min(font_size, round(height * 1.2), round(size_cap))  # same realistic cap as insert_printed
+    font = ImageFont.truetype(font_path_str, font_size)
+    left_pad = max(TYPED_MIN_LEFT_PAD_PT, height * TYPED_LEFT_PAD_HEIGHT_FRAC)
     mask = Image.new("L", (width, height), 0)
     draw = ImageDraw.Draw(mask)
-    draw.text((max(2, round(width * 0.03)), height // 2), text, font=font, fill=255, anchor="lm")
+    draw.text((max(2, round(left_pad)), height // 2), text, font=font, fill=255, anchor="lm")
     rgba = Image.new("RGBA", (width, height), (13, 13, 13, 0))
     rgba.putalpha(mask)
     return rgba
@@ -865,17 +957,65 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
 
     def insert_printed(rect: fitz.Rect, text: str, font_size: float | None, fontname: str, color: tuple[float, float, float],
                        fontfile: str | None = None) -> bool:
-        size = font_size or max(5.0, min(11.0, rect.height * 0.62))
-        while size >= 1.0:
-            kwargs = {"fontfile": fontfile} if fontfile else {}
-            remaining = page.insert_textbox(
-                rect, text, fontsize=size, fontname=fontname, color=color,
-                align=fitz.TEXT_ALIGN_CENTER if len(text) == 1 else fitz.TEXT_ALIGN_LEFT, **kwargs,
-            )
-            if remaining >= 0:
-                return True
-            size *= 0.85
-        return False
+        """Place typed/printed text in `rect`: font size derived from field height
+        (targeting a realistic digit-fill ratio instead of the old hard 11pt cap), a
+        left padding proportional to field height but capped as a fraction of field
+        width so narrow fields aren't over-padded (single characters -- composite
+        digit-box cells, checkbox marks -- stay centred, no padding), vertical
+        centring on the glyph's own ink span, and shrink-to-fit by width down to a
+        legibility floor (with one further step down to an absolute hard floor for
+        values that still don't fit). Returns False, WITHOUT drawing anything, if the
+        text cannot be made to fit even at the hard floor -- OCR training data must
+        never show text clipped against the field border, so the caller must treat a
+        False return as "could not render" and fall back to leaving the field blank
+        with a reason, not accept a clipped image."""
+        single_char = len(text) == 1
+        face = _typed_font_face(fontfile, fontname)
+        if font_size:
+            size = font_size
+        else:
+            digit_ratio = _typed_digit_height_ratio(fontfile) if fontfile else 0.62
+            size = (TYPED_TARGET_DIGIT_HEIGHT_FRAC * rect.height) / digit_ratio
+            size_cap = TYPED_MAX_FONT_SIZE if single_char else TYPED_GENERIC_MAX_SIZE
+            size = max(TYPED_MIN_FONT_SIZE, min(size_cap, size))
+        if single_char:
+            left_pad = 0.0
+        else:
+            left_pad = max(TYPED_MIN_LEFT_PAD_PT, min(rect.height * TYPED_LEFT_PAD_HEIGHT_FRAC,
+                                                       rect.width * TYPED_LEFT_PAD_MAX_WIDTH_FRAC))
+        available_width = max(1.0, rect.width - left_pad - TYPED_RIGHT_PAD_PT)
+        text_width = face.text_length(text, fontsize=size)
+        while text_width > available_width and size > TYPED_SHRINK_FLOOR:
+            size = max(TYPED_SHRINK_FLOOR, size * TYPED_SHRINK_STEP)
+            text_width = face.text_length(text, fontsize=size)
+        if text_width > available_width:
+            # Still doesn't fit at the normal legibility floor: try once more, down to
+            # the absolute hard floor, rather than ever drawing clipped text.
+            while text_width > available_width and size > TYPED_HARD_FLOOR:
+                size = max(TYPED_HARD_FLOOR, size * TYPED_SHRINK_STEP)
+                text_width = face.text_length(text, fontsize=size)
+        if text_width > available_width:
+            return False
+        ascender, descender = face.ascender, face.descender
+        glyph_span = max(1e-6, (ascender - descender)) * size
+        top_pad = max(0.0, (rect.height - glyph_span) / 2.0)
+        baseline_y = rect.y0 + top_pad + ascender * size
+        # Keep the glyph's own ink span inside the field box: ascenders must not rise
+        # above the top, and -- critically for "fill in the line" fields whose bottom
+        # edge is a printed underline -- descenders must not cross the bottom.
+        baseline_ceiling = rect.y1 + descender * size  # descender <= 0, so this is <= rect.y1
+        baseline_floor = rect.y0 + ascender * size
+        if baseline_ceiling >= baseline_floor:
+            baseline_y = min(max(baseline_y, baseline_floor), baseline_ceiling)
+        else:
+            baseline_y = baseline_floor  # glyph taller than the box; best effort, top-aligned
+        if single_char:
+            x0 = rect.x0 + max(0.0, (rect.width - text_width) / 2.0)
+        else:
+            x0 = rect.x0 + left_pad
+        kwargs = {"fontfile": fontfile} if fontfile else {}
+        page.insert_text((x0, baseline_y), text, fontsize=size, fontname=fontname, color=color, **kwargs)
+        return True
 
     def insert_value(rect_values: list[int], text: str, font_size: float | None = None,
                      pencil: bool = False, force_printed: bool = False) -> tuple[str, dict]:
@@ -884,9 +1024,11 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         if not text.strip():
             return text, {}
         if typed_font:
-            if insert_printed(rect, text, font_size, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path):
+            fits = insert_printed(rect, text, font_size, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path)
+            if fits:
                 return text, {}
-            raise ValueError(f"Texto não cabe no campo: {text!r}")
+            return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
+                        "requested_value": text}
         active_pen = numeric_neural_pen if is_numeric_text(text) else text_neural_pen
         neural_enabled = handwriting if is_numeric_text(text) else text_handwriting
         if (
@@ -938,9 +1080,11 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
             return text, {}
-        if insert_printed(rect, text, font_size, "helv", (0.05, 0.15, 0.55)):
+        fits = insert_printed(rect, text, font_size, "helv", (0.05, 0.15, 0.55))
+        if fits:
             return text, {}
-        raise ValueError(f"Texto não cabe no campo: {text!r}")
+        return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
+                    "requested_value": text}
 
     for field in field_map.get("fields", []):
         field_id = str(field["field_id"])
