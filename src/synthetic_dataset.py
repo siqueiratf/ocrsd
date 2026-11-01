@@ -24,7 +24,7 @@ from src.document_filters import apply_realistic_filters_to_pdf
 from src.field_rules import (DATE_PARTS, DNV_TEST_PREFIX, SEPARATED_DATE, SEX_VALUES, TEXT_TYPES, apply_shared_rules, dnv_metadata,
                               document_number, format_date, format_dnv, masked_value, sex_text)
 from src.fonts import DEFAULT_FONT_FAMILY, font_path, is_typed
-from src.neural_handwriting import NeuralPen, load_model, prepare_text, render_strokes
+from src.neural_handwriting import NeuralPen, load_model, prepare_text, render_strokes, trim_trailing_stray_mark
 from src.semantic import REGISTRY, VERSION as SEMANTIC_VERSION, SemanticRecord
 from src.semantic.assisted import ai_binding_key, serialize_ai_values
 from src.semantic.custom import generate_custom_value, validate_custom_definition
@@ -396,38 +396,86 @@ def _fit_mark_image(image: Image.Image, width: int, height: int, variant: str) -
     return canvas
 
 
+def _split_into_word_chunks(text: str, max_chunk_chars: int = 12) -> list[str]:
+    """Split text into chunks on whitespace boundaries only, never through a word.
+
+    A single word longer than max_chunk_chars is kept whole (the model must write
+    it as one chunk) rather than being cut mid-word.
+    """
+    words = text.split(" ")
+    chunks: list[str] = []
+    current = ""
+    for word in words:
+        if not word:
+            continue
+        candidate = f"{current} {word}".strip() if current else word
+        if current and len(candidate) > max_chunk_chars:
+            chunks.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks or [text]
+
+
 def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
                        model, rng: random.Random) -> tuple[Image.Image, dict]:
     rendered = prepare_text(text, pen.text_policy)
     chunks = [rendered]
     if pen.model == "sjvasquez" and len(rendered) > 12:
-        chunks = [rendered[index:index + 10].strip() for index in range(0, len(rendered), 10)]
-        chunks = [chunk for chunk in chunks if chunk]
+        chunks = _split_into_word_chunks(rendered, max_chunk_chars=12)
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    weights = [max(1, len(chunk)) for chunk in chunks]
-    gap = max(1, round(width * 0.01)) if len(chunks) > 1 else 0
-    available_width = max(len(chunks) * 4, width - gap * (len(chunks) - 1))
-    cursor = 0
+    margin = max(1, round(height * 0.08))
+    padding = pen.width / 2 + 2
+    # Height-driven natural scale per chunk: how big the model would draw this
+    # chunk if it had unlimited horizontal room, scaled only so its ink fits the
+    # field HEIGHT (never stretched/squashed to fill a pre-assigned width share).
+    chunk_points = []
+    chunk_scales = []
+    chunk_ranges = []
     seeds = []
     total_points = 0
-    for index, (chunk, weight) in enumerate(zip(chunks, weights)):
-        chunk_width = max(4, available_width - cursor if index == len(chunks) - 1 else round(available_width * weight / sum(weights)))
+    for chunk in chunks:
         last_error = None
+        points = None
         for _ in range(4):
             seed = rng.getrandbits(32)
             try:
                 points = model.sample(chunk, pen.writer or 0, pen.bias, seed)
-                image = render_strokes(points, chunk_width, height, pen, seed)
                 break
             except ValueError as exc:
                 last_error = exc
-        else:
+        if points is None:
             raise ValueError(f"O modelo {pen.model} não conseguiu escrever o valor após novas tentativas") from last_error
-        canvas.alpha_composite(image, (cursor + index * gap, 0))
-        cursor += chunk_width
+        points = trim_trailing_stray_mark(points, pen.width)
+        visible = points[:, :2]
+        low, high = visible.min(axis=0), visible.max(axis=0)
+        range_xy = np.maximum(high - low, 1)
+        natural_scale = max((height - 2 * padding) / range_xy[1], 1e-6)
+        chunk_points.append((points, seed))
+        chunk_scales.append(natural_scale)
+        chunk_ranges.append(range_xy)
         seeds.append(seed)
         total_points += len(points)
-    return canvas, {"backend": pen.model, "seeds": seeds, "stroke_points": total_points}
+    natural_widths = [scale * range_xy[0] + 2 * padding for scale, range_xy in zip(chunk_scales, chunk_ranges)]
+    word_gap = max(1, round(height * 0.28))
+    natural_total = sum(natural_widths) + word_gap * max(0, len(natural_widths) - 1)
+    available = max(4, width - margin)
+    overall_scale = float(min(1.0, available / natural_total)) if natural_total > 0 else 1.0
+    cursor = margin
+    for (points, seed), natural_width, range_xy in zip(chunk_points, natural_widths, chunk_ranges):
+        final_width = max(4, round(natural_width * overall_scale))
+        try:
+            image = render_strokes(points, final_width, height, pen, seed)
+        except ValueError:
+            # The natural box was narrower than the pen padding allows; fall back
+            # to a slightly wider box rather than losing the whole chunk.
+            final_width = max(final_width, round(2 * padding) + 4)
+            image = render_strokes(points, final_width, height, pen, seed)
+        canvas.alpha_composite(image, (round(cursor), 0))
+        cursor += final_width + word_gap * overall_scale
+    return canvas, {"backend": pen.model, "seeds": seeds, "stroke_points": total_points, "chunk_scale": overall_scale}
 
 
 def render_checkbox_mark(width: int, height: int, rng: random.Random,
@@ -848,7 +896,26 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         ):
             rendered = prepare_text(text, active_pen.text_policy)
             model = handwriting_models[active_pen.model]
-            image, rendering = render_neural_text(rendered, x2-x1, y2-y1, active_pen, model, render_rng)
+            try:
+                image, rendering = render_neural_text(rendered, x2-x1, y2-y1, active_pen, model, render_rng)
+            except ValueError as exc:
+                # The neural model failed on this value after retries: fall back to a
+                # clean font handwriting render for this FIELD only (not the whole
+                # document), using the same ink colour as the neural pen.
+                fallback_style = random_handwriting_style(rng, handwriting_intensity, medium="pen")
+                fallback_style = replace(fallback_style, ink=tuple(
+                    int(active_pen.color[i:i+2], 16) for i in (1, 3, 5)
+                ))
+                image = render_handwritten_text(
+                    rendered, max(1, x2-x1), max(1, y2-y1), rng,
+                    style=fallback_style, intensity=handwriting_intensity, medium="pen", font_family=font_family,
+                )
+                stream = io.BytesIO()
+                image.save(stream, format="PNG")
+                page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
+                return rendered, {"requested_value": text, "rendering": {
+                    "backend": "font", "fallback": {"from_backend": active_pen.model, "reason": str(exc)},
+                }}
             stream = io.BytesIO()
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)

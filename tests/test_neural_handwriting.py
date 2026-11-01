@@ -1,5 +1,6 @@
 import json
 import importlib.util
+import random
 import tempfile
 import unittest
 from dataclasses import replace
@@ -11,6 +12,7 @@ import numpy as np
 
 from src.neural_handwriting import (
     ALPHABET, WEIGHTS_PATH, HandwritingModel, NeuralPen, prepare_text, render_strokes,
+    trim_trailing_stray_mark,
 )
 from src.sj_handwriting import ROOT, SjHandwritingModel
 from src.synthetic_dataset import generate_dataset
@@ -212,6 +214,164 @@ class LocalModelTests(unittest.TestCase):
             self.assertGreater(np.asarray(render_strokes(first, 400, 100, NeuralPen(), 42))[:, :, 3].sum(), 1000)
         finally:
             torch.set_num_threads(previous)
+
+
+class _StubStrokeModel:
+    """Deterministic stand-in for a trained model: no weights needed.
+
+    Produces one short diagonal stroke per non-space character (letters advance a
+    fixed pen-unit step) and a larger jump for spaces, so chunk/word geometry is
+    predictable without any neural weights.
+    """
+
+    def sample(self, text, writer, bias, seed):
+        import math
+
+        x = 0.0
+        points = [[0.0, 0.0, 1.0]]
+        for character in text:
+            if character == " ":
+                x += 18.0
+                continue
+            for step in range(4):
+                x += 3.0
+                y = 2.0 + 6.0 * math.sin(x / 5.0 + step)
+                points.append([x, y, 0.0])
+            x += 1.0
+        points.append([x, 0.0, 1.0])
+        return np.array(points, dtype=np.float32)
+
+
+class _FailingStrokeModel:
+    def sample(self, text, writer, bias, seed):
+        raise ValueError("stub model always fails")
+
+
+class TrimTrailingStrayMarkTests(unittest.TestCase):
+    def _zigzag_word(self, start_x=0.0, length=10, step=4.0, amplitude=2.0):
+        points = [[start_x, 0.0, 1.0]]
+        x = start_x
+        for i in range(length):
+            x += step
+            points.append([x, amplitude if i % 2 == 0 else -amplitude, 0.0])
+        points.append([x, 0.0, 1.0])
+        return points, x
+
+    def test_drops_small_far_trailing_mark(self):
+        word, end_x = self._zigzag_word()
+        stray = [[end_x + 160, 0.0, 1.0], [end_x + 161, 1.0, 0.0], [end_x + 162, 0.0, 1.0]]
+        points = np.array(word + stray, dtype=float)
+        trimmed = trim_trailing_stray_mark(points, pen_width=2)
+        self.assertLess(trimmed.shape[0], points.shape[0])
+        self.assertLessEqual(trimmed[:, 0].max(), end_x + 1)
+
+    def test_keeps_real_second_word_close_by(self):
+        first, end_x = self._zigzag_word()
+        second, _ = self._zigzag_word(start_x=end_x + 20, length=8)
+        points = np.array(first + second, dtype=float)
+        trimmed = trim_trailing_stray_mark(points, pen_width=2)
+        self.assertEqual(trimmed.shape[0], points.shape[0])
+
+    def test_short_trajectories_are_untouched(self):
+        points = np.array([[0, 0, 1], [1, 1, 0], [2, 0, 1]], dtype=float)
+        trimmed = trim_trailing_stray_mark(points, pen_width=2)
+        np.testing.assert_array_equal(trimmed, points)
+
+
+class RenderNeuralTextChunkingTests(unittest.TestCase):
+    def test_word_boundary_splitting_never_cuts_a_word(self):
+        from src.synthetic_dataset import _split_into_word_chunks
+
+        text = "MARIA DA SILVA PEREIRA SANTOS OLIVEIRA"
+        chunks = _split_into_word_chunks(text, max_chunk_chars=12)
+        self.assertEqual(" ".join(chunks), text)
+        for chunk in chunks:
+            self.assertLessEqual(len(chunk), 12)
+            for word in chunk.split(" "):
+                self.assertIn(word, text.split(" "))
+
+    def test_short_text_is_not_split(self):
+        from src.synthetic_dataset import _split_into_word_chunks
+
+        self.assertEqual(_split_into_word_chunks("short", 12), ["short"])
+
+    def test_uniform_scale_preserves_aspect_when_shrinking(self):
+        from src.synthetic_dataset import render_neural_text
+
+        pen = NeuralPen(model="sjvasquez", pressure=0, width=1)
+        model = _StubStrokeModel()
+        wide_canvas, _ = render_neural_text("ABCDEFGHIJ", 4000, 60, pen, model, random.Random(1))
+        narrow_canvas, meta = render_neural_text("ABCDEFGHIJ", 600, 60, pen, model, random.Random(1))
+
+        def ink_bbox_ratio(image):
+            bbox = image.getchannel("A").getbbox()
+            width, height = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            return width / height
+
+        wide_ratio = ink_bbox_ratio(wide_canvas)
+        narrow_ratio = ink_bbox_ratio(narrow_canvas)
+        self.assertLess(meta["chunk_scale"], 1.0)
+        # Uniform scaling must preserve the natural width/height ratio of the ink,
+        # never stretching it to fill the field independently on each axis.
+        self.assertAlmostEqual(wide_ratio, narrow_ratio, delta=wide_ratio * 0.15)
+
+    def test_left_aligned_with_margin_not_centered(self):
+        from src.synthetic_dataset import render_neural_text
+
+        pen = NeuralPen(model="sjvasquez", pressure=0, width=1)
+        model = _StubStrokeModel()
+        width, height = 600, 60
+        canvas, _ = render_neural_text("hi", width, height, pen, model, random.Random(3))
+        bbox = canvas.getchannel("A").getbbox()
+        margin = round(height * 0.08)
+        # Ink should start near the left margin, well short of the field's centre.
+        self.assertLess(bbox[0], width * 0.25)
+        self.assertGreaterEqual(bbox[0], margin - 2)
+
+    def test_chunks_get_a_natural_inter_word_gap(self):
+        from src.synthetic_dataset import render_neural_text
+
+        pen = NeuralPen(model="sjvasquez", pressure=0, width=1)
+        model = _StubStrokeModel()
+        single_word, _ = render_neural_text("ABCDEFGHIJKLM", 2000, 60, pen, model, random.Random(5))
+        two_words, _ = render_neural_text("ABCDEF GHIJKLM", 2000, 60, pen, model, random.Random(5))
+        single_bbox = single_word.getchannel("A").getbbox()
+        two_bbox = two_words.getchannel("A").getbbox()
+        # Splitting the same letters into two words with a space must add visible
+        # horizontal extent for the inter-word gap (not collapse or balloon it).
+        self.assertGreater(two_bbox[2] - two_bbox[0], single_bbox[2] - single_bbox[0])
+
+
+class PerFieldFallbackTests(unittest.TestCase):
+    def test_neural_failure_falls_back_to_font_for_that_field_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            template, mapping = root / "template.pdf", root / "mapping.json"
+            with fitz.open() as document:
+                document.new_page()
+                document.save(template)
+            mapping.write_text(json.dumps({"dpi": 300, "template_id": "test", "fields": [
+                {"field_id": "name", "label": "Nome", "bbox": [100, 100, 600, 200],
+                 "validation": {"allowed_values": ["Ana Maria da Silva Pereira"]}},
+                {"field_id": "city", "label": "Cidade", "bbox": [100, 220, 600, 280],
+                 "validation": {"allowed_values": ["Sao Paulo"]}},
+            ]}))
+            with patch("src.synthetic_dataset.load_model", return_value=_FailingStrokeModel()):
+                result = generate_dataset(
+                    template, mapping, {"name", "city"}, root / "out", 1, seed=42,
+                    neural_pen=NeuralPen(model="sjvasquez", color="#193787"),
+                )
+            truth = json.loads(result[0].json_path.read_text())
+            by_id = {field["field_id"]: field for field in truth["fields"]}
+            for field_id in ("name", "city"):
+                rendering = by_id[field_id]["rendering"]
+                self.assertEqual(rendering["backend"], "font")
+                self.assertIn("fallback", rendering)
+                self.assertEqual(rendering["fallback"]["from_backend"], "sjvasquez")
+            # The document must still be produced in full: no field or whole-document
+            # failure despite every neural sample attempt raising.
+            self.assertEqual(by_id["name"]["value"], "Ana Maria da Silva Pereira")
+            self.assertEqual(by_id["city"]["value"], "Sao Paulo")
 
 
 if __name__ == "__main__":

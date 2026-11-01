@@ -213,6 +213,51 @@ class HandwritingModel:
         raise ValueError(f"Model did not finish writing {text!r}; try another seed or writer")
 
 
+def trim_trailing_stray_mark(points: np.ndarray, pen_width: float) -> np.ndarray:
+    """Drop a small isolated mark (e.g. a stray dot) the model leaves stranded far
+    past the end of the word it just wrote.
+
+    Some models (the shared GRU `HandwritingModel`, used for aaron1259/wpvnteam)
+    feed the text twice with a gap in between so the attention mechanism has
+    somewhere to go before the sequence ends; stopping is based on attention
+    location crossing the end of the first copy, which can happen a few steps
+    into that gap, after the pen has already lifted and begun drifting toward
+    the (never-written) second copy. The visible symptom is one tiny, isolated
+    stroke cluster separated from the real word by a horizontal gap much larger
+    than anything inside the word. This trims only that trailing cluster,
+    leaving every intra-word stroke untouched.
+    """
+    if points.shape[0] < 4:
+        return points
+    segment_indices = [index for index in range(len(points) - 1) if not points[index, 2]]
+    if len(segment_indices) < 2:
+        return points
+    gap_threshold = max(pen_width * 6, 8.0)
+    clusters: list[list[int]] = [[segment_indices[0]]]
+    cluster_end = max(points[segment_indices[0], 0], points[segment_indices[0] + 1, 0])
+    for index in segment_indices[1:]:
+        start = min(points[index, 0], points[index + 1, 0])
+        if start - cluster_end > gap_threshold:
+            clusters.append([])
+        clusters[-1].append(index)
+        cluster_end = max(cluster_end, points[index, 0], points[index + 1, 0])
+    if len(clusters) < 2:
+        return points
+
+    def cluster_span(indices: list[int]) -> float:
+        xs = [points[i, 0] for i in indices] + [points[i + 1, 0] for i in indices]
+        ys = [points[i, 1] for i in indices] + [points[i + 1, 1] for i in indices]
+        return max(max(xs) - min(xs), max(ys) - min(ys))
+
+    main_indices = [index for cluster in clusters[:-1] for index in cluster]
+    main_span = cluster_span(main_indices)
+    last_span = cluster_span(clusters[-1])
+    if last_span < max(pen_width * 3, main_span * 0.12):
+        cutoff = main_indices[-1] + 2
+        return points[:cutoff]
+    return points
+
+
 def render_strokes(points: np.ndarray, width: int, height: int, pen: NeuralPen,
                    seed: int) -> Image.Image:
     if width < 4 or height < 4 or points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all():
