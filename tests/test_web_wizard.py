@@ -170,6 +170,8 @@ class WizardTests(unittest.TestCase):
         copy = self.app.state.store.wizard_draft(self.draft, owner)["document_type"]
         self.assertNotIn(copy, {"dnv", "certidao_obito"})
         self.assertIn(f"/modelos/{copy}/editor?draft={self.draft}", opened.headers["hx-redirect"])
+        self.request("POST", "/geracao/editar-mapeamento", data={"draft_id": self.draft, "document_type": copy})
+        self.assertNotIn(self.app.state.store.wizard_draft(self.draft, owner)["document_type"], {"dnv", "certidao_obito", copy})
 
     def test_mapping_preview_and_field_workspace(self):
         initial = self.request("GET", f"/geracao?draft={self.draft}")

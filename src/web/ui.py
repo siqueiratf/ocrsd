@@ -1090,17 +1090,10 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         identifier = text(form, "draft_id")
         state = store.wizard_draft(identifier, owner_id)
         model = model_entry(owner_id, text(form, "document_type") or state["document_type"])
-        if model.id != state.get("document_type"):
-            state.update(document_type=model.id, mapping_id="", fields=[], step=1)
-            store.save_wizard_draft(identifier, owner_id, state)
-        if model.builtin and not model.editable:
-            copy = duplicate_model(catalog, store, model.id, owner_id)
-            state.update(document_type=copy["id"], mapping_id=copy["mapping_id"], fields=[], step=1)
-            store.save_wizard_draft(identifier, owner_id, state)
-            model_id = copy["id"]
-        else:
-            model_id = model.id
-        return Response(headers={"HX-Redirect": f"/modelos/{model_id}/editor?draft={identifier}"})
+        copy = duplicate_model(catalog, store, model.id, owner_id)
+        state.update(document_type=copy["id"], mapping_id=copy["mapping_id"], fields=[], step=1)
+        store.save_wizard_draft(identifier, owner_id, state)
+        return Response(headers={"HX-Redirect": f"/modelos/{copy['id']}/editor?draft={identifier}"})
 
     @router.post("/geracao/rascunho")
     async def generation_draft(request: Request, owner_id: Owner):
