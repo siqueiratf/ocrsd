@@ -330,16 +330,10 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             org = item["orgao"] or {"key": "outros", "sigla": "Outros", "nome": "Outros"}
             group = by_org.setdefault(org["key"], {"key": org["key"], "sigla": org["sigla"], "nome": org["nome"], "docs": []})
             group["docs"].append(item)
-        planned_counts: dict[str, int] = {}
-        for entry in catalog.catalog_data()["documentos"].values():
-            if entry.get("status") == "planejado":
-                planned_counts[entry.get("orgao")] = planned_counts.get(entry.get("orgao"), 0) + 1
         ordered = sorted(by_org.values(), key=lambda group: group["nome"])
-        for group in ordered:
-            group["planned_count"] = planned_counts.get(group["key"], 0)
         custom = [item for item in types if not item["builtin"]]
         if custom:
-            ordered.append({"key": "meus_modelos", "sigla": "", "nome": "Meus modelos", "docs": custom, "planned_count": 0})
+            ordered.append({"key": "meus_modelos", "sigla": "", "nome": "Meus modelos", "docs": custom})
         total = sum(len(group["docs"]) for group in ordered)
         for index, group in enumerate(ordered):
             selected_here = current is not None and any(item["id"] == current["id"] for item in group["docs"])
@@ -1095,7 +1089,10 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         form = await request.form()
         identifier = text(form, "draft_id")
         state = store.wizard_draft(identifier, owner_id)
-        model = model_entry(owner_id, state["document_type"])
+        model = model_entry(owner_id, text(form, "document_type") or state["document_type"])
+        if model.id != state.get("document_type"):
+            state.update(document_type=model.id, mapping_id="", fields=[], step=1)
+            store.save_wizard_draft(identifier, owner_id, state)
         if model.builtin and not model.editable:
             copy = duplicate_model(catalog, store, model.id, owner_id)
             state.update(document_type=copy["id"], mapping_id=copy["mapping_id"], fields=[], step=1)

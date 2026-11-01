@@ -163,6 +163,14 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(state["step"], 1)
         self.assertIn("ainda é um rascunho", self.request("GET", f"/geracao?draft={self.draft}").text)
 
+    def test_mapping_editor_duplicates_the_chosen_card(self):
+        opened = self.request("POST", "/geracao/editar-mapeamento", data={"draft_id": self.draft, "document_type": "certidao_obito"})
+        self.assertEqual(opened.status_code, 200)
+        owner = self.app.state.store.workspace(self.cookie)
+        copy = self.app.state.store.wizard_draft(self.draft, owner)["document_type"]
+        self.assertNotIn(copy, {"dnv", "certidao_obito"})
+        self.assertIn(f"/modelos/{copy}/editor?draft={self.draft}", opened.headers["hx-redirect"])
+
     def test_mapping_preview_and_field_workspace(self):
         initial = self.request("GET", f"/geracao?draft={self.draft}")
         self.assertIn("Duplicar e editar", initial.text)

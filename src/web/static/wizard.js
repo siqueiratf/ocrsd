@@ -7,6 +7,17 @@
   })
   positionOverlays()
 
+  const SCROLL_KEY = 'ocrsd:wizard-scroll'
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || 'null')
+    sessionStorage.removeItem(SCROLL_KEY)
+    if (saved?.path === location.pathname) window.scrollTo(0, saved.y)
+  } catch {}
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.wizard-model-link')) return
+    try { sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ path: location.pathname, y: window.scrollY })) } catch {}
+  })
+
   const preview = document.querySelector('.wizard-preview:has([data-pdf-stage])')
   const stage = preview?.querySelector('[data-pdf-stage]')
   let viewer = null
@@ -23,8 +34,10 @@
         const element = page()
         const image = element?.querySelector('img')
         if (element && image?.naturalWidth) element.style.width = `${Math.round(image.naturalWidth * scale)}px`
+        stage.classList.remove('is-loading')
       },
     })
+    stage.addEventListener('error', () => stage.classList.remove('is-loading'), { capture: true })
   }
 
   const overlaysFor = id => [...document.querySelectorAll('[data-overlay-field]')].filter(box => box.dataset.overlayField === id)
@@ -162,6 +175,9 @@
     sync()
   }
 
+  document.addEventListener('htmx:responseError', event => {
+    if (event.detail.target.id === 'wizard-mapping-preview') stage?.classList.remove('is-loading')
+  })
   document.addEventListener('htmx:afterSwap', event => {
     if (event.detail.target.id !== 'wizard-mapping-preview') return
     positionOverlays()
