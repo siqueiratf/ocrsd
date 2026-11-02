@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from writing_audit import (  # noqa: E402
-    analyze_ink, cer, check_coherence, checkbox_mark_metrics, classify_field_shape,
-    cpf_check_digits_ok, normalize_loose, validate_value,
+    analyze_ink, cer, check_coherence, check_mapping_overlaps, checkbox_mark_metrics,
+    classify_field_shape, cpf_check_digits_ok, normalize_loose, validate_value,
 )
 from PIL import Image  # noqa: E402
 
@@ -129,6 +129,31 @@ class WritingAuditMetricsTest(unittest.TestCase):
         self.assertIsNotNone(validate_value("cep", "123"))
         self.assertIsNone(validate_value("uf", "AM"))
         self.assertIsNotNone(validate_value("uf", "ZZ"))
+
+    def test_check_mapping_overlaps_detects_contained_field(self):
+        definition = {"fields": [
+            {"field_id": "data_obito_extenso", "bbox": [0, 0, 300, 20]},
+            {"field_id": "dia_obito", "bbox": [10, 2, 30, 18]},
+            {"field_id": "unrelated", "bbox": [500, 500, 520, 520]},
+        ]}
+        findings = check_mapping_overlaps(definition)
+        pairs = {(f["field_a"], f["field_b"]) for f in findings}
+        self.assertIn(("data_obito_extenso", "dia_obito"), pairs)
+        self.assertEqual(len(findings), 1)
+
+    def test_check_mapping_overlaps_none_when_disjoint(self):
+        definition = {"fields": [
+            {"field_id": "a", "bbox": [0, 0, 10, 10]},
+            {"field_id": "b", "bbox": [50, 50, 60, 60]},
+        ]}
+        self.assertEqual(check_mapping_overlaps(definition), [])
+
+    def test_check_mapping_overlaps_skips_unsupported_fields(self):
+        definition = {"fields": [
+            {"field_id": "a", "bbox": [0, 0, 10, 10]},
+            {"field_id": "b", "bbox": [1, 1, 9, 9], "unsupported_reason": "not implemented"},
+        ]}
+        self.assertEqual(check_mapping_overlaps(definition), [])
 
 
 if __name__ == "__main__":

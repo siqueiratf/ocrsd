@@ -32,7 +32,7 @@ WEB_AI_ENV = $(if $(filter ssh2,$(AI)),OCRSD_AI_SSH='$(SSH2)' OCRSD_AI_MODEL='$(
 
 .PHONY: help dataset dataset-font dataset-sjvasquez dataset-aaron1259 dataset-wpvnteam
 .PHONY: download-sjvasquez download-aaron1259 download-wpvnteam
-.PHONY: test smoke check gui web web-clean
+.PHONY: test smoke check gui web web-clean quality quality-update
 
 WEB_PY_STAMP := .venv/.ocrsd-web-dependencies
 
@@ -51,6 +51,8 @@ help:
 	  'make dataset FIELDS="campo_1 campo_2"' \
 	  'make check                    Executa os testes e gera/processa uma DNV e uma certidao.' \
 	  'make smoke                    Valida geracao, alinhamento, recortes e ocultacao.' \
+	  'make quality                  Compara a auditoria rapida com tests/fixtures/quality_reference.json.' \
+	  'make quality-update           Regrava a referencia de qualidade (revise o diff antes do commit).' \
 	  'make web                      Prepara e inicia a interface web, a API e o worker.' \
 	  'make web PORT=8001            Usa outra porta local para a interface e a API.' \
 	  'make web AI=ssh2              Usa a IA (Ollama) do servidor 2 por um tunel SSH.' \
@@ -100,6 +102,12 @@ smoke:
 	env OMP_NUM_THREADS='$(THREADS)' MKL_NUM_THREADS='$(THREADS)' $(UV) run --offline --no-sync python -m scripts.smoke_generate --seed '$(SEED)'
 
 check: test smoke
+
+quality:
+	PYTHONPATH=. $(UV) run --offline --no-sync python scripts/quality_gate.py
+
+quality-update:
+	PYTHONPATH=. $(UV) run --offline --no-sync python scripts/quality_gate.py --update
 
 gui:
 	$(UV) run --offline --no-sync python -m src.gui

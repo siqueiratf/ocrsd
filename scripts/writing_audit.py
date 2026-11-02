@@ -49,6 +49,40 @@ try:
 except Exception:  # pragma: no cover
     NeuralPen = None  # type: ignore
 
+try:
+    import easyocr as _easyocr
+except Exception:  # pragma: no cover
+    _easyocr = None  # type: ignore
+
+_EASYOCR_READER = None
+
+
+def easyocr_available() -> bool:
+    return _easyocr is not None
+
+
+def get_easyocr_reader():
+    """Lazily build a single shared easyocr Reader (pt). Expensive to construct,
+    so we build it once per process, not per field."""
+    global _EASYOCR_READER
+    if _easyocr is None:
+        return None
+    if _EASYOCR_READER is None:
+        _EASYOCR_READER = _easyocr.Reader(["pt"], gpu=False, verbose=False)
+    return _EASYOCR_READER
+
+
+def run_easyocr(img: Image.Image) -> str:
+    reader = get_easyocr_reader()
+    if reader is None:
+        return ""
+    try:
+        arr = np.array(img.convert("RGB"))
+        result = reader.readtext(arr, detail=0, paragraph=False)
+        return " ".join(result).strip()
+    except Exception:
+        return ""
+
 DOCUMENTS_ROOT = ROOT / "documents"
 ASSETS = ROOT / "assets" / "handwriting"
 TESSERACT_BIN = "/usr/bin/tesseract"
@@ -375,8 +409,8 @@ def checkbox_mark_metrics(page_img: Image.Image, blank_img: Image.Image | None, 
     }
 
 
-def run_tesseract(img: Image.Image, digits_only: bool = False) -> str:
-    args = [TESSERACT_BIN, "stdin", "stdout", "-l", "por", "--psm", "7"]
+def run_tesseract(img: Image.Image, digits_only: bool = False, psm: int = 7) -> str:
+    args = [TESSERACT_BIN, "stdin", "stdout", "-l", "por", "--psm", str(psm)]
     if digits_only:
         args += ["-c", "tessedit_char_whitelist=0123456789/-.,"]
     buf = io.BytesIO()
@@ -386,6 +420,24 @@ def run_tesseract(img: Image.Image, digits_only: bool = False) -> str:
         return out.stdout.decode("utf-8", "ignore").strip()
     except Exception:
         return ""
+
+
+def run_tesseract_composite(page_img: Image.Image, elements: list[dict], digits_only: bool) -> str:
+    """OCR a composite digit/letter box (e.g. a date or CPF rendered as one glyph per
+    printed cell) one ELEMENT at a time with psm 10 (single character), instead of psm 7
+    over the whole field crop (which mixes in the separator rules/box borders between
+    cells and was responsible for 15-27% EMPTY tesseract reads on digit rows -- see
+    verification.md). Falls back to "" per cell on OCR failure; cells are joined in
+    element order, which already includes any literal separators recorded as elements."""
+    chars = []
+    for element in elements:
+        bbox = element.get("bbox")
+        if not bbox:
+            continue
+        crop, _ = crop_field(page_img, bbox, margin=2)
+        text = run_tesseract(crop, digits_only=digits_only, psm=10).strip()
+        chars.append(text)
+    return "".join(chars)
 
 
 # ---------------------------------------------------------------------------
@@ -436,6 +488,12 @@ class Row:
     timing_s: float | None = None
     crop_path: str | None = None
     content_class: str | None = None
+    rendering_backend: str | None = None  # "font" | neural model name, from entry["rendering"]["backend"]
+    rendering_fallback_from: str | None = None  # neural model name it fell back FROM, if any
+    requested_value: str | None = None  # entry["requested_value"] when it differs from the rendered value
+    ocr_text_easyocr: str | None = None
+    cer_loose_easyocr: float | None = None
+    ocr_engines_agree: bool | None = None  # both engines non-empty and loose-equal (digit fields only)
 
 
 MULTILINE_DATA_TYPES = {"address", "document"}
@@ -451,6 +509,38 @@ def classify_field_shape(data_type: str, is_checkbox: bool, element_count: int, 
     if data_type in MULTILINE_DATA_TYPES and height_px > MULTILINE_HEIGHT_PX_THRESHOLD:
         return "multiline"
     return "single_line"
+
+
+def _bbox_overlap_frac(a: list[float], b: list[float]) -> float:
+    """Overlap area as a fraction of the SMALLER of the two bboxes' areas (so a small
+    field fully inside a big one reports ~1.0, not a tiny fraction of the big one)."""
+    ax0, ay0, ax1, ay1 = a
+    bx0, by0, bx1, by1 = b
+    ix0, iy0 = max(ax0, bx0), max(ay0, by0)
+    ix1, iy1 = min(ax1, bx1), min(ay1, by1)
+    iw, ih = max(0.0, ix1 - ix0), max(0.0, iy1 - iy0)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    area_a = max(0.0, ax1 - ax0) * max(0.0, ay1 - ay0)
+    area_b = max(0.0, bx1 - bx0) * max(0.0, by1 - by0)
+    smaller = min(area_a, area_b) or 1.0
+    return inter / smaller
+
+
+def check_mapping_overlaps(definition: dict, threshold: float = 0.1) -> list[dict]:
+    """Report fields of the same document whose bbox contains/overlaps another field's
+    bbox by more than `threshold` of the smaller field's area (e.g. certidao_obito's
+    data_obito_extenso bbox containing dia_obito's bbox). Reporting only -- mappings are
+    never edited by the audit tool (see verification.md item 7)."""
+    fields = [f for f in definition.get("fields", []) if f.get("bbox") and not f.get("unsupported_reason")]
+    findings = []
+    for i, f1 in enumerate(fields):
+        for f2 in fields[i + 1:]:
+            frac = _bbox_overlap_frac(f1["bbox"], f2["bbox"])
+            if frac >= threshold:
+                findings.append({"field_a": str(f1["field_id"]), "field_b": str(f2["field_id"]), "overlap_frac": round(frac, 3)})
+    return findings
 
 
 def selectable_fields(definition: dict) -> list[dict]:
@@ -485,7 +575,8 @@ def make_blank_template_png(template_path: Path, dpi: float) -> Image.Image:
 
 def run_one(document_key: str, document, definition: dict, preset: dict, seed: int,
             field_filter: set[str] | None, out_dir: Path, blank_pages: dict[int, Image.Image],
-            coherence_acc: dict | None = None, leakage_acc: dict | None = None) -> tuple[list[Row], float]:
+            coherence_acc: dict | None = None, leakage_acc: dict | None = None,
+            use_easyocr: bool = True) -> tuple[list[Row], float]:
     dpi = float(definition.get("dpi", 300))
     fields = selectable_fields(definition)
     if field_filter is not None:
@@ -581,6 +672,15 @@ def run_one(document_key: str, document, definition: dict, preset: dict, seed: i
         if row.is_checkbox:
             row.checkbox_checked_count = sum(1 for e in entry["elements"] if e.get("checked"))
 
+        rendering = entry.get("rendering") or {}
+        row.rendering_backend = rendering.get("backend")
+        row.rendering_fallback_from = (rendering.get("fallback") or {}).get("from_backend")
+        requested = entry.get("requested_value")
+        if requested is not None and requested != value:
+            row.requested_value = requested
+        if entry.get("blank_reason") and not row.blank_reason:
+            row.blank_reason = entry["blank_reason"]
+
         # Blank-template-diffing leakage check: for a blank (unrendered) field, the crop
         # should show ~0 ink once diffed against the blank template. Measured once per
         # (document, field_id) across the whole run, independent of preset/seed.
@@ -597,7 +697,21 @@ def run_one(document_key: str, document, definition: dict, preset: dict, seed: i
                     leakage_acc.setdefault(document_key, []).append({"field_id": fid, "ink_coverage": round(coverage, 4)})
 
         if not blank:
-            bbox = entry["bbox"]
+            # Fix for "extenso date field crop unioned with an adjacent digit-cell field's
+            # bbox" (verification.md): always crop/OCR using this field's OWN geometry --
+            # the union of its own element bboxes when it has elements, never the raw
+            # field["bbox"], which in a handful of mappings geometrically overlaps a
+            # sibling field's bbox (see check_mapping_overlaps/item 7) and would otherwise
+            # pull that sibling's pixels into this field's crop.
+            own_elements = entry.get("elements") or []
+            if own_elements and not row.is_checkbox:
+                xs0 = [e["bbox"][0] for e in own_elements if e.get("bbox")]
+                ys0 = [e["bbox"][1] for e in own_elements if e.get("bbox")]
+                xs1 = [e["bbox"][2] for e in own_elements if e.get("bbox")]
+                ys1 = [e["bbox"][3] for e in own_elements if e.get("bbox")]
+                bbox = [min(xs0), min(ys0), max(xs1), max(ys1)] if xs0 else entry["bbox"]
+            else:
+                bbox = entry["bbox"]
             field_h_px = bbox[3] - bbox[1]
             field_w_px = bbox[2] - bbox[0]
             if row.is_checkbox:
@@ -635,10 +749,28 @@ def run_one(document_key: str, document, definition: dict, preset: dict, seed: i
                 if row.is_digit_field:
                     row.digit_height_ratio = metrics.ink_height_ratio
                 digits_only = data_type in {"date", "cpf", "digit_sequence", "integer"}
-                ocr = run_tesseract(crop, digits_only=digits_only)
+                # Composite digit/letter boxes (one printed cell per character) are OCR'd
+                # per cell at psm 10, not as a whole run at psm 7: psm 7 was reading the
+                # separator rules between cells as part of the line and coming back EMPTY
+                # on 15-27% of digit rows for every style (see verification.md / item 2).
+                if row.field_shape == "composite_box" and own_elements:
+                    ocr = run_tesseract_composite(page_img, own_elements, digits_only)
+                else:
+                    ocr = run_tesseract(crop, digits_only=digits_only)
                 row.ocr_text = ocr
                 row.cer_strict = cer(ocr, value)
                 row.cer_loose = cer(normalize_loose(ocr), normalize_loose(value))
+                # Second OCR engine (easyocr) for digit fields, on by default when
+                # installed: the verdict for digit legibility must use both engines plus
+                # geometry (digit_height_ratio), never tesseract CER alone -- a single
+                # engine's empty read is at least as likely to be an OCR limitation as a
+                # rendering defect.
+                if row.is_digit_field and use_easyocr and easyocr_available():
+                    ocr2 = run_easyocr(crop)
+                    row.ocr_text_easyocr = ocr2
+                    row.cer_loose_easyocr = cer(normalize_loose(ocr2), normalize_loose(value))
+                    if ocr and ocr2:
+                        row.ocr_engines_agree = normalize_loose(ocr) == normalize_loose(ocr2)
                 row.data_problem = validate_value(data_type, value)
             crop_path = out_dir / "crops" / document_key / preset["uid"] / f"{seed}_{fid}.png"
             crop_path.parent.mkdir(parents=True, exist_ok=True)
@@ -868,16 +1000,28 @@ def rerun_report_only(out_dir: Path) -> None:
         timings = load_timings_from_log(out_dir / "run.log")
     doc_keys = sorted({r.document for r in rows})
     preset_uids = sorted({r.preset for r in rows})
-    kind_by_uid = {uid: "standard" if any(uid == p[0] for p in STANDARD_PRESETS) else "neural" for uid in preset_uids}
-    presets = [{"uid": uid, "kind": kind_by_uid[uid]} for uid in preset_uids]
+    # Fix for item 6: a preset's "kind" must come from the same place build_presets()
+    # computes it (standard font presets, content-style presets with no neural override
+    # anywhere, and only THEN "neural") -- not from "is it one of STANDARD_PRESETS",
+    # which mislabelled every content-style preset (e.g. padrao_fonte_* content variants)
+    # as "neural" even when every one of its content overrides used model == "font".
     models_avail = neural_models_available()
+    full_presets_by_uid = {p["uid"]: p for p in build_presets(models_avail)}
+    kind_by_uid = {}
+    for uid in preset_uids:
+        if uid in full_presets_by_uid:
+            kind_by_uid[uid] = full_presets_by_uid[uid]["kind"]
+        else:
+            kind_by_uid[uid] = "standard" if any(uid == p[0] for p in STANDARD_PRESETS) else "neural"
+    presets = [{"uid": uid, "kind": kind_by_uid[uid]} for uid in preset_uids]
     # rewrite metrics.jsonl with the refreshed data_problem field, for diffability with future --compare runs
     with metrics_path.open("w", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r.__dict__, ensure_ascii=False) + "\n")
     coherence_report = json.loads((out_dir / "coherence.json").read_text()) if (out_dir / "coherence.json").is_file() else {}
     leakage_report = json.loads((out_dir / "template_leakage.json").read_text()) if (out_dir / "template_leakage.json").is_file() else {}
-    summary = build_summary(rows, timings, presets, doc_keys, models_avail, coherence_report, leakage_report)
+    overlap_report = json.loads((out_dir / "mapping_overlaps.json").read_text()) if (out_dir / "mapping_overlaps.json").is_file() else {}
+    summary = build_summary(rows, timings, presets, doc_keys, models_avail, coherence_report, leakage_report, overlap_report)
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     auto_report = build_report(summary, rows)
     report_path = out_dir / "report.md"
@@ -909,6 +1053,8 @@ def main() -> None:
                          help=f"Deterministic fast subset for iteration: documents={QUICK_DOCUMENTS}, "
                               f"presets={QUICK_PRESETS}, seeds 1 (+2 for non-neural presets). "
                               "Any of --documents/--presets/--seeds overrides the corresponding quick default.")
+    parser.add_argument("--no-easyocr", action="store_true",
+                         help="Disable the easyocr second engine on digit fields (default: on when installed).")
     args = parser.parse_args()
 
     out_dir = ROOT / "var" / "audit" / args.label
@@ -942,19 +1088,36 @@ def main() -> None:
     timings: list[dict] = []
     coherence_acc: dict = {}
     leakage_acc: dict = {}
+    overlap_report: dict[str, list[dict]] = {}
     run_t0 = time.monotonic()
+    use_easyocr = not args.no_easyocr
 
     for dkey in doc_keys:
         document = types[dkey]
         definition = apply_shared_rules(json.loads(document.active_mapping.read_text(encoding="utf-8")))
         dpi = round(float(definition.get("dpi", 300)))
         blank_pages = {dpi: blank_cache.setdefault((dkey, dpi), make_blank_template_png(document.template, dpi))}
+        overlaps = check_mapping_overlaps(definition)
+        if overlaps:
+            overlap_report[dkey] = overlaps
         for preset in presets:
+            # Rerun-into-the-same-label: remove this (document, preset)'s stale crops
+            # before writing new ones, so a label can be rerun without ambiguity between
+            # old and new evidence (see verification.md item 4).
+            stale_crops = out_dir / "crops" / dkey / preset["uid"]
+            if stale_crops.is_dir():
+                for stale in stale_crops.glob("*.png"):
+                    stale.unlink()
+            for stale_sheet in (out_dir / "sheets").glob(f"{dkey}__{preset['uid']}*.png"):
+                stale_sheet.unlink()
             use_seeds = neural_seeds if preset["kind"] == "neural" else seeds
             for seed in use_seeds:
+                stale_page = out_dir / "pages" / f"{dkey}__{preset['uid']}__{seed}.png"
+                if stale_page.is_file():
+                    stale_page.unlink()
                 try:
                     rows, elapsed = run_one(dkey, document, definition, preset, seed, field_filter, out_dir, blank_pages,
-                                             coherence_acc=coherence_acc, leakage_acc=leakage_acc)
+                                             coherence_acc=coherence_acc, leakage_acc=leakage_acc, use_easyocr=use_easyocr)
                 except Exception as exc:
                     rows, elapsed = [], 0.0
                     print(f"[FATAL] {dkey} {preset['uid']} seed={seed}: {exc}", file=sys.stderr)
@@ -974,8 +1137,9 @@ def main() -> None:
     leakage_report = {k: v for k, v in leakage_acc.items() if not k.startswith("_")}
     (out_dir / "coherence.json").write_text(json.dumps(coherence_report, ensure_ascii=False, indent=2), encoding="utf-8")
     (out_dir / "template_leakage.json").write_text(json.dumps(leakage_report, ensure_ascii=False, indent=2), encoding="utf-8")
+    (out_dir / "mapping_overlaps.json").write_text(json.dumps(overlap_report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    summary = build_summary(all_rows, timings, presets, doc_keys, models_avail, coherence_report, leakage_report)
+    summary = build_summary(all_rows, timings, presets, doc_keys, models_avail, coherence_report, leakage_report, overlap_report)
     summary["total_wall_s"] = round(total_wall_s, 1)
     summary["quick_mode"] = bool(args.quick)
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -990,7 +1154,7 @@ def main() -> None:
 
 def build_summary(rows: list[Row], timings: list[dict], presets: list[dict], doc_keys: list[str],
                    models_avail: dict[str, bool], coherence_report: dict | None = None,
-                   leakage_report: dict | None = None) -> dict:
+                   leakage_report: dict | None = None, overlap_report: dict | None = None) -> dict:
     def pct(n, d):
         return round(100.0 * n / d, 1) if d else None
 
@@ -1059,6 +1223,18 @@ def build_summary(rows: list[Row], timings: list[dict], presets: list[dict], doc
             by_class[content_class] = {"n_rows": len(class_rows),
                                        "mean_cer_loose": round(statistics.mean(class_cer), 3) if class_cer else None}
         per_preset[p["uid"]]["by_content_class"] = by_class
+        digit_cer_easyocr = [r.cer_loose_easyocr for r in prows if r.cer_loose_easyocr is not None]
+        per_preset[p["uid"]]["mean_cer_loose_digits_only_easyocr"] = (
+            round(statistics.mean(digit_cer_easyocr), 3) if digit_cer_easyocr else None)
+        agree = [r.ocr_engines_agree for r in prows if r.ocr_engines_agree is not None]
+        per_preset[p["uid"]]["digit_ocr_engine_agreement_rate"] = (
+            round(sum(1 for a in agree if a) / len(agree), 3) if agree else None)
+        fallback_rows = [r for r in prows if r.rendering_fallback_from]
+        per_preset[p["uid"]]["rendering_fallback_count"] = len(fallback_rows)
+        blank_with_reason = sum(1 for r in prows if r.blank and r.blank_reason)
+        blank_without_reason = sum(1 for r in prows if r.blank and not r.blank_reason)
+        per_preset[p["uid"]]["blank_with_reason_count"] = blank_with_reason
+        per_preset[p["uid"]]["blank_without_reason_count"] = blank_without_reason
 
     data_problems = {}
     for r in rows:
@@ -1091,6 +1267,7 @@ def build_summary(rows: list[Row], timings: list[dict], presets: list[dict], doc
         "unsupported_field_rows": unsupported_total,
         "coherence": coherence_report or {},
         "template_leakage": leakage_summary,
+        "mapping_overlaps": overlap_report or {},
         "mean_timing_s_by_preset": {p["uid"]: round(statistics.mean([t["seconds"] for t in timings if t["preset"] == p["uid"]] or [0]), 3)
                                      for p in presets},
         "total_timing_s": round(sum(t["seconds"] for t in timings), 1),
@@ -1129,6 +1306,11 @@ def build_report(summary: dict, rows: list[Row]) -> str:
                       f"left_margin_h={info['mean_left_margin_h']} left_margin_w={info['mean_left_margin_w']} "
                       f"(composite_box left_margin_h={info['mean_left_margin_h_composite_box']}) "
                       f"digit_h_ratio={info['mean_digit_height_ratio']} right_overflow={info['right_overflow_count']}")
+        lines.append(f"    digits (2nd engine) easyocr CER_loose={info.get('mean_cer_loose_digits_only_easyocr')} "
+                      f"engine_agreement_rate={info.get('digit_ocr_engine_agreement_rate')} "
+                      f"rendering_fallback_count={info.get('rendering_fallback_count')} "
+                      f"blank_with_reason={info.get('blank_with_reason_count')} "
+                      f"blank_without_reason={info.get('blank_without_reason_count')}")
         if info["n_checkbox_rows"]:
             lines.append(f"    checkbox geometry (n={info['n_checkbox_rows']}): "
                           f"mark_size_ratio={info['checkbox_mean_mark_size_ratio']} "
@@ -1170,8 +1352,46 @@ def build_report(summary: dict, rows: list[Row]) -> str:
         lines.append(f"- {dkey}: checked {info['n_blank_fields_checked']} blank fields, "
                       f"mean coverage={info['mean_ink_coverage']}, max={info['max_ink_coverage']}{flag}")
     lines.append("")
+    lines.append("## Mapping bbox overlaps (report-only; mappings are not edited by this tool)")
+    overlaps = summary.get("mapping_overlaps") or {}
+    if overlaps:
+        for dkey, findings in overlaps.items():
+            for f in findings:
+                lines.append(f"- {dkey}: {f['field_a']} overlaps {f['field_b']} (overlap_frac={f['overlap_frac']})")
+    else:
+        lines.append("- none found")
+    lines.append("")
     lines.append("(See the accompanying hand-authored ranked problem list in this report for severity x frequency analysis and crop evidence.)")
     return "\n".join(lines)
+
+
+_COMPARE_SCALAR_METRICS = ("cer_loose", "left_margin_h", "max_gap_over_ink_height", "digit_height_ratio")
+
+
+def _save_side_by_side(base_dir: Path, other_dir: Path, out_path: Path, row_other: dict, row_base: dict, caption: str) -> bool:
+    """Paste the other-run and base-run crops for one field side by side with a caption,
+    so --compare gives visual evidence for the fields with the biggest metric swings, not
+    only compare.md numbers (item 5)."""
+    try:
+        img_o = Image.open(other_dir / row_other["crop_path"]).convert("RGB") if row_other.get("crop_path") else None
+        img_b = Image.open(base_dir / row_base["crop_path"]).convert("RGB") if row_base.get("crop_path") else None
+    except Exception:
+        return False
+    if img_o is None and img_b is None:
+        return False
+    w = max((img_o.width if img_o else 0), (img_b.width if img_b else 0), 200)
+    h = max((img_o.height if img_o else 0), (img_b.height if img_b else 0))
+    pad = 24
+    canvas = Image.new("RGB", (w * 2 + 10, h + pad), "white")
+    draw = ImageDraw.Draw(canvas)
+    if img_o is not None:
+        canvas.paste(img_o, (0, pad))
+    if img_b is not None:
+        canvas.paste(img_b, (w + 10, pad))
+    draw.text((2, 2), f"before | after -- {caption}"[:90], fill="black")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(out_path)
+    return True
 
 
 def write_compare(out_dir: Path, label: str, other_label: str) -> None:
@@ -1192,6 +1412,49 @@ def write_compare(out_dir: Path, label: str, other_label: str) -> None:
                       f"excessive_spacing {o.get('excessive_spacing_count')} -> {b.get('excessive_spacing_count')}, "
                       f"left_margin_h {o.get('mean_left_margin_h')} -> {b.get('mean_left_margin_h')}")
     (base_dir / "compare.md").write_text("\n".join(lines), encoding="utf-8")
+
+    # Per-field side-by-side images: the N fields with the largest metric change across
+    # any of _COMPARE_SCALAR_METRICS, plus a random sample, matched by
+    # (document, preset, seed, field_id) between the two runs' metrics.jsonl.
+    base_metrics_path, other_metrics_path = base_dir / "metrics.jsonl", other_dir / "metrics.jsonl"
+    if not (base_metrics_path.is_file() and other_metrics_path.is_file()):
+        return
+
+    def _load(path: Path) -> dict[tuple, dict]:
+        out = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            d = json.loads(line)
+            out[(d["document"], d["preset"], d["seed"], d["field_id"])] = d
+        return out
+
+    base_rows, other_rows = _load(base_metrics_path), _load(other_metrics_path)
+    deltas = []
+    for key, rb in base_rows.items():
+        ro = other_rows.get(key)
+        if ro is None or not rb.get("crop_path") or not ro.get("crop_path"):
+            continue
+        max_delta = 0.0
+        for metric in _COMPARE_SCALAR_METRICS:
+            vb, vo = rb.get(metric), ro.get(metric)
+            if isinstance(vb, (int, float)) and isinstance(vo, (int, float)):
+                max_delta = max(max_delta, abs(vb - vo))
+        deltas.append((max_delta, key))
+    deltas.sort(key=lambda t: -t[0])
+    top_n = [key for _, key in deltas[:20]]
+    rng = random.Random(f"compare:{label}:{other_label}")
+    remaining = [key for _, key in deltas[20:]]
+    sample = rng.sample(remaining, min(10, len(remaining))) if remaining else []
+
+    compare_dir = base_dir / "compare_images"
+    for key in top_n + sample:
+        document, preset, seed, field_id = key
+        rb, ro = base_rows[key], other_rows[key]
+        caption = f"{document}/{preset}/s{seed}/{field_id}"
+        fname = f"{document}__{preset}__{seed}__{field_id}.png".replace("/", "_")
+        _save_side_by_side(base_dir, other_dir, compare_dir / fname, ro, rb, caption)
+    print(f"Wrote {len(top_n)} largest-delta + {len(sample)} random side-by-side compare images to {compare_dir}")
 
 
 if __name__ == "__main__":
