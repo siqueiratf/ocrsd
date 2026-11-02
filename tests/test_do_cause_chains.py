@@ -188,10 +188,16 @@ class PostVerificationPropertyTests(unittest.TestCase):
                 # Uses the same address generator as the residence (a municipality profile
                 # street with its own matching CEP/neighborhood), never the old 5-item generic
                 # list (whose CEP/neighborhood never matched the street's own profile).
+                # item 5: a municipality offers several streets, so `address` may be any of a
+                # profile's street names, and its CEP must match THAT street (not necessarily
+                # the profile's primary one).
                 from src.semantic.data import LOCATION_PROFILES
-                profile = next(p for p in LOCATION_PROFILES if p["street"] == address)
-                self.assertEqual(values["deceased.occurrence.cep"], profile["cep"])
-                self.assertEqual(values["deceased.occurrence.neighborhood"], profile["neighborhood"])
+                street_info = {name: (cep, neighborhood) for p in LOCATION_PROFILES for name, cep, neighborhood in p.get("streets", ())}
+                profile = next(p for p in LOCATION_PROFILES
+                              if address == p["street"] or address in street_info)
+                street_cep, street_neighborhood = street_info.get(address, (profile["cep"], profile["neighborhood"]))
+                self.assertEqual(values["deceased.occurrence.cep"], street_cep)
+                self.assertEqual(values["deceased.occurrence.neighborhood"], street_neighborhood)
         self.assertGreater(own_count, 0)
         self.assertGreater(other_count, 0)
 

@@ -208,8 +208,17 @@ class SemanticRecordTests(unittest.TestCase):
             _, values = resolved(seed)
             for prefix in ADDRESS_PREFIXES:
                 present = {field: values[f"{prefix}.{part}"] for part, field in PROFILE_FIELDS.items() if f"{prefix}.{part}" in values}
-                matches = [profile for profile in LOCATION_PROFILES if all(profile[field] == value for field, value in present.items())]
+                # A municipality has several streets, each with its own CEP and bairro (items
+                # 5 and m-1): match on municipality/uf/ibge exactly, and accept any
+                # (street, cep, neighborhood) triple the profile offers.
+                non_street = {field: value for field, value in present.items() if field not in ("street", "cep", "neighborhood")}
+                matches = [profile for profile in LOCATION_PROFILES if all(profile[field] == value for field, value in non_street.items())]
                 self.assertEqual(len(matches), 1, f"{seed} {prefix} {present}")
+                if "street" in present or "cep" in present or "neighborhood" in present:
+                    profile = matches[0]
+                    street_entries = {(profile["street"], profile["cep"], profile["neighborhood"]), *profile.get("streets", ())}
+                    self.assertIn((present.get("street"), present.get("cep"), present.get("neighborhood")), street_entries,
+                                 f"{seed} {prefix} {present}")
             self.assertEqual(values["birth.place.summary"],
                              f"{values['birth.establishment.name']}, {values['birth.place.municipality']} - {values['birth.place.uf']}")
             self.assertEqual(values["registration.place.summary"],

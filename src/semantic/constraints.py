@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from typing import Any, Callable, Mapping
 
 from src.field_rules import format_date
-from src.semantic.data import LOCATION_PROFILES, OCCUPATION_CODES
+from src.semantic.data import LOCATION_PROFILES, OCCUPATION_CODES, occupation_cbo_for
 from src.semantic.registry import REGISTRY
 
 ADDRESS_PARTS = {"municipality": "city", "uf": "uf", "ibge": "ibge", "cep": "cep"}
@@ -134,8 +134,19 @@ def _address(prefix: str) -> Constraint:
 
     def check(values: Mapping[str, Any]) -> str | None:
         present = {key: values[key] for key in keys if key in values}
-        if any(all(profile[ADDRESS_PARTS[key.rsplit(".", 1)[1]]] == value for key, value in present.items())
-               for profile in LOCATION_PROFILES):
+
+        def matches(profile: Mapping[str, Any]) -> bool:
+            for key, value in present.items():
+                part = ADDRESS_PARTS[key.rsplit(".", 1)[1]]
+                if part == "cep":
+                    # The municipality has several streets (item 5), each with its own CEP
+                    # (pick_street()) — any of them is coherent for this profile.
+                    if value != profile["cep"] and value not in {entry[1] for entry in profile.get("streets", ())}:
+                        return False
+                elif profile[part] != value:
+                    return False
+            return True
+        if any(matches(profile) for profile in LOCATION_PROFILES):
             return None
         return "município, UF, código IBGE e CEP não pertencem à mesma localidade: " + ", ".join(
             f"{key}={value}" for key, value in present.items())
@@ -293,9 +304,9 @@ CONSTRAINTS: tuple[Constraint, ...] = (
     Constraint("anomalia_sem_diagnostico", ("newborn.anomaly_status", "newborn.anomaly_description"), ("newborn",),
                lambda v: None if v["newborn.anomaly_status"] == "Ignorado" and v["newborn.anomaly_description"] is None else "diagnóstico não validado"),
     Constraint("ocupacao_e_cbo", ("mother.occupation", "mother.occupation_cbo"), ("mother",),
-               lambda v: None if v["mother.occupation_cbo"] == OCCUPATION_CODES.get(v["mother.occupation"]) else "CBO não corresponde à ocupação documentada"),
+               lambda v: None if v["mother.occupation_cbo"] == occupation_cbo_for(v["mother.occupation"]) else "CBO não corresponde à ocupação documentada"),
     Constraint("ocupacao_do_falecido_e_cbo", ("deceased.occupation", "deceased.occupation_cbo"), ("deceased",),
-               lambda v: None if v["deceased.occupation_cbo"] == OCCUPATION_CODES.get(v["deceased.occupation"])
+               lambda v: None if v["deceased.occupation_cbo"] == occupation_cbo_for(v["deceased.occupation"])
                else "CBO não corresponde à ocupação documentada"),
     Constraint("naturalidade_do_falecido", ("deceased.naturalidade",), ("deceased",),
                lambda v: None if v["deceased.naturalidade"] in

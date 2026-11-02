@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import date, time, datetime
 from typing import Any, Iterable, Protocol
 
-from src.semantic.data import LOCATION_PROFILES, OCCUPATION_CODES, OCCUPATIONS, UF_VALUES
+from src.semantic.data import LOCATION_PROFILES, OCCUPATION_CODES, OCCUPATION_OPPOSITE_FORM, OCCUPATIONS, UF_VALUES
 from src.semantic.plan import SemanticPlan, semantic_plan
 from src.semantic.present import validation_rules
 from src.semantic.record import SemanticRecord
@@ -32,6 +32,11 @@ SYSTEM_PROMPT = (
     '{"valores": {"chave": valor}}.')
 CITIES = tuple(profile["city"] for profile in LOCATION_PROFILES)
 OCCUPATION_CHOICES = tuple(dict.fromkeys((*OCCUPATIONS, *OCCUPATION_CODES)))
+# R-c: an occupation slot's answer is a canonical title, but the generator (generators.mother/
+# deceased) always inflects it to the person's sex before storing it. A literal `require(key,
+# (value,), ...)` would then reject that inflected value, so occupation keys widen the
+# requirement to accept either grammatical form.
+OCCUPATION_SLOT_KEYS = frozenset({"mother.occupation", "deceased.occupation"})
 CONNECTORS = frozenset({"da", "das", "de", "do", "dos", "e"})
 NAME_WORD = re.compile(r"^[A-ZÀ-Ý][a-zà-ÿ]+(?:['-][A-Za-zÀ-ÿ][a-zà-ÿ]+)?$")
 DOCUMENT_TITLES = {"dnv": "Declaração de Nascido Vivo (DNV)", "declaracao_obito": "Declaração de Óbito (DO)"}
@@ -560,7 +565,8 @@ class AssistedRecords:
                     continue
                 candidate = SemanticRecord(seed, context)
                 for key, value in accepted.items():
-                    candidate.require(key, (value,), "valor proposto pela IA")
+                    allowed = (value, OCCUPATION_OPPOSITE_FORM[value]) if key in OCCUPATION_SLOT_KEYS and value in OCCUPATION_OPPOSITE_FORM else (value,)
+                    candidate.require(key, allowed, "valor proposto pela IA")
                 try:
                     plan.apply(candidate, legacy_keys)
                 except ValueError as exc:

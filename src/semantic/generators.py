@@ -11,7 +11,8 @@ from src.field_rules import DNV_TEST_PREFIX, cpf, format_date
 from src.semantic.constraints import REFERENCE_END, completed_years
 from src.semantic.data import (ADULT_ESTABLISHMENT_NAMES, COMPLEMENTS, ESTABLISHMENT_NAMES, FEMALE_ASSOCIATED_FIRST_NAMES,
                                ISSUERS, LOCATION_PROFILES, MALE_ASSOCIATED_FIRST_NAMES, OCCUPATIONS, OCCUPATION_CODES,
-                               PROFILES_BY_IBGE, REGISTRY_OFFICE_NAMES, SURNAMES)
+                               OCCUPATION_GENDER, OCCUPATION_OPPOSITE_FORM, OTHER_HEALTH_ESTABLISHMENT_NAMES,
+                               PROFILES_BY_IBGE, REGION_BY_UF, REGISTRY_OFFICE_NAMES, SURNAMES)
 from src.semantic.present import format_matricula
 from src.semantic.cause_chains import CAUSE_CHAINS, PART2_POOL, format_interval
 
@@ -30,6 +31,17 @@ OCCUPATION_MIN_SCHOOLING = {
     "Enfermeiro": "Superior completo", "Técnico em informática": "Médio (antigo 2º grau)",
     "Auxiliar administrativo": "Médio (antigo 2º grau)",
 }
+# The minimum plausible age for an occupation whose schooling is derived above (R-d): a
+# "Superior completo" title needs time to finish a degree (~22), a technical/"Médio" title
+# needs to at least be past compulsory schooling age (~16). Below either age the occupation
+# is excluded from the draw pool, so occupation/schooling/age stay mutually consistent by
+# construction instead of being drawn independently.
+OCCUPATION_MIN_AGE = {occupation: (22 if minimum == "Superior completo" else 16)
+                      for occupation, minimum in OCCUPATION_MIN_SCHOOLING.items()}
+# Below this age a person is not plausibly holding any job but still being schooled (R-d,
+# m-3): the mother's occupation collapses to "Estudante" instead of being drawn from the
+# general pool.
+MIN_WORKING_AGE = 16
 
 
 def _schooling_for_age(rng: random.Random, age: int, occupation: str | None = None) -> tuple[str, int | None]:
@@ -144,9 +156,9 @@ def _weights(low: int, high: int, bands: tuple[tuple[int, float], ...]) -> tuple
     return tuple(next(weight for limit, weight in bands if value <= limit) for value in range(low, high + 1))
 
 
-MOTHER_AGES = range(10, 61)
-MOTHER_AGE_WEIGHTS = _weights(10, 60, ((12, 0.02), (14, 0.3), (17, 3), (19, 5), (24, 9), (29, 10), (34, 9), (39, 5),
-                                       (44, 1.5), (49, 0.2), (60, 0.01)))
+MOTHER_AGES = range(13, 50)
+MOTHER_AGE_WEIGHTS = _weights(13, 49, ((14, 0.3), (17, 3), (19, 5), (24, 9), (29, 10), (34, 9), (39, 5),
+                                       (44, 1.5), (49, 0.2)))
 FATHER_AGES = range(12, 91)
 FATHER_AGE_WEIGHTS = _weights(12, 90, ((15, 0.05), (19, 1.5), (24, 6), (29, 9), (34, 9), (39, 7), (44, 4), (49, 2),
                                        (59, 0.6), (69, 0.1), (90, 0.01)))
@@ -228,6 +240,18 @@ def person_name(record, rng: random.Random, sex: str, family: list[str] | None =
     return " ".join([first_name(record, rng, sex), *(family or surnames(rng))])
 
 
+def _distinct_name(rng: random.Random, record, sex: str, family: list[str] | None, others: tuple[str, ...]) -> str:
+    """Draw a person_name that is not equal to any name already in `others` (item 6): avoids
+    e.g. a newborn whose name happens to repeat a parent's, by chance of the gender-crossing
+    first-name draw plus a shared surname."""
+    name = ""
+    for _ in range(128):
+        name = person_name(record, rng, sex, family)
+        if name not in others:
+            return name
+    raise ValueError("Não foi possível gerar um nome distinto após 128 tentativas")
+
+
 def family_names(name: str) -> list[str]:
     return name.split()[1:] or [name]
 
@@ -239,12 +263,69 @@ def parent_names(record, rng: random.Random, child: str) -> tuple[str, str]:
     return mother, father
 
 
+def inflect_occupation(name: str | None, sex: str) -> str | None:
+    """Inflect an occupation title to agree with the person's sex (item 4): e.g. "Costureira"
+    for a man becomes "Costureiro". Entries absent from OCCUPATION_GENDER (Comerciante,
+    Motorista, Estudante...) are already gender-neutral in Portuguese and pass through."""
+    if not name or OCCUPATION_GENDER.get(name) == sex:
+        return name
+    return OCCUPATION_OPPOSITE_FORM.get(name, name)
+
+
 def profile_of(record, prefix: str) -> dict:
     return PROFILES_BY_IBGE[record.value(f"{prefix}.ibge")]
 
 
 def favoring(favored: dict, weight: float) -> list[float]:
-    return [weight if profile is favored else (1 - weight) / (len(LOCATION_PROFILES) - 1) for profile in LOCATION_PROFILES]
+    """Weight LOCATION_PROFILES so `favored` gets `weight` and the rest split the remainder —
+    but not uniformly (item 1): a profile in the SAME region as `favored` gets a much larger
+    share than one in a distant region, because a real cross-state event (residence vs death,
+    or a cartório away from both) is overwhelmingly a move to a neighbouring state or another
+    state's capital for care, not an arbitrary one. Lei 6.015/73 art. 77 keeps `weight` itself
+    high so crossing state lines at all stays rare."""
+    remainder = 1 - weight
+    same_region = [p for p in LOCATION_PROFILES if p is not favored and REGION_BY_UF[p["uf"]] == REGION_BY_UF[favored["uf"]]]
+    other_region = [p for p in LOCATION_PROFILES if p is not favored and p not in same_region]
+    region_share = remainder * 0.7 if same_region else 0.0
+    other_share = remainder - region_share
+    per_region = region_share / len(same_region) if same_region else 0.0
+    per_other = other_share / len(other_region) if other_region else 0.0
+    weights = []
+    for profile in LOCATION_PROFILES:
+        if profile is favored:
+            weights.append(weight)
+        elif profile in same_region:
+            weights.append(per_region)
+        else:
+            weights.append(per_other)
+    return weights
+
+
+def office_weights(primary: dict, secondary: dict | None, primary_weight: float, secondary_weight: float) -> list[float]:
+    """Weight LOCATION_PROFILES for a cartório/registration office so it lands ONLY in
+    `primary` (e.g. the place of death/birth — Lei 6.015/73 art. 77/50) or in `secondary`
+    (the residence) — never anywhere else (R-a): those are the only two places the law
+    allows, so there is no legitimate "unrelated" remainder to spread over the rest of the
+    country."""
+    # When `secondary` coincides with `primary` (e.g. residence == death municipality), or
+    # there is no secondary at all, every weight collapses onto `primary` — there is nothing
+    # else to split between. Otherwise the two weights are normalized to sum to 1, so the
+    # split between primary/secondary keeps its intended ratio with zero left over.
+    same_profile = secondary is not None and secondary is primary
+    if same_profile or secondary is None:
+        primary_share, secondary_share = 1.0, 0.0
+    else:
+        total = primary_weight + secondary_weight
+        primary_share, secondary_share = primary_weight / total, secondary_weight / total
+    weights = []
+    for profile in LOCATION_PROFILES:
+        if profile is primary:
+            weights.append(primary_share + secondary_share if same_profile else primary_share)
+        elif not same_profile and secondary is not None and profile is secondary:
+            weights.append(secondary_share)
+        else:
+            weights.append(0.0)
+    return weights
 
 
 def pick_profile(record, rng: random.Random, prefix: str, weights: list[float] | None = None,
@@ -254,8 +335,17 @@ def pick_profile(record, rng: random.Random, prefix: str, weights: list[float] |
                        LOCATION_PROFILES, weights)
 
 
-def address(prefix: str, profile: dict, number: str, parts: tuple[str, ...]) -> dict[str, Any]:
-    fields = {"street": profile["street"], "number": number, "neighborhood": profile["neighborhood"], "cep": profile["cep"],
+def pick_street(record, rng: random.Random, key: str, profile: dict) -> tuple[str, str, str]:
+    """Pick one of the municipality's several streets (item 5), so two addresses in the same
+    city are not always the same street; the CEP and the real/plausible bairro (m-1) both
+    travel with the chosen street, so they stay consistent with it."""
+    return record.pick(rng, key, profile["streets"])
+
+
+def address(prefix: str, profile: dict, number: str, parts: tuple[str, ...],
+           street: str | None = None, cep: str | None = None, neighborhood: str | None = None) -> dict[str, Any]:
+    fields = {"street": street or profile["street"], "number": number, "neighborhood": neighborhood or profile["neighborhood"],
+              "cep": cep or profile["cep"],
               "municipality": profile["city"], "uf": profile["uf"], "ibge": profile["ibge"]}
     return {f"{prefix}.{part}": fields[part] for part in parts}
 
@@ -296,12 +386,13 @@ def birth(record, rng: random.Random) -> dict[str, Any]:
     moment = record.pick(rng, "birth.time", MINUTES)
     profile = pick_profile(record, rng, "birth.place")
     establishment = record.pick(rng, "birth.establishment.name", ESTABLISHMENT_NAMES)
+    street, cep, neighborhood = pick_street(record, rng, "birth.place.street", profile)
     values = {
         "birth.date": day, "birth.time": moment, "birth.establishment.name": establishment,
         "birth.occurrence_type": "Hospital",
         "birth.establishment.cnes": stable_digits(7, "cnes", establishment, profile["ibge"]),
         **address("birth.place", profile, house_number(record, rng, "birth.place.number"),
-                  ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge")),
+                  ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge"), street, cep, neighborhood),
         "birth.place.summary": f"{establishment}, {profile['city']} - {profile['uf']}",
     }
     twins = record.pick(rng, "birth.twins", (False, True), (98, 2))
@@ -315,16 +406,27 @@ def mother(record, rng: random.Random) -> dict[str, Any]:
     on = record.value("birth.date")
     age, born = age_and_birth_date(record, rng, "mother", on, MOTHER_AGES, MOTHER_AGE_WEIGHTS)
     name = record.draw("mother.name", rng, lambda: person_name(record, rng, "F"))
-    residence = pick_profile(record, rng, "mother.residence", favoring(profile_of(record, "birth.place"), 0.7))
+    # Lei 6.015/73 art. 50: registration at the place of birth or of the mother's residence
+    # (item 1) — an interstate birth (mother's residence in a different UF from the birth
+    # place) is uncommon in practice, so the favored weight is high and any cross-state
+    # alternative is biased to the same region (favoring()).
+    residence = pick_profile(record, rng, "mother.residence", favoring(profile_of(record, "birth.place"), 0.93))
     cities = [profile["city"] for profile in LOCATION_PROFILES]
     naturalidade = record.pick(rng, "mother.naturalidade", cities,
                                [0.55 if city == residence["city"] else 0.45 / (len(cities) - 1) for city in cities])
-    occupation = record.pick(rng, lambda value: {"mother.occupation": value, "mother.occupation_cbo": OCCUPATION_CODES.get(value)},
-                             (*OCCUPATIONS, *OCCUPATION_CODES))
-    schooling = ("Fundamental I (1ª a 4ª série)" if age < 12 else
-                 record.pick(rng, "mother.schooling", ("Fundamental II (5ª a 8ª série)", "Médio (antigo 2º grau)",
-                                                         "Superior incompleto", "Superior completo")) if age >= 18 else
-                 record.pick(rng, "mother.schooling", ("Fundamental I (1ª a 4ª série)", "Fundamental II (5ª a 8ª série)")))
+    # R-d: occupation, schooling and age must agree — reuse the DO's occupation -> minimum
+    # schooling rule (OCCUPATION_MIN_SCHOOLING/OCCUPATION_MIN_AGE) instead of drawing them
+    # independently. Below MIN_WORKING_AGE the mother is still of school age, so her
+    # "occupation" collapses to "Estudante" (no graduate/technical title under that age).
+    if age < MIN_WORKING_AGE:
+        occupation_canonical = "Estudante"
+    else:
+        occupation_pool = tuple(o for o in (*OCCUPATIONS, *OCCUPATION_CODES) if age >= OCCUPATION_MIN_AGE.get(o, 0))
+        occupation_canonical = record.pick(
+            rng, lambda value: {"mother.occupation": value, "mother.occupation_cbo": OCCUPATION_CODES.get(value)},
+            occupation_pool)
+    occupation = inflect_occupation(occupation_canonical, "F")
+    schooling, _series = _schooling_for_age(rng, age, occupation_canonical)
     marital_status = "Solteira(o)" if age < 18 else record.pick(rng, "mother.marital_status", ("Solteira(o)", "Casada(o)", "União estável"))
     return {
         "mother.name": name, "mother.birth_date": born, "mother.age": age,
@@ -332,10 +434,11 @@ def mother(record, rng: random.Random) -> dict[str, Any]:
         "mother.race": record.pick(rng, "mother.race", ("Branca", "Preta", "Amarela", "Parda", "Indígena"), (38, 10, 1, 49, 2)),
         "mother.cpf": record.draw("mother.cpf", rng, lambda: cpf_digits(rng)),
         "mother.cns": record.draw("mother.cns", rng, lambda: cns_digits(rng)),
-        "mother.occupation": occupation, "mother.occupation_cbo": OCCUPATION_CODES.get(occupation),
+        "mother.occupation": occupation, "mother.occupation_cbo": OCCUPATION_CODES.get(occupation_canonical),
         "mother.naturalidade": naturalidade,
         **address("mother.residence", residence, house_number(record, rng, "mother.residence.number"),
-                  ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge")),
+                  ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge"),
+                  *pick_street(record, rng, "mother.residence.street", residence)),
         "mother.residence.complement": record.pick(rng, "mother.residence.complement", COMPLEMENTS),
         **gestational_history(rng, record.pick, age),
     }
@@ -343,7 +446,16 @@ def mother(record, rng: random.Random) -> dict[str, Any]:
 
 def father(record, rng: random.Random) -> dict[str, Any]:
     age, born = age_and_birth_date(record, rng, "father", record.value("birth.date"), FATHER_AGES, FATHER_AGE_WEIGHTS)
-    return {"father.name": record.draw("father.name", rng, lambda: person_name(record, rng, "M")),
+    mother_name = record.value("mother.name")
+
+    def sample() -> str:
+        name = mother_name
+        for _ in range(128):
+            name = person_name(record, rng, "M")
+            if name != mother_name:
+                return name
+        raise ValueError("Não foi possível gerar um pai com nome distinto da mãe após 128 tentativas")
+    return {"father.name": record.draw("father.name", rng, sample),
             "father.birth_date": born, "father.age": age}
 
 
@@ -362,7 +474,9 @@ def newborn(record, rng: random.Random) -> dict[str, Any]:
         "newborn.race": record.pick(rng, "newborn.race", ("Branca", "Preta", "Amarela", "Parda", "Indígena"), (38, 10, 1, 49, 2)),
         "newborn.weight_g": weight, "newborn.length_tenths_cm": length, "newborn.head_circumference_cm": head,
         "newborn.apgar_1min": apgar_1, "newborn.apgar_5min": record.pick(rng, "newborn.apgar_5min", range(apgar_1, 11)),
-        "newborn.name": record.draw("newborn.name", rng, lambda: person_name(record, rng, sex, list(dict.fromkeys(family)))),
+        "newborn.name": record.draw("newborn.name", rng, lambda: _distinct_name(
+            rng, record, sex, list(dict.fromkeys(family)),
+            (record.value("mother.name"), record.value("father.name")))),
         "newborn.sex": sex, "newborn.cpf": record.draw("newborn.cpf", rng, lambda: cpf_digits(rng)),
         "newborn.naturalidade": record.pick(rng, "newborn.naturalidade", cities, (60, 40)),
     }
@@ -455,9 +569,10 @@ def registration(record, rng: random.Random) -> dict[str, Any]:
     span = DateSpan(start, min(start + timedelta(days=3 * 365), EVENT_END))
     day = record.pick(rng, "registration.date", span,
                       [1 if index <= 15 else 0.3 if index <= 90 else 0.005 for index in range(len(span))])
+    # Lei 6.015/73 art. 50: registration at the place of birth or of the parents' residence
+    # (item 1) — biased accordingly instead of leaving a flat 5% to "anywhere in the country".
     born_in, lives_in = profile_of(record, "birth.place"), profile_of(record, "mother.residence")
-    weights = [0.6 * (profile is born_in) + 0.35 * (profile is lives_in) + 0.05 / len(LOCATION_PROFILES)
-               for profile in LOCATION_PROFILES]
+    weights = office_weights(born_in, lives_in, 0.6, 0.35)
     office = pick_profile(record, rng, "registration.office", weights, ("municipality", "uf"))
     name = record.pick(rng, "registration.office.name", REGISTRY_OFFICE_NAMES)
     term = f"{rng.randint(1, 250000):07d}"
@@ -595,9 +710,16 @@ def death(record, rng: random.Random) -> dict[str, Any]:
         values["death.medical_assistance"] = "1"
         values["death.autopsy"] = "2"
 
+    if not hospital:
+        establishment_pool = None
+    elif category == "2":
+        # Field-20 category 2 ("outro estabelecimento de saúde") is UPA/UBS/policlínica/pronto
+        # atendimento, never "Hospital ..." (item 2).
+        establishment_pool = OTHER_HEALTH_ESTABLISHMENT_NAMES
+    else:
+        establishment_pool = ADULT_ESTABLISHMENT_NAMES if is_do else ESTABLISHMENT_NAMES
     values["death.place.establishment.name"] = (
-        record.pick(rng, "death.place.establishment.name", ADULT_ESTABLISHMENT_NAMES if is_do else ESTABLISHMENT_NAMES)
-        if hospital else None)
+        record.pick(rng, "death.place.establishment.name", establishment_pool) if establishment_pool else None)
     values["death.place.establishment.cnes"] = (
         record.draw("death.place.establishment.cnes", rng, lambda: digits(rng, 7)) if hospital else None)
 
@@ -659,12 +781,13 @@ def _occurrence_address(record, rng: random.Random, category: str, own_home: boo
         return {"deceased.occurrence.address": None, "deceased.occurrence.number": None,
                "deceased.occurrence.complement": None, "deceased.occurrence.cep": None,
                "deceased.occurrence.neighborhood": None}
+    street, cep, neighborhood = pick_street(record, rng, "deceased.occurrence.street", profile)
     return {
-        "deceased.occurrence.address": profile["street"],
+        "deceased.occurrence.address": street,
         "deceased.occurrence.number": house_number(record, rng, "deceased.occurrence.number"),
         "deceased.occurrence.complement": (record.pick(rng, "deceased.occurrence.complement", COMPLEMENTS)
                                            if rng.random() < 0.3 else None),
-        "deceased.occurrence.cep": profile["cep"], "deceased.occurrence.neighborhood": profile["neighborhood"],
+        "deceased.occurrence.cep": cep, "deceased.occurrence.neighborhood": neighborhood,
     }
 
 
@@ -684,16 +807,25 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     mother_name, father_name = parent_names(record, rng, name)
     category = record.value("death.place.category") if is_do else None
     # Home deaths (category "3") must be in the deceased's own residence city (M1) — a death at
-    # home is, by definition, in the municipality the person lived in.
-    residence_bias = 1.0 if (is_do and category == "3") else 0.7
+    # home is, by definition, in the municipality the person lived in. Otherwise (item 1), Lei
+    # 6.015/73 keeps registration at the place of death OR of residence, and in practice an
+    # interstate death (e.g. referred to a capital for hospital care) is the exception: ~5%,
+    # not the ~23% the old 0.7 weight gave, and favoring() now biases any cross-state pick
+    # toward a neighbouring region instead of spreading it uniformly over the whole country.
+    residence_bias = 1.0 if (is_do and category == "3") else 0.95
     residence = pick_profile(record, rng, "deceased.residence", favoring(profile_of(record, "death.place"), residence_bias))
     birthplace = rng.choice(LOCATION_PROFILES)
     # "Estudante" is implausible for an elderly DO death (M4) — exclude it from the pool once
     # the person is well past typical student age in the DO context.
     occupation_pool = tuple(o for o in OCCUPATIONS if o != "Estudante") if (is_do and age >= 65) else OCCUPATIONS
-    occupation = "Não se aplica" if age < 14 else record.pick(rng, "deceased.occupation", occupation_pool)
+    occupation_canonical = "Não se aplica" if age < 14 else record.pick(rng, "deceased.occupation", occupation_pool)
+    # R-c: always inflect to the deceased's sex, even when the AI required a specific
+    # canonical value — assisted.py widens that requirement to accept either grammatical
+    # form, so the inflected value still satisfies it.
+    occupation = inflect_occupation(occupation_canonical, sex)
     residence_fields = address("deceased.residence", residence, house_number(record, rng, "deceased.residence.number"),
-                               ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge"))
+                               ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge"),
+                               *pick_street(record, rng, "deceased.residence.street", residence))
     values = {
         "deceased.name": name, "deceased.sex": sex, "deceased.birth_date": born, "deceased.age": age,
         "deceased.cpf": record.draw("deceased.cpf", rng, lambda: cpf_digits(rng)),
@@ -702,7 +834,7 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
         "deceased.mother_name": record.draw("deceased.mother_name", rng, lambda: mother_name),
         "deceased.father_name": record.draw("deceased.father_name", rng, lambda: father_name),
         "deceased.parents_names": f"{mother_name}; {father_name}",
-        "deceased.occupation": occupation, "deceased.occupation_cbo": OCCUPATION_CODES.get(occupation),
+        "deceased.occupation": occupation, "deceased.occupation_cbo": OCCUPATION_CODES.get(occupation_canonical),
         **residence_fields,
     }
     if is_do:
@@ -718,7 +850,7 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     values["deceased.cns"] = (record.draw("deceased.cns", rng, lambda: cns_digits(rng))
                               if (not is_do or on >= date(1997, 1, 1)) else None)
     values["deceased.race"] = record.pick(rng, "deceased.race", RACES, RACE_WEIGHTS)
-    schooling, series = _schooling_for_age(rng, age, occupation if is_do else None)
+    schooling, series = _schooling_for_age(rng, age, occupation_canonical if is_do else None)
     values["deceased.schooling"] = schooling
     values["deceased.schooling_series"] = series
     marital_options, marital_weights = _DECEASED_MARITAL_WEIGHTS(age)
@@ -747,8 +879,12 @@ def death_registration(record, rng: random.Random) -> dict[str, Any]:
     span = DateSpan(on, min(on + timedelta(days=365), EVENT_END))
     day = record.pick(rng, "death_registration.date", span,
                       [1 if index <= 15 else 0.3 if index <= 90 else 0.01 for index in range(len(span))])
-    office = pick_profile(record, rng, "death_registration.office", favoring(profile_of(record, "death.place"), 0.8),
-                          ("municipality", "uf"))
+    # Lei 6.015/73 art. 77: registration at the place of death or of residence (item 1) — so the
+    # cartório UF should almost always be one of the two, not an unrelated third state.
+    death_profile = profile_of(record, "death.place")
+    residence_profile = profile_of(record, "deceased.residence")
+    office = pick_profile(record, rng, "death_registration.office",
+                          office_weights(death_profile, residence_profile, 0.75, 0.18), ("municipality", "uf"))
     values = {
         "death_registration.date": day,
         "death_registration.number": record.draw("death_registration.number", rng, lambda: str(rng.randint(1, 250000))),
@@ -787,7 +923,11 @@ def certifier(record, rng: random.Random) -> dict[str, Any]:
         else:
             role = rng.choices(["1", "2"], (70, 30))[0]
     else:
-        role = rng.choices(["1", "2", "3", "4"], (80, 10, 5, 5))[0]
+        # Outside the DO, the certifier's role is not rendered, but it still feeds
+        # certifier.iml_svo_* fields; keeping it random let an IML/SVO certifier appear
+        # together with a "Não" necropsy context that doesn't exist on these documents (item 3).
+        # Fix it to "1" (médico assistente) so no document models an IML/SVO without a DO.
+        role = "1"
     iml_svo = role in ("3", "4")
     profile = profile_of(record, "death.place") if iml_svo else None
     ddd = UF_DDD.get(record.value("death.place.uf"), "61")

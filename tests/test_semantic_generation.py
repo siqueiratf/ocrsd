@@ -48,7 +48,15 @@ def ddmmyyyy(text: str) -> date:
 
 
 def profile(**parts) -> dict | None:
-    return next((item for item in LOCATION_PROFILES if all(item[key] == value for key, value in parts.items())), None)
+    # A municipality has several streets, each with its own CEP (item 5), so "cep" may be any
+    # of a profile's street CEPs, not just its primary one.
+    cep = parts.pop("cep", None)
+
+    def matches(item: dict) -> bool:
+        if not all(item[key] == value for key, value in parts.items()):
+            return False
+        return cep is None or cep == item["cep"] or cep in {entry[1] for entry in item.get("streets", ())}
+    return next((item for item in LOCATION_PROFILES if matches(item)), None)
 
 
 def blank_page(path: Path) -> None:
@@ -276,7 +284,16 @@ class SemanticGenerationTests(unittest.TestCase):
         for truth in legacy:
             record, by_id = truth["semantic_record"], fields(truth)
             self.assertEqual(by_id["1"]["value"], record["newborn.name"])
-            self.assertEqual(by_id["25"]["value"], record["mother.residence.street"])
+            # Field "25" in this legacy fixture has no "semantic" binding (by_id["25"]["semantic"]
+            # is None): its text comes from the generic, non-semantic address faker in
+            # synthetic_dataset.py (unrelated to src.semantic), which always uses the
+            # municipality's PRIMARY street. mother.residence.street itself now varies across
+            # several streets per municipality (item 5), so the two no longer coincide; both
+            # are still coherent (same municipality), which is what this legacy path promises.
+            self.assertIsNone(by_id["25"].get("semantic"))
+            from src.semantic.data import LOCATION_PROFILES as _PROFILES
+            residence_profile = next(p for p in _PROFILES if p["city"] == record["mother.residence.municipality"])
+            self.assertEqual(by_id["25"]["value"], residence_profile["street"])
             self.assertEqual(int(by_id["n_cesareas"]["value"]), record["mother.obstetric.cesareans"])
             self.assertEqual(len(truth["fields"]), len(all_ids(DNV_LEGACY)))
 
