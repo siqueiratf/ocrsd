@@ -61,6 +61,46 @@
         <a class="subtle-link" href="/presets/escrita/modelos">Detalhes dos modelos e registro de novos modelos</a>
       </section>
       <div id="controles-modelo">{% include "partials/writing_controls.html" %}</div>
+      <section class="config-section">
+        <h2>Estilo por tipo de conteúdo <span class="optional">opcional</span></h2>
+        <small class="hint">Escolha um estilo diferente do principal para um tipo de conteúdo específico — por exemplo, uma fonte digitada bem legível para números, datas e CPF, mantendo a letra manuscrita (ou até um modelo neural com regularidade alta) para nomes e textos. Deixe em “Igual ao estilo principal” para usar o estilo principal nesse conteúdo.</small>
+        <div class="content-style-rows">
+          {% for cls, label in content_classes.items() %}
+          {% set override = (writing.content or {}).get(cls) %}
+          {% set cls_model = override.model if override else '' %}
+          <details class="content-style-row" {% if override %}open{% endif %}>
+            <summary>{{ label }}<span class="content-style-current">{{ (override.font_family if cls_model == 'font' else cls_model) if override else 'Igual ao estilo principal' }}</span></summary>
+            <div class="content-style-body">
+              <label class="field">Estilo
+                <select name="content_{{ cls }}_model" aria-label="Estilo para {{ label }}" data-content-model="{{ cls }}">
+                  <option value="" {% if not override %}selected{% endif %}>Igual ao estilo principal</option>
+                  <option value="font" {% if cls_model == 'font' %}selected{% endif %}>Fonte (manuscrita ou digitada)</option>
+                  {% for model in models if model.id != 'font' %}
+                  <option value="{{ model.id }}" {% if cls_model == model.id %}selected{% endif %} {% if not model.available %}disabled{% endif %}>{{ model.label }}{{ '' if model.available else ' (indisponível)' }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label class="field">Fonte <span class="optional">quando o estilo é “Fonte”</span>
+                <select name="content_{{ cls }}_font_family" aria-label="Fonte para {{ label }}">
+                  {% for key, family in FONT_FAMILIES.items() %}
+                  <option value="{{ key }}" {% if (override.font_family if override else None) == key %}selected{% endif %}>{{ family.label }} ({{ "digitada" if family.category == "typed" else "manuscrita" }})</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label class="field">Variação <span class="optional">fontes manuscritas</span>
+                <input type="range" name="content_{{ cls }}_intensity" min="0" max="1" step="0.05" value="{{ override.intensity if override and override.intensity is not none else 0.65 }}">
+              </label>
+              <label class="field">Escritor <span class="optional">modelos neurais, vazio = aleatório</span>
+                <input type="number" name="content_{{ cls }}_writer" min="0" max="511" value="{{ override.writer if override and override.writer is not none else '' }}">
+              </label>
+              <label class="field">Regularidade/legibilidade <span class="optional">modelos neurais</span>
+                <input type="range" name="content_{{ cls }}_bias" min="0" max="3" step="0.05" value="{{ override.bias if override and override.bias is not none else 0.75 }}">
+              </label>
+            </div>
+          </details>
+          {% endfor %}
+        </div>
+      </section>
       {% if mode == 'editar' %}
       <section id="compartilhamento" class="config-section">{% include "partials/preset_share.html" %}</section>
       {% endif %}

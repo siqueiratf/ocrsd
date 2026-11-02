@@ -206,7 +206,9 @@ class WizardTests(unittest.TestCase):
         fields = re.findall(r'name="fields" value="([^"]+)"', self.request("GET", f"/geracao?draft={self.draft}&etapa=2").text)
         self.advance(2, fields=fields[:1])
         natural = self.request("GET", f"/geracao?draft={self.draft}&etapa=3")
-        self.assertIn('name="preset" value="padrao_fonte_natural" checked', natural.text)
+        # DNV's recommended style was updated (topic 4 evidence) to the
+        # content-aware preset: a legible hand overall, typed digits/dates/CPF.
+        self.assertIn('name="preset" value="padrao_manuscrito_legivel_por_conteudo" checked', natural.text)
         self.assertEqual(self.advance(1, document_type="certidao_nascimento").status_code, 200)
         fields = re.findall(r'name="fields" value="([^"]+)"', self.request("GET", f"/geracao?draft={self.draft}&etapa=2").text)
         self.advance(2, fields=fields[:1])

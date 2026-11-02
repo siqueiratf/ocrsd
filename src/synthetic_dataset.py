@@ -20,6 +20,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from src.content_classes import classify_content
 from src.document_types import build_dataset_run_dir, infer_document_type_key
 from src.document_filters import apply_realistic_filters_to_pdf
 from src.field_rules import (DATE_PARTS, DNV_TEST_PREFIX, SEPARATED_DATE, SEX_VALUES, TEXT_TYPES, apply_shared_rules, dnv_metadata,
@@ -901,13 +902,21 @@ def _safe_name(value: str) -> str:
 
 def _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
                         numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset, style_preset_uid,
-                        font_family: str = DEFAULT_FONT_FAMILY) -> dict:
-    return {"handwriting": handwriting, "handwriting_intensity": handwriting_intensity,
+                        font_family: str = DEFAULT_FONT_FAMILY,
+                        content_pens: dict | None = None, content_fonts: dict | None = None,
+                        content_intensity: dict | None = None, content_handwriting: dict | None = None) -> dict:
+    options = {"handwriting": handwriting, "handwriting_intensity": handwriting_intensity,
             "text_handwriting": text_handwriting, "neural_pen": asdict(neural_pen) if neural_pen else None,
             "numeric_neural_pen": asdict(numeric_neural_pen) if numeric_neural_pen else None,
             "text_neural_pen": asdict(text_neural_pen) if text_neural_pen else None,
             "realistic_filters": realistic_filters, "filter_preset": filter_preset, "style_preset_uid": style_preset_uid,
             "font_family": font_family}
+    if content_pens or content_fonts:
+        options["content_pens"] = {k: asdict(v) if v else None for k, v in (content_pens or {}).items()}
+        options["content_fonts"] = dict(content_fonts or {})
+        options["content_intensity"] = dict(content_intensity or {})
+        options["content_handwriting"] = dict(content_handwriting or {})
+    return options
 
 
 def generate_document(template_path: Path, field_map: dict, selected_ids: set[str],
@@ -921,7 +930,11 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                       font_family: str = DEFAULT_FONT_FAMILY,
                       style_preset_uid: str | None = None,
                       generation_metadata: dict | None = None,
-                      record_factory: RecordFactory | None = None) -> SyntheticDocument:
+                      record_factory: RecordFactory | None = None,
+                      content_pens: dict[str, NeuralPen | None] | None = None,
+                      content_fonts: dict[str, str] | None = None,
+                      content_intensity: dict[str, float] | None = None,
+                      content_handwriting: dict[str, bool] | None = None) -> SyntheticDocument:
     field_map = apply_shared_rules(field_map)
     reproduction = dict(generation_metadata or {})
     if not reproduction:
@@ -930,7 +943,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                         "selected_ids": sorted(selected_ids),
                         "options": _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
                                                        numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset,
-                                                       style_preset_uid, font_family)}
+                                                       style_preset_uid, font_family, content_pens, content_fonts, content_intensity, content_handwriting)}
     output_dir.mkdir(parents=True, exist_ok=True)
     document = fitz.open(template_path)
     if len(document) == 0:
@@ -950,7 +963,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
     else:
         numeric_neural_pen = neural_pen
         text_neural_pen = neural_pen
-    neural_pens = [pen for pen in (numeric_neural_pen, text_neural_pen) if pen is not None]
+    neural_pens = [pen for pen in (numeric_neural_pen, text_neural_pen, *(content_pens or {}).values()) if pen is not None]
     render_rng = random.Random(rng.getrandbits(64)) if neural_pens else None
     handwriting_models = handwriting_model if isinstance(handwriting_model, dict) else {}
     if handwriting_model is not None and not isinstance(handwriting_model, dict) and neural_pen is not None:
@@ -973,6 +986,11 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         neural_pen = resolve_pen(neural_pen)
         numeric_neural_pen = neural_pen
         text_neural_pen = neural_pen
+    content_pens = content_pens or {}
+    content_fonts = content_fonts or {}
+    content_intensity = content_intensity or {}
+    content_handwriting = content_handwriting or {}
+    content_pens = {content_class: resolve_pen(pen) for content_class, pen in content_pens.items()}
     handwriting_style = random_handwriting_style(rng, handwriting_intensity, medium="pen")
     pencil_style = random_handwriting_style(rng, handwriting_intensity, medium="pencil")
     semantic_seed = rng.getrandbits(64)
@@ -1028,6 +1046,14 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
     typed_font = is_typed(font_family)
     typed_alias = TYPED_FONT_ALIAS_PREFIX + font_family
     typed_path = str(font_path(font_family))
+
+    def _resolve_font(content_class: str | None) -> tuple[str, bool, str, str]:
+        """Font family, typed flag, alias and path for `content_class`, or
+        the document's default font_family when the class has no override."""
+        family = content_fonts.get(content_class, font_family) if content_class else font_family
+        if family == font_family:
+            return font_family, typed_font, typed_alias, typed_path
+        return family, is_typed(family), TYPED_FONT_ALIAS_PREFIX + family, str(font_path(family))
 
     def insert_printed(rect: fitz.Rect, text: str, font_size: float | None, fontname: str, color: tuple[float, float, float],
                        fontfile: str | None = None) -> bool:
@@ -1092,19 +1118,33 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         return True
 
     def insert_value(rect_values: list[int], text: str, font_size: float | None = None,
-                     pencil: bool = False, force_printed: bool = False) -> tuple[str, dict]:
+                     pencil: bool = False, force_printed: bool = False,
+                     content_class: str | None = None) -> tuple[str, dict]:
         x1, y1, x2, y2 = rect_values
         rect = fitz.Rect(x1 * point_scale, y1 * point_scale, x2 * point_scale, y2 * point_scale)
         if not text.strip():
             return text, {}
-        if typed_font:
-            fits = insert_printed(rect, text, font_size, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path)
-            if fits:
-                return text, {}
-            return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
-                        "requested_value": text}
-        active_pen = numeric_neural_pen if is_numeric_text(text) else text_neural_pen
-        neural_enabled = handwriting if is_numeric_text(text) else text_handwriting
+        has_class_override = content_class is not None and (content_class in content_pens or content_class in content_fonts)
+        if not has_class_override:
+            if typed_font:
+                fits = insert_printed(rect, text, font_size, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path)
+                if fits:
+                    return text, {}
+                return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
+                            "requested_value": text}
+            active_pen = numeric_neural_pen if is_numeric_text(text) else text_neural_pen
+            neural_enabled = handwriting if is_numeric_text(text) else text_handwriting
+            local_font_family = font_family
+        else:
+            active_pen = content_pens.get(content_class)
+            neural_enabled = active_pen is not None
+            local_font_family, local_typed, local_typed_alias, local_typed_path = _resolve_font(content_class)
+            if local_typed and active_pen is None:
+                fits = insert_printed(rect, text, font_size, local_typed_alias, (0.05, 0.05, 0.05), fontfile=local_typed_path)
+                if fits:
+                    return text, {}
+                return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
+                            "requested_value": text}
         if (
             not force_printed
             and active_pen is not None
@@ -1136,7 +1176,31 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
             return rendered, {"requested_value": text, "rendering": rendering}
-        if not force_printed and handwriting and is_numeric_text(text):
+        if has_class_override:
+            # The class override chose a "font" model (no neural pen) and a
+            # non-typed font family: render it as handwriting with that
+            # family (numeric glyph shapes for numeric-looking values,
+            # cursive/print shapes otherwise) UNLESS the override explicitly
+            # turned handwriting off for this class (content_handwriting is
+            # False), in which case it falls through to the plain printed
+            # fallback below, same as a class with no handwriting at all.
+            if not force_printed and not local_typed and content_handwriting.get(content_class, True):
+                local_intensity = content_intensity.get(content_class, handwriting_intensity)
+                if is_numeric_text(text):
+                    image = render_handwritten_numeric(
+                        text, max(1, x2-x1), max(1, y2-y1), rng,
+                        style=handwriting_style, intensity=local_intensity, font_family=local_font_family,
+                    )
+                else:
+                    image = render_handwritten_text(
+                        text, max(1, x2-x1), max(1, y2-y1), rng,
+                        style=pencil_style, intensity=local_intensity, medium="pencil", font_family=local_font_family,
+                    )
+                stream = io.BytesIO()
+                image.save(stream, format="PNG")
+                page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
+                return text, {}
+        elif not force_printed and handwriting and is_numeric_text(text):
             image = render_handwritten_numeric(
                 text, max(1, x2-x1), max(1, y2-y1), rng,
                 style=handwriting_style, intensity=handwriting_intensity, font_family=font_family,
@@ -1145,7 +1209,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
             return text, {}
-        if not force_printed and text_handwriting and pencil:
+        elif not force_printed and text_handwriting and pencil:
             image = render_handwritten_text(
                 text, max(1, x2-x1), max(1, y2-y1), rng,
                 style=pencil_style, intensity=handwriting_intensity, medium="pencil", font_family=font_family,
@@ -1224,12 +1288,16 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             composite = element_values(field, rng, generation_context)
         if composite:
             requested, parts, semantic = composite
+            field_content_class = classify_content(
+                field.get("data_type", "text"), binding.key if binding else None, requested,
+            )
             element_entries = []
             for element, character in parts:
                 rendered, metadata = insert_value(
                     element["bbox"], character,
                     pencil=field.get("data_type") == "text_sequence",
                     force_printed=bool(field.get("render_as_printed", False)),
+                    content_class=field_content_class,
                 )
                 element_entries.append({**element, "value": rendered, **metadata})
             sequence = "".join(element["value"] for element in element_entries) if field.get("data_type") in {"digit_sequence", "text_sequence"} else requested
@@ -1246,6 +1314,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             field["bbox"], value,
             pencil=field.get("data_type", "text") in TEXT_TYPES and not is_numeric_text(value),
             force_printed=bool(field.get("render_as_printed", False)),
+            content_class=classify_content(field.get("data_type", "text"), binding.key if binding else None, value),
         )
         values[field_id] = value
         entries.append({"field_id": field_id, "label": field.get("label", ""), "value": value, "bbox": field["bbox"], **semantic, **meaning,
@@ -1304,6 +1373,10 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
                      font_family: str = DEFAULT_FONT_FAMILY,
                      progress_callback: Callable[[int, int, SyntheticDocument], None] | None = None,
                      record_factory: Callable[[int, int, str | None, SemanticPlan, list[str]], SemanticRecord] | None = None,
+                     content_pens: dict[str, NeuralPen | None] | None = None,
+                     content_fonts: dict[str, str] | None = None,
+                     content_intensity: dict[str, float] | None = None,
+                     content_handwriting: dict[str, bool] | None = None,
                      ) -> list[SyntheticDocument]:
     if count <= 0:
         raise ValueError("A quantidade deve ser maior que zero")
@@ -1323,7 +1396,7 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
     rng = random.Random(seed)
     options = _generation_options(handwriting, handwriting_intensity, text_handwriting, neural_pen,
                                   numeric_neural_pen, text_neural_pen, realistic_filters, filter_preset, style_preset_uid,
-                                  font_family)
+                                  font_family, content_pens, content_fonts, content_intensity, content_handwriting)
     output_dir.mkdir(parents=True, exist_ok=True)
     mapping_bytes = (json.dumps(field_map, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
     mapping_hash = hashlib.sha256(mapping_bytes).hexdigest()
@@ -1339,9 +1412,13 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
     else:
         numeric_neural_pen = neural_pen
         text_neural_pen = neural_pen
+    content_pens = content_pens or {}
+    content_fonts = content_fonts or {}
+    content_intensity = content_intensity or {}
+    content_handwriting = content_handwriting or {}
     handwriting_model = {
         model: load_model(model)
-        for model in {pen.model for pen in (numeric_neural_pen, text_neural_pen) if pen is not None}
+        for model in {pen.model for pen in (numeric_neural_pen, text_neural_pen, *content_pens.values()) if pen is not None}
     }
     generated = []
     for index in range(1, count + 1):
@@ -1355,6 +1432,8 @@ def generate_dataset(template_path: Path, mapping_path: Path, selected_ids: set[
             handwriting_model=handwriting_model,
             realistic_filters=realistic_filters, filter_preset=filter_preset,
             style_preset_uid=style_preset_uid, font_family=font_family,
+            content_pens=content_pens, content_fonts=content_fonts, content_intensity=content_intensity,
+            content_handwriting=content_handwriting,
             generation_metadata={"manifest": "dataset.json", "seed": seed, "index": index,
                                  "mapping_sha256": mapping_hash, "template_sha256": reproduction["template_sha256"]},
             record_factory=None if record_factory is None else partial(record_factory, index),

@@ -42,6 +42,93 @@ STANDARD_PRESETS = (("padrao_fonte_natural", "Fonte manuscrita · natural", "cav
                     ("padrao_digitada_arimo", "Digitada · Arimo", "arimo", 0.65),
                     ("padrao_digitada_tinos", "Digitada · Tinos", "tinos", 0.65))
 
+# Presets that use a different, generally more legible, style per content
+# class instead of one font/model for the whole document. Evidence: the
+# writing audit shows neural handwriting -- and font handwriting at high
+# intensity -- is far less legible for digits/dates/CPF than typed or
+# low-intensity font handwriting, while names and short texts read fine as
+# natural handwriting. These presets keep legibility high everywhere by
+# using a clear, low-intensity hand (or a typed font) for numbers/dates/CPF
+# and a more natural hand only for names and free text.
+CONTENT_STYLE_PRESETS = (
+    {
+        # Evidence (var/audit/t4_evidence, do+dnv+certidao_obito+certidao_casamento_cnj+cnpj,
+        # seeds 1-2, neural seed 1; see report.md "by content class"):
+        # digits CER_loose -- padrao_fonte_natural (caveat 0.65 everywhere) 0.685,
+        # exp_digits_caveat_low_intensity (caveat 0.1 just for digits) 0.721 (NOT
+        # better -- low intensity alone does not fix it), exp_digits_neural_sjvasquez_highbias
+        # (bias=3.0 clean pen) 0.996 (much WORSE), padrao_manuscrito_legivel_por_conteudo
+        # (courier_prime typed for digits/date/cpf/time) 0.414. Typed is the only
+        # option tested that is actually legible for digits; neither a calmer
+        # font-handwriting setting nor a high-bias neural pen closes the gap.
+        # This does trade single-writer realism (a hand-filled form would not
+        # literally have typed digits) for legibility; the user's own stated
+        # priority is legibility first ("mantém a legibilidade no máximo é
+        # geralmente o melhor caminho"), and a contact-sheet read of the
+        # rendered pages (var/audit/t4_evidence/pages) shows the typed digits
+        # still read naturally as "filled into boxed fields", which is how
+        # DO/DNV's own pre-printed digit boxes look. So this preset keeps the
+        # overall look handwritten (names/places/text in caveat) and renders
+        # digits/dates/times/CPF with a clean typed font.
+        "id": "padrao_manuscrito_legivel_por_conteudo",
+        "label": "Manuscrito legível por conteúdo",
+        "base": {"font_family": "caveat", "intensity": 0.25},
+        "content": {
+            "digits": {"font_family": "courier_prime", "intensity": 0.65},
+            "date": {"font_family": "courier_prime", "intensity": 0.65},
+            "time": {"font_family": "courier_prime", "intensity": 0.65},
+            "cpf_cnpj": {"font_family": "courier_prime", "intensity": 0.65},
+        },
+    },
+    {
+        # For documents that are office/cartório paperwork rather than a
+        # single person's hand-filled form (certidões, CNPJ, DREI): most of
+        # the document is typed, with names/places more plausibly added by
+        # hand. Evidence (same run): short_text CER_loose goes from 0.11
+        # (padrao_digitada_arimo, fully typed) to 0.477 with this preset's
+        # handwritten names -- a real legibility cost -- so this preset is
+        # offered as an option but is NOT set as escrita_recomendada for any
+        # document (see documents/catalogo.json): for certidao_obito,
+        # certidao_casamento_cnj and cnpj_quadro_socios_administradores the
+        # fully-typed padrao_digitada_arimo measured strictly better and stays
+        # the recommendation.
+        "id": "padrao_formulario_cartorio",
+        "label": "Formulário de cartório",
+        "base": {"font_family": "courier_prime", "intensity": 0.65},
+        "content": {
+            "name": {"font_family": "caveat", "intensity": 0.25},
+            "short_text": {"font_family": "caveat", "intensity": 0.25},
+            "long_text": {"font_family": "caveat", "intensity": 0.25},
+            "place": {"font_family": "caveat", "intensity": 0.25},
+        },
+    },
+)
+
+# --- Exploration-only candidates (topic 4 evidence gathering) -----------
+# NOT shipped (not in CONTENT_STYLE_PRESETS, so Catalog.presets() never
+# returns them) -- kept only so scripts/writing_audit.py can reproduce the
+# measurements below from var/audit/t4_evidence. Result (digits CER_loose /
+# short_text CER_loose / place CER_loose, same run as CONTENT_STYLE_PRESETS
+# above):
+#   exp_digits_caveat_low_intensity:       digits 0.721  (vs typed 0.414 -- rejected)
+#   exp_digits_neural_sjvasquez_highbias:  digits 0.996  (worse than doing nothing -- rejected)
+#   exp_names_neural_sjvasquez_highbias:   short_text 0.669, place 1.043
+#       (vs plain caveat handwriting 0.557 / 0.871 -- the neural pen, even at
+#       bias=3.0 with a clean/no-dropout pen, is LESS legible than font
+#       handwriting for names/places here; only long_text improved, 0.323 vs
+#       ~0.47-0.55, on a small sample of 9-22 rows). No neural-based content
+#       preset is shipped: the evidence does not support one.
+#   The exp_* presets live in scripts/writing_audit.py (EXPLORATION_CONTENT_PRESETS).
+
+
+def _content_style_writing(spec: dict) -> Writing:
+    # Each content-class entry is a partial writing spec (model, font_family,
+    # intensity, writer, bias, ...) -- same shape as WritingOverride -- so a
+    # preset can mix typed fonts, font-handwriting and neural models freely
+    # per content class, not just font_family.
+    content = {content_class: dict(override) for content_class, override in spec["content"].items()}
+    return Writing(**spec["base"], content=content)
+
 
 class ServiceError(Exception):
     def __init__(self, status: int, code: str, message: str):
@@ -192,6 +279,9 @@ class Catalog:
         result = [PresetResponse(id=identifier, label=label, writing=Writing(intensity=intensity, font_family=font_family),
                                  filter_preset="none", available=True)
                   for identifier, label, font_family, intensity in STANDARD_PRESETS]
+        result.extend(PresetResponse(id=spec["id"], label=spec["label"], writing=_content_style_writing(spec),
+                                     filter_preset="none", available=True)
+                      for spec in CONTENT_STYLE_PRESETS)
         available = {m["id"] for m in self.models() if m["available"]}
         for preset in list_presets(self.settings.documents / "writing_presets.json"):
             settings = preset.get("settings", {})
@@ -276,7 +366,7 @@ class Catalog:
         if options.writing.model != "font" and (options.writing.handwriting or options.writing.text_handwriting):
             from src.neural_handwriting import NeuralPen
             try:
-                NeuralPen(**options.writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity", "font_family"}))
+                NeuralPen(**options.writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity", "font_family", "content"}))
             except ValueError as exc:
                 raise ServiceError(422, "writing_incompatible", f"Configuração de escrita inválida: {exc}") from exc
             conflicts = writing_issues(definition, options.fields, options.writing)
@@ -912,6 +1002,11 @@ def render_pdf_page(path: Path, page_number: int, width: int = 1800) -> bytes:
 
 PREVIEW_SAMPLES = (("Nome", "Ana Carolina Silva"), ("Data", "15/09/2026"), ("CPF", "123.456.789-09"),
                    ("Texto alfanumérico", "13H00 M00 S"))
+# Content class each PREVIEW_SAMPLES row stands for, so the preview can show
+# that row rendered with its own content-style override (see
+# render_writing_samples' `content_classes` argument), instead of always the
+# base style.
+PREVIEW_SAMPLE_CONTENT_CLASSES = ("name", "date", "cpf_cnpj", "short_text")
 PREVIEW_RENDERER = "ocrsd-preview-1"
 _MODEL_LOCK = threading.Lock()
 
@@ -923,7 +1018,12 @@ def cached_handwriting_model(name: str):
     return load_model(name)
 
 
-def render_writing_samples(writing: Writing, texts: list[str], variation: int = 0) -> list[dict]:
+def render_writing_samples(writing: Writing, texts: list[str], variation: int = 0,
+                           content_classes: list[str | None] | None = None) -> list[dict]:
+    """Render each text with `writing`, or -- when `content_classes[index]`
+    names a content class with an override in `writing.content` -- with that
+    class's resolved style instead, so the preview shows each configured
+    content-style row with a matching sample (name/date/CPF/text)."""
     from PIL import Image
     from src.fonts import is_typed
     from src.neural_handwriting import NeuralPen, prepare_text
@@ -931,27 +1031,33 @@ def render_writing_samples(writing: Writing, texts: list[str], variation: int = 
                                        render_handwritten_text, render_neural_text, render_typed_text)
 
     variation_rng = random.Random(42 + variation * 7919)
-    writer = writing.writer if writing.writer is not None else variation_rng.randrange(13 if writing.model == "sjvasquez" else 512)
     results = []
     for index, text in enumerate(texts):
+        content_class = (content_classes or [None] * len(texts))[index]
+        sample_writing = writing.resolved_for(content_class) if content_class else writing
+        writer = sample_writing.writer if sample_writing.writer is not None else variation_rng.randrange(
+            13 if sample_writing.model == "sjvasquez" else 512)
         seed = 10_000 + variation * 1000 + index * 100 + len(text)
-        result = {"text": text, "rendered": text, "image": None, "error": None, "writer": None if writing.model == "font" else writer}
+        result = {"text": text, "rendered": text, "image": None, "error": None,
+                  "writer": None if sample_writing.model == "font" else writer,
+                  "content_class": content_class, "overridden": sample_writing is not writing}
         try:
-            if writing.model == "font":
+            if sample_writing.model == "font":
                 numeric = is_numeric_text(text)
                 rng = random.Random(seed)
-                if is_typed(writing.font_family):
-                    image = render_typed_text(text, 520, 116, font_family=writing.font_family)
+                if is_typed(sample_writing.font_family):
+                    image = render_typed_text(text, 520, 116, font_family=sample_writing.font_family)
                 else:
-                    style = random_handwriting_style(rng, intensity=writing.intensity, medium="pen" if numeric else "pencil")
-                    image = (render_handwritten_numeric(text, 520, 116, rng, style=style, intensity=writing.intensity, font_family=writing.font_family) if numeric
-                             else render_handwritten_text(text, 520, 116, rng, style=style, intensity=writing.intensity, medium="pencil", font_family=writing.font_family))
+                    style = random_handwriting_style(rng, intensity=sample_writing.intensity, medium="pen" if numeric else "pencil")
+                    image = (render_handwritten_numeric(text, 520, 116, rng, style=style, intensity=sample_writing.intensity, font_family=sample_writing.font_family) if numeric
+                             else render_handwritten_text(text, 520, 116, rng, style=style, intensity=sample_writing.intensity, medium="pencil", font_family=sample_writing.font_family))
             else:
-                rendered = prepare_text(text, writing.text_policy)
-                pen = NeuralPen(model=writing.model, writer=writer, bias=writing.bias, color=writing.color, width=writing.width,
-                                pressure=writing.pressure, dropout=writing.dropout, text_policy=writing.text_policy)
+                rendered = prepare_text(text, sample_writing.text_policy)
+                pen = NeuralPen(model=sample_writing.model, writer=writer, bias=sample_writing.bias, color=sample_writing.color,
+                                width=sample_writing.width, pressure=sample_writing.pressure, dropout=sample_writing.dropout,
+                                text_policy=sample_writing.text_policy)
                 with _MODEL_LOCK:
-                    image, _ = render_neural_text(rendered, 520, 116, pen, cached_handwriting_model(writing.model), random.Random(seed))
+                    image, _ = render_neural_text(rendered, 520, 116, pen, cached_handwriting_model(sample_writing.model), random.Random(seed))
                 result["rendered"] = rendered
         except (ValueError, FileNotFoundError) as exc:
             result["error"] = ("O modelo não escreve todos os caracteres deste texto com a política “Rejeitar”"
@@ -1136,7 +1242,22 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
 
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
     writing = options.writing
-    pen = None if writing.model == "font" or not (writing.handwriting or writing.text_handwriting) else NeuralPen(**writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity", "font_family"}))
+    pen = None if writing.model == "font" or not (writing.handwriting or writing.text_handwriting) else NeuralPen(**writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity", "font_family", "content"}))
+    content_pens: dict[str, NeuralPen | None] = {}
+    content_fonts: dict[str, str] = {}
+    content_intensity: dict[str, float] = {}
+    content_handwriting: dict[str, bool] = {}
+    for content_class, override in (writing.content or {}).items():
+        effective = writing.resolved_for(content_class)
+        content_fonts[content_class] = effective.font_family
+        content_intensity[content_class] = effective.intensity
+        content_handwriting[content_class] = effective.handwriting
+        if effective.model == "font" or not effective.handwriting:
+            content_pens[content_class] = None
+        else:
+            content_pens[content_class] = NeuralPen(
+                **effective.model_dump(exclude={"handwriting", "text_handwriting", "intensity", "font_family", "content"})
+            )
     def finalize_document(index: int, total: int, document) -> None:
         data = json.loads(document.json_path.read_text())
         data.update(source_template=options.document_type, synthetic=True, notice=NOTICE,
@@ -1152,6 +1273,8 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
         template, mapping, set(options.fields), output, options.count, options.seed,
         handwriting=writing.handwriting, text_handwriting=writing.text_handwriting,
         handwriting_intensity=writing.intensity, neural_pen=pen, font_family=writing.font_family,
+        content_pens=content_pens or None, content_fonts=content_fonts or None, content_intensity=content_intensity or None,
+        content_handwriting=content_handwriting or None,
         realistic_filters=options.filter_preset != "none", filter_preset=options.filter_preset if options.filter_preset != "none" else "medium",
         progress_callback=finalize_document, record_factory=factory,
     )

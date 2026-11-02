@@ -41,7 +41,7 @@
       "categoria": "Registro civil",
       "prioridade": "alta",
       "status": "disponivel",
-      "escrita_recomendada": "padrao_fonte_natural"
+      "escrita_recomendada": "padrao_manuscrito_legivel_por_conteudo"
     },
     "do": {
       "orgao": "ms",
@@ -52,7 +52,7 @@
       "categoria": "Registro civil",
       "prioridade": "alta",
       "status": "disponivel",
-      "escrita_recomendada": "padrao_fonte_natural"
+      "escrita_recomendada": "padrao_fonte_regular"
     },
     "certidao_nascimento": {
       "orgao": "cnj",

@@ -4,13 +4,36 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.content_classes import CONTENT_CLASSES
 from src.fonts import FONT_FAMILY_KEYS
 
 Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,100}$")]
 
+# Content classes a preset/user may override with a distinct style. "checkbox"
+# marks are excluded: topic 3 already draws them as pen strokes independently
+# of model/font selection, so overriding them here would have no effect.
+OVERRIDABLE_CONTENT_CLASSES = tuple(c for c in CONTENT_CLASSES if c != "checkbox")
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False, strict=True)
+
+
+class WritingOverride(StrictModel):
+    """Partial writing spec for one content class. Every field is optional
+    (None = inherit the base Writing's value for that attribute), so a
+    preset only needs to spell out what actually differs for that class."""
+    model: Literal["font", "sjvasquez", "aaron1259", "wpvnteam"] | None = None
+    font_family: Literal[*FONT_FAMILY_KEYS] | None = None
+    handwriting: bool | None = None
+    intensity: float | None = Field(default=None, ge=0, le=1)
+    writer: int | None = Field(default=None, ge=0, le=511, strict=True)
+    bias: float | None = Field(default=None, ge=0, le=3)
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+    width: float | None = Field(default=None, gt=0, le=40)
+    pressure: float | None = Field(default=None, ge=0, le=1)
+    dropout: float | None = Field(default=None, ge=0, le=1)
+    text_policy: Literal["normalize", "strict"] | None = None
 
 
 class Writing(StrictModel):
@@ -26,12 +49,32 @@ class Writing(StrictModel):
     pressure: float = Field(default=0.25, ge=0, le=1)
     dropout: float = Field(default=0, ge=0, le=1)
     text_policy: Literal["normalize", "strict"] = "normalize"
+    # Optional per-content-class overrides. Absent/empty (the default) means
+    # every content class renders with the base attributes above, exactly as
+    # before this field existed -- old presets/jobs/replays are unaffected.
+    content: dict[Literal[*OVERRIDABLE_CONTENT_CLASSES], WritingOverride] | None = None
 
     @model_validator(mode="after")
     def validate_writer(self) -> Writing:
         if self.model == "sjvasquez" and self.writer is not None and self.writer > 12:
             raise ValueError("sjvasquez aceita estilos de 0 a 12")
+        for content_class, override in (self.content or {}).items():
+            effective_model = override.model or self.model
+            effective_writer = override.writer if override.writer is not None else self.writer
+            if effective_model == "sjvasquez" and effective_writer is not None and effective_writer > 12:
+                raise ValueError(f"sjvasquez aceita estilos de 0 a 12 ({content_class})")
         return self
+
+    def resolved_for(self, content_class: str) -> Writing:
+        """Return the effective Writing for a given content class: base
+        attributes merged with that class's override, if any. Unknown or
+        unconfigured classes just return `self` unchanged."""
+        override = (self.content or {}).get(content_class)
+        if override is None:
+            return self
+        data = self.model_dump(exclude={"content"})
+        data.update(override.model_dump(exclude_none=True))
+        return Writing(**data, content=None)
 
 
 class GenerationOptions(StrictModel):

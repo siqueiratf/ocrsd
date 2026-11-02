@@ -37,6 +37,7 @@ import fitz  # noqa: E402
 import numpy as np  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
+from src.content_classes import classify_content  # noqa: E402
 from src.document_types import discover_document_types  # noqa: E402
 from src.field_rules import apply_shared_rules  # noqa: E402
 from src.synthetic_dataset import generate_document  # noqa: E402
@@ -78,6 +79,43 @@ def neural_models_available() -> dict[str, bool]:
     return {"sjvasquez": sj_ok, "aaron1259": wb.is_file(), "wpvnteam": wb.is_file()}
 
 
+# Exploration presets for the content-style evidence (topic 4). They are
+# audit-only: the web app and the API never offer them.
+EXPLORATION_CONTENT_PRESETS = (
+    {
+        "id": "exp_digits_caveat_low_intensity",
+        "label": "[exp] digitos caveat baixa intensidade",
+        "base": {"font_family": "caveat", "intensity": 0.25},
+        "content": {
+            "digits": {"font_family": "caveat", "intensity": 0.1},
+            "date": {"font_family": "caveat", "intensity": 0.1},
+            "cpf_cnpj": {"font_family": "caveat", "intensity": 0.1},
+        },
+    },
+    {
+        "id": "exp_digits_neural_sjvasquez_highbias",
+        "label": "[exp] digitos neurais sjvasquez bias alto",
+        "base": {"font_family": "caveat", "intensity": 0.25},
+        "content": {
+            "digits": {"model": "sjvasquez", "bias": 3.0, "dropout": 0.0, "width": 1.2},
+            "date": {"model": "sjvasquez", "bias": 3.0, "dropout": 0.0, "width": 1.2},
+            "cpf_cnpj": {"model": "sjvasquez", "bias": 3.0, "dropout": 0.0, "width": 1.2},
+        },
+    },
+    {
+        "id": "exp_names_neural_sjvasquez_highbias",
+        "label": "[exp] nomes neurais sjvasquez bias alto, digitos tipografados",
+        "base": {"font_family": "courier_prime", "intensity": 0.65},
+        "content": {
+            "name": {"model": "sjvasquez", "bias": 3.0, "dropout": 0.0, "width": 1.2},
+            "place": {"model": "sjvasquez", "bias": 3.0, "dropout": 0.0, "width": 1.2},
+            "short_text": {"model": "sjvasquez", "bias": 3.0, "dropout": 0.0, "width": 1.2},
+            "long_text": {"model": "sjvasquez", "bias": 3.0, "dropout": 0.0, "width": 1.2},
+        },
+    },
+)
+
+
 def build_presets(models_available: dict[str, bool]) -> list[dict]:
     """Return the list of writing presets the web app offers, filtered to
     what is actually usable on this machine. Mirrors
@@ -89,6 +127,15 @@ def build_presets(models_available: dict[str, bool]) -> list[dict]:
                          "intensity": intensity, "writer": None, "bias": 0.75, "color": "#193787",
                          "width": 1.5, "pressure": 0.25, "dropout": 0.0, "text_policy": "normalize",
                          "filter_preset": filter_preset, "kind": "standard"})
+    from src.web.services import CONTENT_STYLE_PRESETS
+    for spec in (*CONTENT_STYLE_PRESETS, *EXPLORATION_CONTENT_PRESETS):
+        has_neural_content = any(override.get("model", "font") != "font" for override in spec["content"].values())
+        presets.append({"uid": spec["id"], "label": spec["label"], "model": "font",
+                        "font_family": spec["base"]["font_family"], "intensity": spec["base"]["intensity"],
+                        "writer": None, "bias": 0.75, "color": "#193787", "width": 1.5, "pressure": 0.25,
+                        "dropout": 0.0, "text_policy": "normalize", "filter_preset": "none",
+                        "kind": "neural" if has_neural_content else "standard",
+                        "content": spec["content"]})
     for preset in list_presets(DOCUMENTS_ROOT / "writing_presets.json"):
         settings = preset.get("settings", {})
         if settings.get("mode") == "mixed":
@@ -388,6 +435,7 @@ class Row:
     ai_eligible: bool = False
     timing_s: float | None = None
     crop_path: str | None = None
+    content_class: str | None = None
 
 
 MULTILINE_DATA_TYPES = {"address", "document"}
@@ -447,6 +495,22 @@ def run_one(document_key: str, document, definition: dict, preset: dict, seed: i
 
     rng = random.Random(f"{document_key}:{preset['uid']}:{seed}")
     pen = make_pen(preset)
+    content_fonts: dict[str, str] = {}
+    content_pens: dict[str, "NeuralPen | None"] = {}
+    content_intensity: dict[str, float] = {}
+    for content_class, override in preset.get("content", {}).items():
+        model = override.get("model", "font")
+        content_fonts[content_class] = override.get("font_family", preset["font_family"])
+        content_intensity[content_class] = override.get("intensity", preset["intensity"])
+        if model == "font" or NeuralPen is None:
+            content_pens[content_class] = None
+        else:
+            content_pens[content_class] = NeuralPen(
+                model=model, writer=override.get("writer"), bias=override.get("bias", 0.75),
+                color=override.get("color", "#193787"), width=override.get("width", 1.5),
+                pressure=override.get("pressure", 0.25), dropout=override.get("dropout", 0.0),
+                text_policy=override.get("text_policy", "normalize"),
+            )
     tmp_dir = out_dir / "_gen" / document_key / preset["uid"] / str(seed)
     tmp_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
@@ -456,6 +520,8 @@ def run_one(document_key: str, document, definition: dict, preset: dict, seed: i
             document.template, definition, selected_ids, tmp_dir, f"{document_key}_{seed}", rng,
             handwriting=True, handwriting_intensity=preset["intensity"], text_handwriting=True,
             neural_pen=pen, font_family=preset["font_family"], realistic_filters=False,
+            content_pens=content_pens or None, content_fonts=content_fonts or None,
+            content_intensity=content_intensity or None,
         )
     except Exception as exc:  # whole-document failure (e.g. unsupported field slipped through)
         elapsed = time.monotonic() - t0
@@ -509,6 +575,8 @@ def run_one(document_key: str, document, definition: dict, preset: dict, seed: i
                   not blank, blank, reason, value, None, ai_eligible=fid in ai_keys, timing_s=elapsed)
         row.is_checkbox = bool(entry.get("elements")) and data_type == "checkbox"
         row.element_count = element_count
+        semantic_key = (entry.get("semantic") or {}).get("key")
+        row.content_class = classify_content(data_type, semantic_key, value)
         row.field_shape = classify_field_shape(data_type, row.is_checkbox, element_count, entry.get("bbox") or f.get("bbox"))
         if row.is_checkbox:
             row.checkbox_checked_count = sum(1 for e in entry["elements"] if e.get("checked"))
@@ -984,6 +1052,13 @@ def build_summary(rows: list[Row], timings: list[dict], presets: list[dict], doc
             "checkbox_mean_ink_outside_frac": round(statistics.mean(mark_outside), 3) if mark_outside else None,
             "checkbox_multi_or_zero_mark_count": sum(1 for r in checkbox_rows if r.checkbox_checked_count != 1),
         }
+        by_class: dict[str, dict] = {}
+        for content_class in sorted({r.content_class for r in prows if r.content_class}):
+            class_rows = [r for r in prows if r.content_class == content_class]
+            class_cer = [r.cer_loose for r in class_rows if r.cer_loose is not None]
+            by_class[content_class] = {"n_rows": len(class_rows),
+                                       "mean_cer_loose": round(statistics.mean(class_cer), 3) if class_cer else None}
+        per_preset[p["uid"]]["by_content_class"] = by_class
 
     data_problems = {}
     for r in rows:
@@ -1061,6 +1136,11 @@ def build_report(summary: dict, rows: list[Row]) -> str:
                           f"stroke_width_px={info['checkbox_mean_stroke_width_px']} "
                           f"ink_outside_frac={info['checkbox_mean_ink_outside_frac']} "
                           f"multi_or_zero_mark={info['checkbox_multi_or_zero_mark_count']}")
+        by_class = info.get("by_content_class") or {}
+        if by_class:
+            class_parts = ", ".join(f"{cls}: n={cinfo['n_rows']} CER_loose={cinfo['mean_cer_loose']}"
+                                    for cls, cinfo in by_class.items())
+            lines.append(f"    by content class -- {class_parts}")
     lines.append("")
     lines.append("## Data problems")
     for k, v in sorted(summary["data_problems"].items(), key=lambda kv: -kv[1]):

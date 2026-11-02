@@ -28,7 +28,8 @@ from src.fonts import FONT_FAMILIES
 from src.web.models import GenerationOptions, Identifier, ModelPromote, ModelUpdate, SemanticDefinitionCreate, ShareCreate, Writing
 from src.web.palette import (CUSTOM_BASES, EDITOR_OPTIONS, GENERATION_RULES, ICON_NAMES, LAYOUT_PALETTE, PALETTE, TYPE_LABELS,
                              custom_field_config, custom_palette)
-from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, STANDARD_EDITS_DISABLED, Catalog, ServiceError,
+from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, PREVIEW_SAMPLE_CONTENT_CLASSES,
+                              STANDARD_EDITS_DISABLED, Catalog, ServiceError,
                               ai_slots, create_blank_model, create_model, duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key,
                               preview_strip, promote_model, render_writing_samples, realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count,
                               render_preview, revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping,
@@ -126,6 +127,39 @@ def validated(model: type[BaseModel], data: dict) -> Any:
         raise ServiceError(422, "validation_error", message) from exc
 
 
+CONTENT_CLASS_LABELS = {
+    "digits": "Números e códigos", "date": "Datas", "time": "Horas", "cpf_cnpj": "CPF/CNPJ",
+    "name": "Nomes", "place": "Endereços e locais", "short_text": "Textos curtos", "long_text": "Textos longos",
+}
+
+
+def content_overrides_state(form: FormData) -> dict:
+    """Parse the preset editor's "Estilo por tipo de conteúdo" rows into a
+    `Writing.content` dict. A row left on "Igual ao estilo principal" (its
+    model field empty) is left out, so that class simply inherits the main
+    style -- this is what keeps an old preset (every row on the default)
+    producing the same `content: null` as before this feature existed.
+
+    Each row picks a full style source, not just a font family: "font"
+    (typed or handwriting font family + intensity) or one of the neural
+    models (writer + bias/legibility), mirroring the main model selector."""
+    overrides: dict[str, dict] = {}
+    for content_class in CONTENT_CLASS_LABELS:
+        model = text(form, f"content_{content_class}_model")
+        if not model:
+            continue
+        if model == "font":
+            font_family = text(form, f"content_{content_class}_font_family")
+            if not font_family:
+                continue
+            overrides[content_class] = {"model": "font", "font_family": font_family,
+                                        "intensity": parsed(form, f"content_{content_class}_intensity", float, 0.65)}
+        else:
+            overrides[content_class] = {"model": model, "writer": parsed(form, f"content_{content_class}_writer", int),
+                                        "bias": parsed(form, f"content_{content_class}_bias", float, 0.75)}
+    return overrides
+
+
 def writing_state(form: FormData) -> dict:
     return {"model": text(form, "model") or "font", "font_family": text(form, "font_family") or "caveat",
             "handwriting": "handwriting" in form,
@@ -133,7 +167,8 @@ def writing_state(form: FormData) -> dict:
             "writer": parsed(form, "writer", int), "bias": parsed(form, "bias", float, 0.75),
             "color": text(form, "color") or "#193787", "width": parsed(form, "width", float, 1.5),
             "pressure": parsed(form, "pressure", float, 0.25), "dropout": parsed(form, "dropout", float, 0.0),
-            "text_policy": text(form, "text_policy") or "normalize"}
+            "text_policy": text(form, "text_policy") or "normalize",
+            "content": content_overrides_state(form) or None}
 
 
 def options_state(form: FormData) -> dict:
@@ -1491,7 +1526,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         grants = store.preset_grants(entry["id"]) if entry and entry["editable"] else 0
         return render(request, "preset_editor.html", page="presets", entry=entry, writing=writing, mode=mode, models=model_cards(),
                       info=MODEL_INFO, samples=PREVIEW_SAMPLES, retorno=valid_return(owner_id, retorno), rename=rename,
-                      grants=grants, link=None, characters=NEURAL_CHARACTERS)
+                      grants=grants, link=None, characters=NEURAL_CHARACTERS, content_classes=CONTENT_CLASS_LABELS)
 
     @router.get("/presets")
     async def presets_redirect():
@@ -1525,6 +1560,12 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         writing = model_defaults(model, writing) if text(form, "acao") == "padroes" else adapt_to_model(writing, model, text(form, "modelo_atual"))
         return render(request, "partials/writing_controls.html", writing=writing, info=MODEL_INFO, characters=NEURAL_CHARACTERS)
 
+    # Representative sample text for a content class that has no row in the
+    # base PREVIEW_SAMPLES (name/date/CPF/text) -- so a preset that overrides
+    # e.g. "digits" or "place" still gets a preview row for it.
+    EXTRA_CONTENT_SAMPLES = {"digits": "048125", "time": "14:35", "place": "São Paulo - SP",
+                            "long_text": "Texto descritivo mais longo para verificar o resultado."}
+
     @router.post("/presets/escrita/previa")
     async def preset_preview(request: Request, owner_id: Owner):
         form = await request.form()
@@ -1534,12 +1575,21 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         variations = variations if variations in {1, 2, 3} else 1
         if not available:
             return render(request, "partials/playground.html", rows=[], unavailable=reason, variations=variations, writing=writing)
-        texts = [sample for _, sample in PREVIEW_SAMPLES]
-        columns = [await run_in_threadpool(render_writing_samples, writing, texts, variation) for variation in range(variations)]
-        rows = [{"label": label, "text": sample, "cells": [
+        samples = list(zip(PREVIEW_SAMPLES, PREVIEW_SAMPLE_CONTENT_CLASSES))
+        # Add a preview row for any configured content class not already
+        # covered by the base samples, so every row in the "Estilo por tipo
+        # de conteúdo" section has a matching preview.
+        for content_class, sample_text in EXTRA_CONTENT_SAMPLES.items():
+            if content_class in (writing.content or {}):
+                samples.append(((CONTENT_CLASS_LABELS[content_class], sample_text), content_class))
+        texts = [sample for (_, sample), _ in samples]
+        content_classes = [content_class for _, content_class in samples]
+        columns = [await run_in_threadpool(render_writing_samples, writing, texts, variation, content_classes)
+                  for variation in range(variations)]
+        rows = [{"label": label, "text": sample, "content_class": content_classes[index], "cells": [
                     {**column[index], "image": "data:image/png;base64," + base64.b64encode(column[index]["image"]).decode() if column[index]["image"] else None}
                     for column in columns]}
-                for index, (label, sample) in enumerate(PREVIEW_SAMPLES)]
+                for index, ((label, sample), _) in enumerate(samples)]
         return render(request, "partials/playground.html", rows=rows, unavailable=None, variations=variations, writing=writing)
 
     @router.get("/presets/escrita/convite/{preset_id}")
