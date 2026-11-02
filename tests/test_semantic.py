@@ -25,7 +25,7 @@ registration.matricula registration.dnv_number registration.office.name registra
 registration.place.summary deceased.name deceased.sex deceased.birth_date deceased.age deceased.cpf deceased.mother_name
 deceased.father_name deceased.occupation deceased.residence.street deceased.residence.number deceased.residence.neighborhood
 deceased.residence.cep deceased.residence.municipality deceased.residence.uf deceased.residence.ibge death.date death.time
-death.place.establishment.name death.place.municipality death.place.uf death.place.ibge certifier.name certifier.registration
+death.place.establishment.name death.place.summary death.place.municipality death.place.uf death.place.ibge certifier.name certifier.registration
 deceased.naturalidade deceased.occupation_cbo death.type death.place.category death.medical_assistance death.autopsy certifier.role
 birth.pregnancy_type birth.delivery_type birth.cesarean_before_labor newborn.anomaly_status newborn.anomaly_description mother.occupation_cbo
 birth.twins twin.name_matricula death_registration.date death_registration.number death_registration.office.name

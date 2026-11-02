@@ -722,6 +722,9 @@ def death(record, rng: random.Random) -> dict[str, Any]:
         record.pick(rng, "death.place.establishment.name", establishment_pool) if establishment_pool else None)
     values["death.place.establishment.cnes"] = (
         record.draw("death.place.establishment.cnes", rng, lambda: digits(rng, 7)) if hospital else None)
+    values["death.place.summary"] = (
+        values["death.place.establishment.name"] if hospital
+        else "Domicílio" if category == "3" else "Via pública")
 
     if external:
         work_hour = values["death.time"].hour

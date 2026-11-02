@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CASAMENTO_CNJ_MAPPING = ROOT / "documents/certidao_casamento_cnj/mappings/mapeamento_certidao_casamento_cnj_v1.json"
 CASAMENTO_CNJ_TEMPLATE = ROOT / "documents/certidao_casamento_cnj/template.pdf"
 CASAMENTO_MAPPING = ROOT / "documents/certidao_casamento/mappings/mapeamento_certidao_casamento_v1.json"
-OBITO_MAPPING = ROOT / "documents/certidao_obito/mappings/mapeamento_certidao_obito_v1.json"
-NASCIMENTO_CNJ_MAPPING = ROOT / "documents/certidao_nascimento_cnj/mappings/mapeamento_certidao_nascimento_cnj_v1.json"
+OBITO_MAPPING = ROOT / "documents/certidao_obito/mappings/mapeamento_certidao_obito_v2.json"
+NASCIMENTO_CNJ_MAPPING = ROOT / "documents/certidao_nascimento_cnj/mappings/mapeamento_certidao_nascimento_cnj_v2.json"
 
 MARRIAGE_KEYS = (ENTITY_KEYS["spouse1"] + ENTITY_KEYS["spouse2"] + ENTITY_KEYS["marriage"]
                  + ENTITY_KEYS["marriage_registration"])
@@ -170,6 +170,38 @@ class MappingBindingTests(unittest.TestCase):
             plan = semantic_plan(definition["fields"], context)
             self.assertEqual(plan.issues, (), path)
             self.assertFalse(any(decision.invalid for decision in plan.decisions.values()), path)
+
+    def test_local_nascimento_matches_the_birth_establishment(self):
+        # "Local de nascimento" (certidao_nascimento_cnj) must agree with the same record's
+        # birth establishment, not an unrelated place -- regression for the bug where it was
+        # filled by a generic filler instead of being bound to a semantic key.
+        from src.semantic.data import LOCATION_PROFILES
+        for seed in range(300):
+            values = SemanticRecord(seed, "certidao_nascimento").resolve(ENTITY_KEYS["birth"])
+            self.assertTrue(values["birth.establishment.name"])
+            self.assertTrue(any(profile["city"] == values["birth.place.municipality"] for profile in LOCATION_PROFILES))
+
+    def test_local_falecimento_matches_the_death_place(self):
+        # "Local de falecimento" (certidao_obito) must agree with death.place.category/
+        # establishment: a hospital name when the death was in a hospital, and
+        # "Domicílio"/"Via pública" otherwise -- never a generic, unrelated place.
+        from src.semantic.data import LOCATION_PROFILES
+        seen_hospital = seen_domicilio = seen_via_publica = False
+        for seed in range(300):
+            values = SemanticRecord(seed, "declaracao_obito").resolve(ENTITY_KEYS["death"])
+            category = values["death.place.category"]
+            summary = values["death.place.summary"]
+            if category in ("1", "2"):
+                self.assertEqual(summary, values["death.place.establishment.name"])
+                seen_hospital = True
+            elif category == "3":
+                self.assertEqual(summary, "Domicílio")
+                seen_domicilio = True
+            else:
+                self.assertEqual(summary, "Via pública")
+                seen_via_publica = True
+            self.assertTrue(any(profile["city"] == values["death.place.municipality"] for profile in LOCATION_PROFILES))
+        self.assertTrue(seen_hospital and seen_domicilio and seen_via_publica)
 
     def test_three_casamento_cnj_documents_are_coherent(self):
         definition = json.loads(CASAMENTO_CNJ_MAPPING.read_text(encoding="utf-8"))
