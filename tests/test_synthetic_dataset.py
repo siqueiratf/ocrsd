@@ -180,7 +180,17 @@ class SyntheticValueTests(unittest.TestCase):
         self.assertEqual(image.mode, "RGBA")
         self.assertEqual(image.size, (48, 48))
         self.assertGreater(np.asarray(image.getchannel("A")).sum(), 0)
+        self.assertIn(metadata["rendering"]["mark_variant"], {"slash", "backslash", "x_combo"})
+
+    def test_legacy_checkbox_mark_stays_available(self):
+        image, metadata = render_checkbox_mark(
+            48, 48, random.Random(19), style=random_handwriting_style(random.Random(19)), mark_candidate="legacy",
+        )
+
+        self.assertEqual(image.size, (48, 48))
+        self.assertGreater(np.asarray(image.getchannel("A")).sum(), 0)
         self.assertIn(metadata["rendering"]["mark_variant"], {"middle_stroke", "upper_stroke", "vertical_stroke", "x"})
+        self.assertIn(metadata["rendering"]["requested_value"], {"I", "x"})
 
     def test_neural_render_retries_transient_model_failure(self):
         model = unittest.mock.Mock()

@@ -470,8 +470,12 @@ def _fit_mark_image(image: Image.Image, width: int, height: int, variant: str) -
         return canvas
     if variant in {"middle_stroke", "upper_stroke"}:
         target_width, target_height = max(1, round(width * 0.90)), max(1, round(height * 0.42))
-    elif variant == "x":
+    elif variant in {"x", "x_combo"}:
         target_width, target_height = max(1, round(width * 0.78)), max(1, round(height * 0.78))
+    elif variant in {"slash", "backslash"}:
+        # a single diagonal pen stroke, sized close to what a person actually draws
+        # inside a checkbox (not stretched to fill the whole box).
+        target_width, target_height = max(1, round(width * 0.58)), max(1, round(height * 0.85))
     else:
         target_width, target_height = max(1, round(width * 0.42)), max(1, round(height * 0.92))
     scale = min(target_width / image.width, target_height / image.height)
@@ -570,36 +574,106 @@ def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
     return canvas, {"backend": pen.model, "seeds": seeds, "stroke_points": total_points, "chunk_scale": overall_scale}
 
 
+# Candidate "slash_set": draw the mark as the "/" and/or "\" glyph of a handwriting font
+# (the pen stroke used to tick a checkbox), instead of the legacy "I"/"x" letter stroke.
+SLASH_VARIANTS = ("slash", "backslash", "x_combo")
+SLASH_CHARACTERS = {"slash": ("/",), "backslash": ("\\",), "x_combo": ("/", "\\")}
+# Candidate "legacy": the original behaviour (kept so both can be rendered from the same
+# seed and compared; see scripts/compare_checkbox_marks.py).
+LEGACY_VARIANTS = ("middle_stroke", "upper_stroke", "vertical_stroke", "x")
+
+# Default candidate per backend, chosen from the contact sheets and mark geometry of
+# scripts/compare_checkbox_marks.py (legacy vs slash_set, same seeds, DO and DNV boxes).
+DEFAULT_MARK_CANDIDATE = {
+    "sjvasquez": "slash_set", "wpvnteam": "slash_set",
+    "font": "slash_set",
+}
+
+
+def _hex_to_rgb(color: str) -> tuple[int, int, int]:
+    return tuple(int(color[index:index + 2], 16) for index in (1, 3, 5))
+
+
+def _mark_glyph_image(characters: tuple[str, ...], width: int, height: int, rng: random.Random,
+                      style: HandwritingStyle, intensity: float, font_family: str) -> Image.Image:
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    for character in characters:
+        glyph = render_handwritten_text(
+            character, width, height, rng, style=style, intensity=intensity, medium="pen", font_family=font_family,
+        )
+        canvas.alpha_composite(glyph)
+    return canvas
+
+
 def render_checkbox_mark(width: int, height: int, rng: random.Random,
                          style: HandwritingStyle | None = None,
                          intensity: float = 0.65,
                          neural_pen: NeuralPen | None = None,
                          handwriting_model=None,
                          render_rng: random.Random | None = None,
-                         font_family: str = DEFAULT_FONT_FAMILY) -> tuple[Image.Image, dict]:
-    width, height = max(1, int(width)), max(1, int(height))
-    variant = rng.choice(("middle_stroke", "upper_stroke", "vertical_stroke", "x"))
-    character = "x" if variant == "x" else "I"
-    rotation = rng.uniform(-8, 8)
-    if variant in {"middle_stroke", "upper_stroke"}:
-        rotation += rng.choice((-90, 90))
+                         font_family: str = DEFAULT_FONT_FAMILY,
+                         mark_candidate: str | None = None) -> tuple[Image.Image, dict]:
+    """Render one checked-box mark.
 
+    `mark_candidate` selects how the mark is drawn, so the old and new behaviour can be
+    compared from the same seed:
+      - "legacy": the original "I"/"x" letter stroke (neural pen or font handwriting).
+      - "slash_set": the "/" and/or "\\" pen-stroke glyph of a handwriting font (for
+        neural presets, tinted to the pen's own colour/width, since the neural models'
+        alphabet has no "/" or "\\" glyph to sample).
+      - None (default): uses DEFAULT_MARK_CANDIDATE for the active backend.
+    """
+    width, height = max(1, int(width)), max(1, int(height))
+    backend_key = neural_pen.model if neural_pen is not None else "font"
+    candidate = mark_candidate or DEFAULT_MARK_CANDIDATE.get(backend_key, "slash_set")
+    rotation = rng.uniform(-8, 8)
+
+    if candidate == "legacy":
+        variant = rng.choice(LEGACY_VARIANTS)
+        character = "x" if variant == "x" else "I"
+        if variant in {"middle_stroke", "upper_stroke"}:
+            rotation += rng.choice((-90, 90))
+        if neural_pen is not None:
+            if handwriting_model is None:
+                handwriting_model = load_model(neural_pen.model)
+            sample_rng = render_rng or rng
+            rendered = prepare_text(character, neural_pen.text_policy)
+            image, neural_metadata = render_neural_text(rendered, width, height, neural_pen, handwriting_model, sample_rng)
+            metadata = {
+                **neural_metadata, "backend": neural_pen.model, "mark_variant": variant,
+                "requested_value": character, "mark_candidate": candidate,
+            }
+        else:
+            image = render_handwritten_text(
+                character, width, height, rng, style=style, intensity=intensity, medium="pen", font_family=font_family,
+            )
+            metadata = {"backend": "font", "mark_variant": variant, "requested_value": character, "mark_candidate": candidate}
+        image = image.rotate(rotation, resample=Image.Resampling.BICUBIC, expand=True)
+        return _fit_mark_image(image, width, height, variant), {"rendering": metadata}
+
+    # "slash_set"
+    variant = rng.choice(SLASH_VARIANTS)
+    characters = SLASH_CHARACTERS[variant]
     if neural_pen is not None:
-        if handwriting_model is None:
-            handwriting_model = load_model(neural_pen.model)
-        sample_rng = render_rng or rng
-        rendered = prepare_text(character, neural_pen.text_policy)
-        image, neural_metadata = render_neural_text(rendered, width, height, neural_pen, handwriting_model, sample_rng)
-        backend = neural_pen.model
-        metadata = {
-            **neural_metadata, "backend": backend, "mark_variant": variant,
-            "requested_value": character,
-        }
-    else:
-        image = render_handwritten_text(
-            character, width, height, rng, style=style, intensity=intensity, medium="pen", font_family=font_family,
+        # The neural handwriting models' alphabet has no "/" or "\" glyph (see
+        # src/neural_handwriting.ALPHABET: it only has letters, digits and a few
+        # punctuation marks), so the neural pen itself cannot write these characters.
+        # Instead we draw them with the Homemade Apple handwriting font - whose "/" and
+        # "\" already look like a natural pen tick - tinted to the neural pen's own ink
+        # colour, and thickened to roughly the pen's stroke width, so the mark reads as
+        # the same hand as the rest of the field (this also targets the baseline finding
+        # that wpvnteam marks were unusually thin, since stroke thickness no longer
+        # depends on that model's own synthesis).
+        mark_style = HandwritingStyle(
+            ink=_hex_to_rgb(neural_pen.color), rotation=0.0, width_scale=1.0, size_scale=1.0,
+            spacing_scale=1.0, stroke_bias=1 if neural_pen.width >= 2.2 else 0, baseline_bias=0.0,
         )
-        metadata = {"backend": "font", "mark_variant": variant, "requested_value": character}
+        image = _mark_glyph_image(characters, width, height, rng, mark_style, 0.0, "homemade_apple")
+        metadata = {"backend": neural_pen.model, "mark_variant": variant, "requested_value": "".join(characters), "mark_candidate": candidate}
+    else:
+        mark_style = style or random_handwriting_style(rng, intensity, medium="pen")
+        image = _mark_glyph_image(characters, width, height, rng, mark_style, intensity, font_family)
+        metadata = {"backend": "font", "mark_variant": variant, "requested_value": "".join(characters), "mark_candidate": candidate}
     image = image.rotate(rotation, resample=Image.Resampling.BICUBIC, expand=True)
     return _fit_mark_image(image, width, height, variant), {"rendering": metadata}
 

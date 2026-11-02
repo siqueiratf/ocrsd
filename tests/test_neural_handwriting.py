@@ -87,7 +87,10 @@ class NeuralDatasetTests(unittest.TestCase):
             with patch("src.synthetic_dataset.load_model", return_value=model):
                 result = generate_dataset(template, mapping, {"choice"}, root / "out", 1, seed=42,
                                           neural_pen=NeuralPen(color="#ff0000", pressure=0, width=2))
-            model.sample.assert_called_once()
+            # Checkbox marks are now drawn as a tinted "/" "\" font glyph matched to the
+            # pen's colour (see render_checkbox_mark), not sampled from the neural model -
+            # the model's alphabet has no "/" or "\" glyph - so model.sample is not called.
+            model.sample.assert_not_called()
             with fitz.open(result[0].pdf_path) as document:
                 pixmap = document[0].get_pixmap()
                 rgb = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(100, 100, 3)
@@ -95,7 +98,7 @@ class NeuralDatasetTests(unittest.TestCase):
             truth = json.loads(result[0].json_path.read_text())
             rendering = truth["fields"][0]["elements"][0]["rendering"]
             self.assertEqual(rendering["backend"], "sjvasquez")
-            self.assertIn(rendering["mark_variant"], {"middle_stroke", "upper_stroke", "vertical_stroke", "x"})
+            self.assertIn(rendering["mark_variant"], {"slash", "backslash", "x_combo"})
 
     def test_models_keep_same_values_and_record_normalization(self):
         with tempfile.TemporaryDirectory() as temporary:
