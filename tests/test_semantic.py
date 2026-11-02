@@ -45,6 +45,17 @@ spouse1.name spouse1.name_after spouse1.nationality spouse1.naturalidade.municip
 spouse1.parents_names spouse2.birth_date spouse2.cpf spouse2.marital_status_before spouse2.name spouse2.name_after
 spouse2.nationality spouse2.naturalidade.municipality spouse2.naturalidade.uf spouse2.parents_names
 spouse1.age spouse2.age
+certifier.contact deceased.cns deceased.race deceased.schooling deceased.schooling_series deceased.marital_status_do
+death.cause.manner death.scenario death.cause.chain_id death.cause.a_text death.cause.a_cid death.cause.a_interval
+death.cause.b_text death.cause.b_cid death.cause.b_interval death.cause.c_text death.cause.c_cid
+death.cause.c_interval death.cause.d_text death.cause.d_cid death.cause.d_interval
+death.cause.ii1_text death.cause.ii1_cid death.cause.ii2_text death.cause.ii2_cid
+death.external.type death.external.work_accident death.external.source death.external.description
+death.external.place.municipality death.external.place.uf
+deceased.occurrence.address deceased.occurrence.number deceased.occurrence.complement deceased.occurrence.cep
+deceased.occurrence.neighborhood
+death.place.establishment.cnes certifier.iml_svo_municipality certifier.iml_svo_uf
+death_registration.witness1_name death_registration.witness2_name
 """.split()
 ADDRESS_PREFIXES = ("birth.place", "mother.residence", "deceased.residence", "death.place", "registration.office",
                     "death_registration.office", "burial", "deceased.naturalidade", "spouse1.naturalidade",

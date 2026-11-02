@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 
 VERSION = "2"
@@ -238,7 +239,85 @@ FIELDS = [
     _field("certifier.registration", "CRM do médico", "document_number", "Médico atestante",
            "Número de registro no conselho profissional (CRM), de 4 a 6 algarismos", DO, ("crm", "registro no conselho")),
     _field("certifier.role", "Condição do médico atestante", "text", "Médico atestante",
-           "Médico assistente no cenário sintético hospitalar", DO, ("obito atestado por medico",)),
+           "Médico assistente, substituto, IML ou SVO, de acordo com o cenário da morte", DO, ("obito atestado por medico",)),
+    _field("certifier.contact", "Meio de contato do médico atestante", "text", "Médico atestante",
+           "Telefone ou e-mail sintético do médico atestante", DO, ("meio de contato", "telefone", "contato")),
+    _field("deceased.cns", "Cartão SUS do falecido", "cns", "Falecido", "Número do Cartão Nacional de Saúde do falecido, com dígito verificador válido",
+           DO, ("cartao sus", "cns", "cartao nacional de saude")),
+    _field("deceased.race", "Raça/cor do falecido", "text", "Falecido", "Categoria de raça/cor autodeclarada do falecido", DO,
+           ("raca cor", "raca/cor")),
+    _field("deceased.schooling", "Escolaridade do falecido", "text", "Falecido",
+           "Nível de escolaridade plausível para a idade do falecido", DO, ("escolaridade",)),
+    _field("deceased.schooling_series", "Série concluída pelo falecido", "integer", "Falecido",
+           "Série/ano concluído (1 a 9), coerente com o nível de escolaridade", DO, ("serie concluida", "serie"), optional=True),
+    _field("deceased.marital_status_do", "Situação conjugal do falecido (opções da DO)", "text", "Falecido",
+           "Situação conjugal reclassificada nas 6 opções do formulário da DO", DO, ("situacao conjugal da do",),
+           ("deceased.marital_status",)),
+    _field("death.cause.manner", "Natureza do óbito", "text", "Causas", "Natural ou não natural (causa externa), conforme o cenário",
+           DO, ("natureza do obito", "morte natural ou nao natural")),
+    _field("death.scenario", "Cenário sintético do óbito", "text", "Causas",
+           "Identificador interno do cenário (ex.: natural_hospital, external_traffic) usado para gerar o registro; "
+           "não corresponde a nenhum campo impresso da DO", DO, ("cenario sintetico do obito",), optional=True),
+    _field("death.cause.chain_id", "Identificador da cadeia causal", "text", "Causas",
+           "Identificador interno da cadeia causal escolhida na biblioteca de cadeias", DO, ("cadeia causal",), optional=True),
+    _field("death.cause.a_text", "Causa imediata (linha a)", "text", "Causas", "Causa imediata da morte, CID coerente", DO,
+           ("causa imediata",), optional=True),
+    _field("death.cause.a_cid", "CID da linha a", "text", "Causas", "Código CID-10 da causa imediata", DO,
+           ("cid linha a",), optional=True),
+    _field("death.cause.a_interval", "Intervalo entre início e óbito (linha a)", "text", "Causas", "Intervalo decrescente em relação às linhas abaixo",
+           DO, ("intervalo linha a",), optional=True),
+    _field("death.cause.b_text", "Causa (linha b)", "text", "Causas", "Causa intermediária, devido à linha c", DO, ("causa linha b",), optional=True),
+    _field("death.cause.b_cid", "CID da linha b", "text", "Causas", "Código CID-10 da linha b", DO, ("cid linha b",), optional=True),
+    _field("death.cause.b_interval", "Intervalo (linha b)", "text", "Causas", "Intervalo da linha b", DO, ("intervalo linha b",), optional=True),
+    _field("death.cause.c_text", "Causa (linha c)", "text", "Causas", "Causa intermediária, devido à linha d", DO, ("causa linha c",), optional=True),
+    _field("death.cause.c_cid", "CID da linha c", "text", "Causas", "Código CID-10 da linha c", DO, ("cid linha c",), optional=True),
+    _field("death.cause.c_interval", "Intervalo (linha c)", "text", "Causas", "Intervalo da linha c", DO, ("intervalo linha c",), optional=True),
+    _field("death.cause.d_text", "Causa básica (linha d)", "text", "Causas", "Causa básica/de base da sequência causal", DO,
+           ("causa basica", "causa de base"), optional=True),
+    _field("death.cause.d_cid", "CID da linha d", "text", "Causas", "Código CID-10 da causa básica", DO, ("cid linha d",), optional=True),
+    _field("death.cause.d_interval", "Intervalo (linha d)", "text", "Causas", "Intervalo da linha d", DO, ("intervalo linha d",), optional=True),
+    _field("death.cause.ii1_text", "Parte II - condição contribuinte 1", "text", "Causas",
+           "Condição que contribuiu para a morte sem fazer parte da sequência causal", DO, ("condicao contribuinte 1",), optional=True),
+    _field("death.cause.ii1_cid", "CID da condição contribuinte 1", "text", "Causas", "Código CID-10 da condição contribuinte 1", DO,
+           ("cid condicao contribuinte 1",), optional=True),
+    _field("death.cause.ii2_text", "Parte II - condição contribuinte 2", "text", "Causas",
+           "Segunda condição contribuinte, quando aplicável", DO, ("condicao contribuinte 2",), optional=True),
+    _field("death.cause.ii2_cid", "CID da condição contribuinte 2", "text", "Causas", "Código CID-10 da condição contribuinte 2", DO,
+           ("cid condicao contribuinte 2",), optional=True),
+    _field("death.external.type", "Tipo da causa externa", "text", "Causa externa",
+           "Acidente, suicídio ou homicídio, coerente com a cadeia causal escolhida", DO, ("tipo de causa externa",),
+           optional=True),
+    _field("death.external.work_accident", "Acidente de trabalho", "text", "Causa externa",
+           "Sim/Não/Ignorado; sim apenas quando plausível pela ocupação e pelo horário", DO, ("acidente de trabalho",),
+           optional=True),
+    _field("death.external.source", "Fonte da informação da causa externa", "text", "Causa externa",
+           "Boletim de ocorrência, hospital, família etc.", DO, ("fonte da informacao",), optional=True),
+    _field("death.external.description", "Descrição sumária do evento", "text", "Causa externa",
+           "Descrição textual curta coerente com o tipo de causa externa e o local", DO, ("descricao sumaria do evento",),
+           optional=True),
+    *_address("death.external.place", "Causa externa", "local da causa externa", DO, ("do evento", "da ocorrencia externa"),
+              ("municipality", "uf")),
+    _field("deceased.occurrence.address", "Endereço da ocorrência fora do estabelecimento/residência", "text", "Óbito",
+           "Preenchido apenas quando o óbito ocorreu em domicílio diferente da residência ou em via pública", DO,
+           ("endereco da ocorrencia",), optional=True),
+    _field("deceased.occurrence.number", "Número do endereço da ocorrência", "house_number", "Óbito",
+           "Número do endereço da ocorrência, quando fora de estabelecimento", DO, ("numero da ocorrencia",), optional=True),
+    _field("deceased.occurrence.complement", "Complemento do endereço da ocorrência", "complement", "Óbito",
+           "Complemento do endereço da ocorrência, quando aplicável", DO, ("complemento da ocorrencia",), optional=True),
+    _field("deceased.occurrence.cep", "CEP da ocorrência", "cep", "Óbito", "CEP do endereço da ocorrência, quando fora de estabelecimento",
+           DO, ("cep da ocorrencia",), optional=True),
+    _field("deceased.occurrence.neighborhood", "Bairro da ocorrência", "text", "Óbito",
+           "Bairro do endereço da ocorrência, quando fora de estabelecimento", DO, ("bairro da ocorrencia",), optional=True),
+    _field("death.place.establishment.cnes", "Código CNES do estabelecimento do óbito", "cnes", "Óbito",
+           "Código CNES de 7 dígitos do estabelecimento do óbito", DO, ("codigo cnes",), optional=True),
+    _field("certifier.iml_svo_municipality", "Município do SVO/IML", "municipality", "Óbito",
+           "Município do SVO ou IML que atestou o óbito, quando aplicável", DO, ("municipio do atestante",), optional=True),
+    _field("certifier.iml_svo_uf", "UF do SVO/IML", "uf", "Óbito", "UF do SVO ou IML, quando aplicável", DO,
+           ("uf do atestante",), optional=True),
+    _field("death_registration.witness1_name", "Testemunha A", "name", "Registro do óbito",
+           "Primeira testemunha do registro civil do óbito", DO, ("testemunha a",)),
+    _field("death_registration.witness2_name", "Testemunha B", "name", "Registro do óbito",
+           "Segunda testemunha do registro civil do óbito", DO, ("testemunha b",)),
 ]
 FIELDS.extend([
     _field("newborn.race", "Raça/cor do recém-nascido", "text", "Recém-nascido",
@@ -459,6 +538,11 @@ FIELDS.extend([
            "UF da naturalidade do recém-nascido, do mesmo município de newborn.naturalidade", CERT,
            ("uf da naturalidade", "uf naturalidade"), ("newborn.naturalidade",)),
 ])
+# death.external.place.* is only filled for "Não natural" scenarios; mark optional after
+# construction since the _address() helper does not take an optional flag.
+_OPTIONAL_WHEN_SCENARIO_DEPENDENT = {"death.external.place.municipality", "death.external.place.uf"}
+FIELDS = [dataclasses.replace(field, optional=True) if field.key in _OPTIONAL_WHEN_SCENARIO_DEPENDENT else field
+         for field in FIELDS]
 REGISTRY: dict[str, SemanticField] = {field.key: field for field in FIELDS}
 ENTITY_KEYS: dict[str, tuple[str, ...]] = {
     entity: tuple(field.key for field in FIELDS if field.entity == entity) for entity in dict.fromkeys(field.entity for field in FIELDS)

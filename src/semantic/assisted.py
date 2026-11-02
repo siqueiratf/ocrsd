@@ -97,9 +97,12 @@ SLOTS: dict[str, tuple[Slot, ...]] = {
     "declaracao_obito": (
         Slot("deceased.name", "nome completo da pessoa falecida"),
         Slot("deceased.sex", "sexo da pessoa falecida", ("M", "F")),
-        Slot("deceased.age", "idade em anos completos na data do óbito", low=0, high=110),
-        Slot("deceased.occupation", "ocupação habitual (use 'Não se aplica' para menores de 14 anos)",
-             ("Não se aplica", *OCCUPATIONS)),
+        # high=102 (not 110): that's the oldest age any phase-1 cause-of-death chain's gate
+        # reaches (R5) — death() picks the scenario/chain consistently with this proposed age
+        # (see generators.death), so any age outside a chain's range would be unreachable.
+        Slot("deceased.age", "idade em anos completos na data do óbito; fase 1 é somente adulta (18 anos ou mais)",
+             low=18, high=102),
+        Slot("deceased.occupation", "ocupação habitual", ("Não se aplica", *OCCUPATIONS)),
         Slot("deceased.mother_name", "nome completo da mãe da pessoa falecida"),
         Slot("deceased.father_name", "nome completo do pai da pessoa falecida"),
         Slot("deceased.residence.municipality", "município de residência da pessoa falecida", CITIES),
@@ -137,7 +140,7 @@ SLOTS: dict[str, tuple[Slot, ...]] = {
 SCENARIOS: dict[str, tuple[tuple[str, float], ...]] = {
     "dnv": (("mãe adolescente", 1), ("mãe entre 20 e 34 anos", 6), ("mãe com 35 anos ou mais", 2), ("parto prematuro", 1),
             ("família de cidade grande", 2), ("parto em município diferente da residência", 1)),
-    "declaracao_obito": (("pessoa idosa", 6), ("adulto entre 30 e 59 anos", 3), ("adulto jovem", 1), ("criança", 0.3),
+    "declaracao_obito": (("pessoa idosa", 6), ("adulto entre 30 e 59 anos", 3), ("adulto jovem", 1),
                          ("óbito fora do município de residência", 1)),
     "certidao_casamento": (("casal jovem", 4), ("segundo casamento de pessoa divorciada", 2),
                            ("casal com mais de 70 anos", 1), ("casamento civil em cidade do interior", 2),

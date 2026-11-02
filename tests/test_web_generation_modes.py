@@ -236,7 +236,7 @@ class GenerationModeTests(unittest.TestCase):
         self.assertTrue(all(truths[0]["semantic_record"][key] == value for key, value in provenance["accepted"].items()))
         self.assertEqual(manifest["generation"]["documents"][0]["status"], "accepted")
 
-    def test_do_ai_generation_preserves_age_chronology_and_rejects_impossible_occupation(self):
+    def test_do_ai_generation_keeps_age_chronology_and_discards_ages_outside_the_adult_range(self):
         self.start_ai()
         draft = self.wizard("ai", count="1", document_type="do", fields=DO_FIELDS)
         self.assertEqual(self.hx("POST", "/geracao/gerar", data={"draft_id": draft}).status_code, 200)
@@ -251,14 +251,21 @@ class GenerationModeTests(unittest.TestCase):
         self.assertEqual(record["deceased.age"], died.year - born.year - ((died.month, died.day) < (born.month, born.day)))
         self.assertEqual(truths[0]["semantic_provenance"]["mode"], "ai")
 
+        # "contradictory" proposes deceased.age = 2, which the DO's AI slot now rejects outright
+        # (low=18 — phase 1 is adult-only, R5): the record still succeeds, but with the toddler
+        # age dropped rather than threaded through to an incoherent chain/occupation — the
+        # generator fills deceased.age from the cause-of-death chain's own (adult) range instead.
         FakeRecordModel.mode = "contradictory"
         draft = self.wizard("ai", count="1", document_type="do", fields=DO_FIELDS)
         self.assertEqual(self.hx("POST", "/geracao/gerar", data={"draft_id": draft}).status_code, 200)
-        rejected_job = self.app.state.store.list_jobs(self.owner)[0]
+        other_job = self.app.state.store.list_jobs(self.owner)[0]
         self.run_worker()
-        rejected = self.app.state.store.get(rejected_job["id"])
-        self.assertEqual(rejected["status"], "failed")
-        self.assertIn("A IA não produziu um registro válido", rejected["error"])
+        other = self.app.state.store.get(other_job["id"])
+        self.assertEqual(other["status"], "succeeded", other["error"])
+        _, other_truths = self.outputs(other_job["id"])
+        other_record = other_truths[0]["semantic_record"]
+        self.assertGreaterEqual(other_record["deceased.age"], 18)
+        self.assertNotIn("deceased.age", other_truths[0]["semantic_provenance"]["ai_keys"])
 
 
 class BuiltinMetadataTests(unittest.TestCase):

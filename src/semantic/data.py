@@ -51,6 +51,15 @@ ESTABLISHMENT_NAMES = (
     "Hospital e Maternidade São José", "Maternidade Nossa Senhora da Conceição", "Santa Casa de Misericórdia",
     "Hospital Santa Luzia", "Hospital Materno-Infantil", "Hospital São Lucas", "Maternidade Santa Mônica",
 )
+# Adult-admission establishments only (no maternity units) — used for the DO,
+# whose deaths in phase 1 are all adults; ESTABLISHMENT_NAMES above (DNV-oriented,
+# ~43% maternity) stays for birth documents.
+ADULT_ESTABLISHMENT_NAMES = (
+    "Hospital Municipal", "Hospital Regional", "Hospital Geral", "Hospital Universitário",
+    "Santa Casa de Misericórdia", "Hospital Santa Luzia", "Hospital São Lucas", "Hospital das Clínicas",
+    "Hospital de Pronto Socorro", "Hospital São Vicente de Paulo", "Hospital Nossa Senhora Auxiliadora",
+    "Hospital Evangélico",
+)
 REGISTRY_OFFICE_NAMES = (
     "Cartório de Registro Civil das Pessoas Naturais", "1º Ofício de Registro Civil das Pessoas Naturais",
     "2º Ofício de Registro Civil das Pessoas Naturais", "Cartório do 1º Subdistrito", "Cartório do 2º Subdistrito",

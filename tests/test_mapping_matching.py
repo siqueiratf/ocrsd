@@ -88,7 +88,7 @@ YES_NO = (("Sim", "1"), ("Não", "2"), ("Ignorado", "9"))
 DO_LABELS = [
     ("Tipo de óbito", "I", "checkbox", (("Fetal", "1"), ("Não Fetal", "2")), NEW),
     ("Data do óbito", "I", "digit_sequence", 8, "death.date"), ("Hora", "I", "digit_sequence", 4, "death.time"),
-    ("Cartão SUS", "I", "digit_sequence", 15, NEW), ("Naturalidade", "I", "text", 0, "deceased.naturalidade"),
+    ("Cartão SUS", "I", "digit_sequence", 15, "deceased.cns"), ("Naturalidade", "I", "text", 0, "deceased.naturalidade"),
     ("Nome do Falecido", "I", "text", 0, "deceased.name"), ("Nome do Pai", "I", "text", 0, "deceased.father_name"),
     ("Nome da Mãe", "I", "text", 0, "deceased.mother_name"),
     ("Data de nascimento", "I", "digit_sequence", 8, "deceased.birth_date"), ("Idade", "I", "text", 0, "deceased.age"),
@@ -104,7 +104,8 @@ DO_LABELS = [
     ("Município de residência", "II", "text", 0, "deceased.residence.municipality"),
     ("UF", "II", "text", 0, "deceased.residence.uf"),
     ("Local de ocorrência do óbito", "III", "checkbox", (("Hospital", "1"), ("Domicílio", "3"), ("Via pública", "4")), NEW),
-    ("Estabelecimento", "III", "text", 0, "death.place.establishment.name"), ("Código CNES", "III", "digit_sequence", 7, NEW),
+    ("Estabelecimento", "III", "text", 0, "death.place.establishment.name"),
+    ("Código CNES", "III", "digit_sequence", 7, "death.place.establishment.cnes"),
     ("Endereço da ocorrência, se fora do estabelecimento ou da residência (rua, praça, avenida, etc)", "III", "text", 0, NEW),
     ("CEP", "III", "digit_sequence", 8, NEW), ("Bairro/Distrito", "III", "text", 0, NEW),
     ("Município de ocorrência", "III", "text", 0, "death.place.municipality"), ("UF", "III", "text", 0, "death.place.uf"),
@@ -246,7 +247,7 @@ class MatchingTests(unittest.TestCase):
         uf = match_candidates([candidate("uf", "UF")], DO)[0]
         self.assertEqual((uf.status, uf.key), ("ambiguous", None))
         self.assertEqual({key for key, _ in uf.alternatives},
-                         {"deceased.residence.uf", "death.place.uf", "death_registration.office.uf"})
+                         {"deceased.residence.uf", "death.place.uf", "death.external.place.uf"})
         birth = candidate("nasc", "Data de Nascimento")
         self.assertEqual(match_candidates([birth], "dnv")[0].status, "ambiguous")
         relaxed = match_candidates([birth], "dnv", min_margin=0.1)[0]

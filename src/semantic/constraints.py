@@ -52,6 +52,18 @@ def _age_rule(person: str, event: str, title: str) -> Callable[[Mapping[str, Any
     return check
 
 
+def _scenario_consistency(values: Mapping[str, Any]) -> str | None:
+    hospital = values["death.place.category"] in ("1", "2")
+    external = values["death.cause.manner"] == "Não natural"
+    if hospital and values["death.medical_assistance"] != "1":
+        return "óbito em estabelecimento de saúde precisa ter assistência médica"
+    if hospital and values["death.autopsy"] not in ("1", "2"):
+        return "necrópsia precisa ser sim ou não quando o óbito ocorre em estabelecimento de saúde"
+    if external and values["death.autopsy"] not in ("1", "2"):
+        return "necrópsia precisa ser sim ou não em causas externas"
+    return None
+
+
 def _mother_age(values: Mapping[str, Any]) -> str | None:
     if values["mother.birth_date"] >= values["birth.date"]:
         return "a mãe precisa ter nascido antes do nascimento do recém-nascido"
@@ -289,11 +301,10 @@ CONSTRAINTS: tuple[Constraint, ...] = (
                lambda v: None if v["deceased.naturalidade"] in
                {f"{profile['city']} - {profile['uf']}" for profile in LOCATION_PROFILES}
                else "naturalidade não pertence a um município e UF do catálogo"),
-    *(Constraint(f"cenario_hospitalar:{key}", (key,), (REGISTRY[key].entity,),
-                 lambda values, key=key, expected=expected: None if values[key] == expected
-                 else f"{key} precisa ser {expected} neste cenário hospitalar")
-      for key, expected in (("death.type", "2"), ("death.place.category", "1"),
-                            ("death.medical_assistance", "1"), ("death.autopsy", "2"), ("certifier.role", "1"))),
+    Constraint("obito_nao_fetal", ("death.type",), ("death",),
+               lambda v: None if v["death.type"] == "2" else "death.type precisa ser 2 (não fetal) no cenário adulto da fase 1",),
+    Constraint("cenario_e_local_de_ocorrencia", ("death.place.category", "death.medical_assistance", "death.autopsy",
+                                                  "death.cause.manner"), ("death",), _scenario_consistency),
     Constraint("idade_da_mae_no_nascimento", ("mother.birth_date", "mother.age", "birth.date"), ("mother",), _mother_age),
     Constraint("idade_do_pai_no_nascimento", ("father.birth_date", "father.age", "birth.date"), ("father",),
                _age_rule("father", "birth.date", "pai")),

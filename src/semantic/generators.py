@@ -9,12 +9,135 @@ from typing import Any, Callable
 
 from src.field_rules import DNV_TEST_PREFIX, cpf, format_date
 from src.semantic.constraints import REFERENCE_END, completed_years
-from src.semantic.data import (COMPLEMENTS, ESTABLISHMENT_NAMES, FEMALE_ASSOCIATED_FIRST_NAMES, ISSUERS, LOCATION_PROFILES,
-                               MALE_ASSOCIATED_FIRST_NAMES, OCCUPATIONS, OCCUPATION_CODES, PROFILES_BY_IBGE, REGISTRY_OFFICE_NAMES, SURNAMES)
+from src.semantic.data import (ADULT_ESTABLISHMENT_NAMES, COMPLEMENTS, ESTABLISHMENT_NAMES, FEMALE_ASSOCIATED_FIRST_NAMES,
+                               ISSUERS, LOCATION_PROFILES, MALE_ASSOCIATED_FIRST_NAMES, OCCUPATIONS, OCCUPATION_CODES,
+                               PROFILES_BY_IBGE, REGISTRY_OFFICE_NAMES, SURNAMES)
 from src.semantic.present import format_matricula
+from src.semantic.cause_chains import CAUSE_CHAINS, PART2_POOL, format_interval
 
 EVENT_START, EVENT_END = date(1980, 1, 1), REFERENCE_END
 MINUTES = tuple(time(minute // 60, minute % 60) for minute in range(24 * 60))
+
+RACES = ("Branca", "Preta", "Amarela", "Parda", "Indígena")
+RACE_WEIGHTS = (43, 10, 1, 45, 1)
+SCHOOLING_LEVELS = ("Sem escolaridade", "Fundamental I (1ª a 4ª Série)", "Fundamental II (5ª a 8ª Série)",
+                    "Médio (antigo 2º grau)", "Superior incompleto", "Superior completo")
+SCHOOLING_SERIES_RANGE = {SCHOOLING_LEVELS[1]: (1, 4), SCHOOLING_LEVELS[2]: (5, 8), SCHOOLING_LEVELS[3]: (1, 3)}
+# Occupations whose title legally/practically requires a completed degree (M4):
+# schooling is derived from occupation for these, not drawn independently.
+OCCUPATION_MIN_SCHOOLING = {
+    "Engenheira": "Superior completo", "Advogada": "Superior completo", "Professora": "Superior completo",
+    "Enfermeiro": "Superior completo", "Técnico em informática": "Médio (antigo 2º grau)",
+    "Auxiliar administrativo": "Médio (antigo 2º grau)",
+}
+
+
+def _schooling_for_age(rng: random.Random, age: int, occupation: str | None = None) -> tuple[str, int | None]:
+    minimum = OCCUPATION_MIN_SCHOOLING.get(occupation or "")
+    if minimum == "Superior completo":
+        return "Superior completo", None
+    if minimum == "Médio (antigo 2º grau)":
+        level = rng.choices(SCHOOLING_LEVELS[3:], (60, 20, 20))[0]
+        series_range = SCHOOLING_SERIES_RANGE.get(level)
+        return level, rng.randint(*series_range) if series_range else None
+    if age < 5:
+        return SCHOOLING_LEVELS[0], None
+    if age < 7:
+        levels, weights = SCHOOLING_LEVELS[:2], (60, 40)
+    elif age < 15:
+        levels, weights = SCHOOLING_LEVELS[:3], (10, 40, 50)
+    else:
+        levels, weights = SCHOOLING_LEVELS, (8, 15, 22, 30, 10, 15)
+    level = rng.choices(levels, weights[:len(levels)])[0]
+    series_range = SCHOOLING_SERIES_RANGE.get(level)
+    series = rng.randint(*series_range) if series_range else None
+    return level, series
+
+
+_CAUSE_LINE_LETTERS = ("a", "b", "c", "d")
+PLACE_DIGIT = {"1": "9", "2": "9", "3": "0", "4": "4"}  # DO field 20 category -> W-Y 4th-character place digit
+# Only W00-Y34 use the 4th character for the place of occurrence; V01-V99 uses it for the
+# victim's role/accident mechanism, so the table already stores the complete V code (R3).
+_PLACE_DIGIT_CID = re.compile(r"^[WXY][0-9]{2}$")
+_UNIT_MINUTES = {"minutos": 1, "horas": 60, "dias": 1440, "semanas": 10080, "meses": 43200, "anos": 525600}
+# Scenarios where Part II comorbidities are medically plausible as mere contributors (R2/m-e):
+# falls at any age may have chronic comorbidities; natural disease deaths may too. Homicide,
+# suicide and traffic deaths get Part II only in the rare case already modelled by the low
+# "Não natural" weight below — restricted further to falls so gunshot/stabbing deaths don't
+# carry an implausible "Hipertensão arterial" line.
+_PART2_ELIGIBLE_EXTERNAL = {"external_fall"}
+
+
+def _place_coded_cid(base_cid: str, category: str) -> str:
+    if _PLACE_DIGIT_CID.fullmatch(base_cid):
+        return f"{base_cid}.{PLACE_DIGIT.get(category, '9')}"
+    return base_cid
+
+
+def _ordered_intervals(rng: random.Random, part1: list) -> dict[int, int]:
+    """Sample each line's interval value so they are non-decreasing from ``a`` to ``d`` in
+    minutes, by construction (R1): walk from ``d`` (longest) down to ``a`` (shortest), capping
+    each line's range at the minutes of the line already sampled below it. Lines sharing a
+    `group` id (near-simultaneous events) reuse one sampled value."""
+    shared: dict[int, int] = {}
+    values: dict[int, int] = {}
+    cap_minutes: int | None = None
+    for index in reversed(range(len(part1))):
+        line = part1[index]
+        if line is None:
+            continue
+        if line.group and line.group in shared:
+            value = shared[line.group]
+        else:
+            hi = line.hi
+            if cap_minutes is not None:
+                hi = max(line.lo, min(line.hi, cap_minutes // _UNIT_MINUTES[line.unit]))
+            value = rng.randint(line.lo, hi)
+            if line.group:
+                shared[line.group] = value
+        values[index] = value
+        line_minutes = value * _UNIT_MINUTES[line.unit]
+        cap_minutes = line_minutes if cap_minutes is None else min(cap_minutes, line_minutes)
+    return values
+
+
+def _render_chain(rng: random.Random, chain, category: str, scenario: str | None) -> dict[str, Any]:
+    """Render a chosen CauseChain's Part I/II into the death.cause.* fields.
+
+    Text variants are sampled per record (variety); interval numbers are sampled so they stay
+    non-decreasing from ``a`` to ``d`` (R1, see `_ordered_intervals`). W00-Y34 external-cause
+    codes get the 4th "place of occurrence" character appended from the DO's own field 20
+    (`category`); V01-V99 codes are stored complete in the table (R3). Part II never repeats a
+    Part I code/category and is restricted to scenarios where a comorbidity is plausible (R2/m-e).
+    """
+    part1 = list(chain.part1) + [None] * (4 - len(chain.part1))
+    interval_values = _ordered_intervals(rng, part1)
+    values: dict[str, Any] = {"death.cause.chain_id": chain.chain_id}
+    used_cids = set()
+    for index, (letter, line) in enumerate(zip(_CAUSE_LINE_LETTERS, part1)):
+        if line is None:
+            values[f"death.cause.{letter}_text"] = None
+            values[f"death.cause.{letter}_cid"] = None
+            values[f"death.cause.{letter}_interval"] = None
+            continue
+        values[f"death.cause.{letter}_text"] = rng.choice(line.text_variants)
+        values[f"death.cause.{letter}_cid"] = _place_coded_cid(line.cid, category)
+        values[f"death.cause.{letter}_interval"] = format_interval(line.unit, interval_values[index])
+        base = line.cid.split(".")[0]
+        used_cids.add(base)  # base ICD-10 category, so E11.2 also excludes E11.9 (same disease)
+        if base == "I11":
+            used_cids.add("I10")  # hypertensive heart disease already implies the hypertension
+    part2_eligible = chain.manner == "Natural" or scenario in _PART2_ELIGIBLE_EXTERNAL
+    pool = [line for line in PART2_POOL if line.cid.split(".")[0] not in used_cids] if part2_eligible else []
+    rng.shuffle(pool)
+    count_options, count_weights = ((0, 1), (90, 10)) if chain.manner == "Não natural" else ((0, 1, 2), (35, 45, 20))
+    count = rng.choices(count_options, count_weights)[0] if part2_eligible else 0
+    chosen = (pool[:count] + [None, None])[:2]
+    values["death.cause.ii1_text"] = chosen[0].text_variants[0] if chosen[0] else None
+    values["death.cause.ii1_cid"] = chosen[0].cid if chosen[0] else None
+    values["death.cause.ii2_text"] = chosen[1].text_variants[0] if chosen[1] else None
+    values["death.cause.ii2_cid"] = chosen[1].cid if chosen[1] else None
+    return values
 
 
 def _weights(low: int, high: int, bands: tuple[tuple[int, float], ...]) -> tuple[float, ...]:
@@ -146,6 +269,13 @@ def age_and_birth_date(record, rng: random.Random, person: str, on: date, ages: 
     age = record.pick(rng, f"{person}.age", ages, weights)
     born = record.pick(rng, f"{person}.birth_date", birth_dates_for_age(age, on))
     return completed_years(born, on), born
+
+
+def age_and_birth_date_in_range(record, rng: random.Random, person: str, on: date, lo: int, hi: int) -> tuple[int, date]:
+    """Like age_and_birth_date, but drawing uniformly from [lo, hi] (a chosen chain's own
+    age gate) instead of the general population pyramid — used so the DO's deceased age is
+    always inside the cause-of-death chain's plausible range, by construction."""
+    return age_and_birth_date(record, rng, person, on, range(lo, hi + 1), tuple(1.0 for _ in range(lo, hi + 1)))
 
 
 def gestational_history(rng: random.Random, pick: Callable, age: int) -> dict[str, int]:
@@ -342,15 +472,168 @@ def registration(record, rng: random.Random) -> dict[str, Any]:
     }
 
 
+EXTERNAL_SOURCE_BY_SCENARIO = {
+    "external_traffic": "Boletim de Ocorrência", "external_fall": "Boletim de Ocorrência",
+    "external_homicide": "Boletim de Ocorrência", "external_suicide": "Família",
+}
+EXTERNAL_DESCRIPTIONS = {
+    ("external_traffic", "hospital"): "Vítima de acidente de trânsito, socorrida e encaminhada ao hospital, onde veio a óbito.",
+    ("external_traffic", "public"): "Vítima de acidente de trânsito, com óbito no local, em via pública.",
+    ("external_fall", "hospital"): "Vítima de queda, socorrida e encaminhada ao hospital, onde veio a óbito.",
+    ("external_fall", "home_own"): "Vítima de queda no próprio domicílio.",
+    ("external_fall", "home_other"): "Vítima de queda em domicílio.",
+    ("external_fall", "public"): "Vítima de queda em via pública.",
+    ("external_homicide", "public"): "Vítima de agressão física, com óbito no local, em via pública.",
+    ("external_homicide", "home_own"): "Vítima de agressão física no próprio domicílio.",
+    ("external_homicide", "home_other"): "Vítima de agressão física em domicílio.",
+    ("external_homicide", "hospital"): "Vítima de agressão física, socorrida e encaminhada ao hospital, onde veio a óbito.",
+    ("external_suicide", "home_own"): "Vítima de lesão autoprovocada intencionalmente, encontrada no próprio domicílio.",
+    ("external_suicide", "home_other"): "Vítima de lesão autoprovocada intencionalmente, encontrada em domicílio.",
+    ("external_suicide", "hospital"): ("Vítima de lesão autoprovocada intencionalmente, socorrida e encaminhada "
+                                       "ao hospital, onde veio a óbito."),
+    ("external_suicide", "public"): "Vítima de lesão autoprovocada intencionalmente em via pública.",
+}
+UF_DDD = {"AC": "68", "AL": "82", "AP": "96", "AM": "92", "BA": "71", "CE": "85", "DF": "61", "ES": "27", "GO": "62",
+         "MA": "98", "MT": "65", "MS": "67", "MG": "31", "PA": "91", "PB": "83", "PR": "41", "PE": "81", "PI": "86",
+         "RJ": "21", "RN": "84", "RS": "51", "RO": "69", "RR": "95", "SC": "48", "SP": "11", "SE": "79", "TO": "63"}
+
+
+def _place_group(category: str, own_home: bool) -> str:
+    if category in ("1", "2"):
+        return "hospital"
+    if category == "3":
+        return "home_own" if own_home else "home_other"
+    return "public"
+
+
+def _own_residence_draw(rng: random.Random) -> bool:
+    return rng.random() < 0.85
+
+
 def death(record, rng: random.Random) -> dict[str, Any]:
+    from src.semantic.cause_chains import chains_for_scenario
+    from src.semantic.death_scenarios import ADULT_SCENARIOS, SCENARIOS_BY_ID, pick_place, pick_scenario
+
+    is_do = record.context == "declaracao_obito"
+    # The template is "Versão 01/10" (2010); restrict DO deaths to the period that version
+    # covers (M5) — this also keeps every DO death inside the Cartão Nacional de Saúde era
+    # (CNS exists since 1996) without a separate date cutoff for field 3.
+    event_start = date(2011, 1, 1) if is_do else EVENT_START
     profile = pick_profile(record, rng, "death.place", parts=("municipality", "uf", "ibge"))
-    return {
-        "death.date": record.pick(rng, "death.date", DateSpan(EVENT_START, EVENT_END)),
+
+    scenario = chain = None
+    category, hospital, external, manner = "1", True, False, "Natural"
+    if is_do:
+        # When the AI (or any caller) required a specific deceased.age, the scenario/chain must
+        # be picked consistently with it (R5): never draw a scenario/chain pair whose age gate
+        # excludes the required age, so deceased() (which draws age from the chosen chain's own
+        # range) can always satisfy the requirement on the first try.
+        required_ages = record.required_values("deceased.age") if hasattr(record, "required_values") else None
+        if required_ages:
+            target_age = min(required_ages)
+            eligible = [(sid, c) for sid in SCENARIOS_BY_ID for c in chains_for_scenario(sid)
+                       if c.min_age <= target_age <= c.max_age]
+        else:
+            eligible = None
+        if eligible:
+            pair_weights = [SCENARIOS_BY_ID[sid].weight * c.weight for sid, c in eligible]
+            scenario, chain = rng.choices(eligible, pair_weights)[0]
+        else:
+            scenario = record.draw("death.scenario", rng, lambda: pick_scenario(rng).scenario_id)
+            # Scenario -> chain FIRST (never crossing scenario or manner — B1/B2), then place
+            # consistent with the chosen chain's setting (hospital-only chains force a hospital
+            # place; everything else follows the scenario's own place distribution — M1).
+            candidates = chains_for_scenario(scenario)
+            chain = rng.choices(candidates, weights=[c.weight for c in candidates])[0]
+        picked = SCENARIOS_BY_ID[scenario]
+        manner = picked.manner
+        external = manner == "Não natural"
+        if chain.setting == "hospital":
+            category = rng.choices(["1", "2"], (90, 10))[0]
+        else:
+            category = pick_place(rng, picked)
+        hospital = category in ("1", "2")
+
+    # Whether a category-"3" (domicílio) death happened in the deceased's OWN residence (~85%,
+    # field 22 blank, field 51 says "próprio domicílio") or a different address (~15%, field 22
+    # filled with a profile street, field 51 says "em domicílio") — R4. Shared via record.link so
+    # deceased() (which renders field 22) and death() (which renders field 51's text) agree.
+    own_home = category == "3" and record.link("death.own_residence", _own_residence_draw)
+
+    values: dict[str, Any] = {
+        "death.date": record.pick(rng, "death.date", DateSpan(event_start, EVENT_END)),
         "death.time": record.pick(rng, "death.time", MINUTES),
-        "death.type": "2", "death.place.category": "1", "death.medical_assistance": "1", "death.autopsy": "2",
-        "death.place.establishment.name": record.pick(rng, "death.place.establishment.name", ESTABLISHMENT_NAMES),
+        "death.type": "2",
+        "death.place.category": category,
+        "death.cause.manner": manner,
+        "death.scenario": scenario,
         **address("death.place", profile, "", ("municipality", "uf", "ibge")),
     }
+
+    if is_do:
+        # Certifier role / necropsy / medical assistance are one deterministic function of
+        # (manner, hospital, assistance, chain.course) — never drawn independently — so external
+        # deaths are always IML + necropsy "Sim" (CPP art. 162), natural home deaths without
+        # assistance go to the SVO (necropsy "Sim"), and the IML is never used for a natural
+        # death, nor the SVO for a hospital death (B4). A home death from a chronic, long-
+        # diagnosed chain (neoplasms, Alzheimer, DPOC...) almost always had medical assistance
+        # (R2); a home death from a sudden chain (IAM, AVC, HSA...) plausibly did not.
+        # certifier() mirrors this same rule to pick the role.
+        if external:
+            values["death.medical_assistance"] = "1" if hospital else rng.choices(["2", "1"], (92, 8))[0]
+            values["death.autopsy"] = "1"
+        elif hospital:
+            values["death.medical_assistance"] = rng.choices(["1", "2"], (95, 5))[0]
+            values["death.autopsy"] = rng.choices(["2", "1"], (97, 3))[0]  # m-d: rare outside the SVO/IML
+        elif chain.course == "chronic":
+            values["death.medical_assistance"] = rng.choices(["1", "2"], (90, 10))[0]
+            values["death.autopsy"] = "1" if values["death.medical_assistance"] == "2" else rng.choices(["2", "1"], (97, 3))[0]
+        else:
+            values["death.medical_assistance"] = rng.choices(["1", "2"], (30, 70))[0]
+            values["death.autopsy"] = "1" if values["death.medical_assistance"] == "2" else rng.choices(["2", "1"], (70, 30))[0]
+    else:
+        values["death.medical_assistance"] = "1"
+        values["death.autopsy"] = "2"
+
+    values["death.place.establishment.name"] = (
+        record.pick(rng, "death.place.establishment.name", ADULT_ESTABLISHMENT_NAMES if is_do else ESTABLISHMENT_NAMES)
+        if hospital else None)
+    values["death.place.establishment.cnes"] = (
+        record.draw("death.place.establishment.cnes", rng, lambda: digits(rng, 7)) if hospital else None)
+
+    if external:
+        work_hour = values["death.time"].hour
+        is_work_accident = (scenario in ("external_traffic", "external_fall") and 7 <= work_hour <= 18
+                            and rng.random() < 0.12)
+        place_group = _place_group(category, own_home)
+        values.update({
+            "death.external.type": chain.external_type,
+            "death.external.work_accident": "1" if is_work_accident else "2",
+            "death.external.source": "Hospital" if hospital else EXTERNAL_SOURCE_BY_SCENARIO[scenario],
+            "death.external.description": EXTERNAL_DESCRIPTIONS[(scenario, place_group)],
+            "death.external.place.municipality": profile["city"], "death.external.place.uf": profile["uf"],
+        })
+    else:
+        values.update({
+            "death.external.type": None, "death.external.work_accident": None, "death.external.source": None,
+            "death.external.description": None, "death.external.place.municipality": None, "death.external.place.uf": None,
+        })
+
+    if is_do:
+        values.update(_render_chain(rng, chain, category, scenario))
+    else:
+        values.update({f"death.cause.{letter}_{suffix}": None
+                       for letter in _CAUSE_LINE_LETTERS for suffix in ("text", "cid", "interval")})
+        values.update({"death.cause.chain_id": None, "death.cause.ii1_text": None, "death.cause.ii1_cid": None,
+                       "death.cause.ii2_text": None, "death.cause.ii2_cid": None})
+    return values
+
+
+MARITAL_TO_DO = {
+    "SOLTEIRO(A)": "Solteiro", "CASADO(A)": "Casado", "VIÚVO(A)": "Viúvo",
+    "DIVORCIADO(A)": "Separado judicialmente/divorciado",
+    "SEPARADO(A) JUDICIALMENTE": "Separado judicialmente/divorciado", "UNIÃO ESTÁVEL": "União estável",
+}
 
 
 def _DECEASED_MARITAL_WEIGHTS(age: int) -> tuple[tuple[str, ...], tuple[float, ...]]:
@@ -361,14 +644,56 @@ def _DECEASED_MARITAL_WEIGHTS(age: int) -> tuple[tuple[str, ...], tuple[float, .
     return options, weights
 
 
+def _occurrence_address(record, rng: random.Random, category: str, own_home: bool, profile: dict) -> dict[str, Any]:
+    """Field 22/23/24 ("endereço da ocorrência, se fora do estabelecimento OU DA RESIDÊNCIA").
+
+    When the death happened at the deceased's own home (category "3", ~85% of home deaths —
+    `own_home`, shared with death()/field 51 via record.link), the DO form wants this block
+    BLANK: field 22 is for an occurrence outside the establishment OR the residence, so a death
+    in the deceased's own residence never fills it (R4). The remaining ~15% of home deaths (a
+    different address, e.g. a relative's home) and every via-pública death (category "4") use
+    the SAME address generator as the residence — the death municipality's own profile
+    street/CEP/neighborhood (R4) — instead of a 5-item generic street list.
+    """
+    if category not in ("3", "4") or own_home:
+        return {"deceased.occurrence.address": None, "deceased.occurrence.number": None,
+               "deceased.occurrence.complement": None, "deceased.occurrence.cep": None,
+               "deceased.occurrence.neighborhood": None}
+    return {
+        "deceased.occurrence.address": profile["street"],
+        "deceased.occurrence.number": house_number(record, rng, "deceased.occurrence.number"),
+        "deceased.occurrence.complement": (record.pick(rng, "deceased.occurrence.complement", COMPLEMENTS)
+                                           if rng.random() < 0.3 else None),
+        "deceased.occurrence.cep": profile["cep"], "deceased.occurrence.neighborhood": profile["neighborhood"],
+    }
+
+
 def deceased(record, rng: random.Random) -> dict[str, Any]:
-    age, born = age_and_birth_date(record, rng, "deceased", record.value("death.date"), DECEASED_AGES, DECEASED_AGE_WEIGHTS)
-    sex = record.pick(rng, "deceased.sex", ("M", "F"), (52, 48))
+    is_do = record.context == "declaracao_obito"
+    on = record.value("death.date")
+    if is_do:
+        from src.semantic.cause_chains import CAUSE_CHAINS
+        chain_id = record.value("death.cause.chain_id")
+        chain = next(c for c in CAUSE_CHAINS if c.chain_id == chain_id)
+        age, born = age_and_birth_date_in_range(record, rng, "deceased", on, chain.min_age, chain.max_age)
+        sex = chain.sex or record.pick(rng, "deceased.sex", ("M", "F"), (52, 48))
+    else:
+        age, born = age_and_birth_date(record, rng, "deceased", on, DECEASED_AGES, DECEASED_AGE_WEIGHTS)
+        sex = record.pick(rng, "deceased.sex", ("M", "F"), (52, 48))
     name = record.draw("deceased.name", rng, lambda: person_name(record, rng, sex))
     mother_name, father_name = parent_names(record, rng, name)
-    residence = pick_profile(record, rng, "deceased.residence", favoring(profile_of(record, "death.place"), 0.7))
+    category = record.value("death.place.category") if is_do else None
+    # Home deaths (category "3") must be in the deceased's own residence city (M1) — a death at
+    # home is, by definition, in the municipality the person lived in.
+    residence_bias = 1.0 if (is_do and category == "3") else 0.7
+    residence = pick_profile(record, rng, "deceased.residence", favoring(profile_of(record, "death.place"), residence_bias))
     birthplace = rng.choice(LOCATION_PROFILES)
-    occupation = "Não se aplica" if age < 14 else record.pick(rng, "deceased.occupation", OCCUPATIONS)
+    # "Estudante" is implausible for an elderly DO death (M4) — exclude it from the pool once
+    # the person is well past typical student age in the DO context.
+    occupation_pool = tuple(o for o in OCCUPATIONS if o != "Estudante") if (is_do and age >= 65) else OCCUPATIONS
+    occupation = "Não se aplica" if age < 14 else record.pick(rng, "deceased.occupation", occupation_pool)
+    residence_fields = address("deceased.residence", residence, house_number(record, rng, "deceased.residence.number"),
+                               ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge"))
     values = {
         "deceased.name": name, "deceased.sex": sex, "deceased.birth_date": born, "deceased.age": age,
         "deceased.cpf": record.draw("deceased.cpf", rng, lambda: cpf_digits(rng)),
@@ -378,11 +703,27 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
         "deceased.father_name": record.draw("deceased.father_name", rng, lambda: father_name),
         "deceased.parents_names": f"{mother_name}; {father_name}",
         "deceased.occupation": occupation, "deceased.occupation_cbo": OCCUPATION_CODES.get(occupation),
-        **address("deceased.residence", residence, house_number(record, rng, "deceased.residence.number"),
-                  ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge")),
+        **residence_fields,
     }
+    if is_do:
+        death_profile = profile_of(record, "death.place")
+        own_home = category == "3" and record.link("death.own_residence", _own_residence_draw)
+        values.update(_occurrence_address(record, rng, category, own_home, death_profile))
+    else:
+        values.update({"deceased.occurrence.address": None, "deceased.occurrence.number": None,
+                       "deceased.occurrence.complement": None, "deceased.occurrence.cep": None,
+                       "deceased.occurrence.neighborhood": None})
+    # The Cartão Nacional de Saúde only exists from 1996+: for the DO this is moot (deaths are
+    # already restricted to >= 2011, M5), but the generic path keeps the old unconditional draw.
+    values["deceased.cns"] = (record.draw("deceased.cns", rng, lambda: cns_digits(rng))
+                              if (not is_do or on >= date(1997, 1, 1)) else None)
+    values["deceased.race"] = record.pick(rng, "deceased.race", RACES, RACE_WEIGHTS)
+    schooling, series = _schooling_for_age(rng, age, occupation if is_do else None)
+    values["deceased.schooling"] = schooling
+    values["deceased.schooling_series"] = series
     marital_options, marital_weights = _DECEASED_MARITAL_WEIGHTS(age)
     marital = record.pick(rng, "deceased.marital_status", marital_options, marital_weights)
+    values["deceased.marital_status_do"] = MARITAL_TO_DO.get(marital, "Ignorada")
     married_like = marital in {"CASADO(A)", "VIÚVO(A)", "UNIÃO ESTÁVEL"}
     spouse_sex = "F" if sex == "M" else "M"
     values["deceased.marital_status"] = marital
@@ -419,14 +760,46 @@ def death_registration(record, rng: random.Random) -> dict[str, Any]:
     values["death_registration.declarant_name"] = record.draw("death_registration.declarant_name", rng,
                                                                lambda: person_name(record, rng, sex))
     values["death_registration.matricula"] = build_matricula(rng, day.year, "4")
+    values["death_registration.witness1_name"] = record.draw("death_registration.witness1_name", rng,
+                                                              lambda: person_name(record, rng, rng.choice(("F", "M"))))
+    values["death_registration.witness2_name"] = record.draw("death_registration.witness2_name", rng,
+                                                              lambda: person_name(record, rng, rng.choice(("F", "M"))))
     return values
 
 
 def certifier(record, rng: random.Random) -> dict[str, Any]:
     sex = rng.choice(("F", "M"))
-    return {"certifier.name": record.draw("certifier.name", rng, lambda: person_name(record, rng, sex)),
-            "certifier.registration": record.draw("certifier.registration", rng, lambda: str(rng.randint(1000, 999999))),
-            "certifier.role": "1"}
+    is_do = record.context == "declaracao_obito"
+    if is_do:
+        # Mirrors the exact same facts death() used to derive necropsy (B4): external deaths
+        # always go to the IML; a natural death at home without medical assistance goes to the
+        # SVO; everything else (hospital, or home WITH assistance) is a regular assistente/
+        # substituto. This never produces IML for a natural death, nor SVO for a hospital one.
+        manner = record.value("death.cause.manner")
+        hospital = record.value("death.place.category") in ("1", "2")
+        assistance = record.value("death.medical_assistance")
+        if manner == "Não natural":
+            role = "3"
+        elif not hospital and assistance == "2":
+            role = "4"
+        elif hospital:
+            role = rng.choices(["1", "2"], (85, 15))[0]
+        else:
+            role = rng.choices(["1", "2"], (70, 30))[0]
+    else:
+        role = rng.choices(["1", "2", "3", "4"], (80, 10, 5, 5))[0]
+    iml_svo = role in ("3", "4")
+    profile = profile_of(record, "death.place") if iml_svo else None
+    ddd = UF_DDD.get(record.value("death.place.uf"), "61")
+    return {
+        "certifier.name": record.draw("certifier.name", rng, lambda: person_name(record, rng, sex)),
+        "certifier.registration": record.draw("certifier.registration", rng, lambda: str(rng.randint(1000, 999999))),
+        "certifier.role": role,
+        "certifier.contact": record.draw("certifier.contact", rng,
+                                         lambda: f"({ddd}) 9{rng.randint(1000, 9999)}-{rng.randint(1000, 9999)}"),
+        "certifier.iml_svo_municipality": profile["city"] if iml_svo else None,
+        "certifier.iml_svo_uf": profile["uf"] if iml_svo else None,
+    }
 
 
 def build_matricula(rng: random.Random, year: int, livro: str) -> str:

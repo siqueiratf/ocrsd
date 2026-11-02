@@ -121,6 +121,22 @@ class SemanticRecord:
             allowed = tuple(allowed)
         self._requires.setdefault(key, []).append((allowed, reason))
 
+    def required_values(self, key: str) -> set | None:
+        """The finite set of explicitly required values for `key` (e.g. an AI-proposed age), or
+        None when unconstrained or constrained only by a predicate (not a finite set). Used by
+        generators that must pick an upstream choice (e.g. the DO cause-of-death chain)
+        consistently with a value required downstream (R5)."""
+        rules = self._requires.get(key)
+        if not rules:
+            return None
+        finite = [allowed for allowed, _ in rules if not callable(allowed)]
+        if not finite:
+            return None
+        result = set(finite[0])
+        for allowed in finite[1:]:
+            result &= set(allowed)
+        return result
+
     def allows(self, key: str, value: Any) -> bool:
         for allowed, _ in self._requires.get(key, ()):
             try:
