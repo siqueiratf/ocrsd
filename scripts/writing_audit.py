@@ -42,7 +42,7 @@ from src.document_types import discover_document_types  # noqa: E402
 from src.field_rules import apply_shared_rules  # noqa: E402
 from src.synthetic_dataset import generate_document  # noqa: E402
 from src.writing_presets import list_presets  # noqa: E402
-from src.semantic.assisted import ai_coverage  # noqa: E402
+from src.semantic.assisted import ai_coverage, name_sex_mismatch  # noqa: E402
 
 try:
     from src.neural_handwriting import NeuralPen
@@ -926,6 +926,27 @@ def check_coherence(snapshot: dict) -> list[str]:
     name_by_key = {k: v for k, v in snapshot.items() if isinstance(v, str) and v.strip() and k.endswith(".name")
                    and not any(part in k for part in ("office.", "establishment."))}
     roles = {re.sub(r"\.name$", "", k): v for k, v in name_by_key.items()}
+
+    # name vs sex (R-3.3): an AI-proposed name whose first given name is unambiguously
+    # associated with the OTHER sex than the role's own `.sex` field -- catches the newborn
+    # "João Pedro ..." / sex="F" case the real-call audit found, using the same name lists and
+    # heuristic as src.semantic.assisted.name_sex_mismatch so both the generation-time guard and
+    # this post-hoc audit agree on what counts as a mismatch.
+    for role, name_value in roles.items():
+        sex_value = snapshot.get(f"{role}.sex")
+        if isinstance(sex_value, str) and name_sex_mismatch(name_value, sex_value.strip().upper()):
+            issues.append("nome_inconsistente_com_sexo")
+
+    # chronological order among custom AI-authored dates (R-3.3): custom `ai.*` field ids (e.g.
+    # "ai.data_lavratura" / "ai.data_fechamento" of a procuração) don't match the key-suffix
+    # convention the generic date-ordering check above relies on, so a closing/ending date before
+    # an opening/drafting date of the same document slips through it entirely.
+    ai_dates = {k: _parse_any_date(v) for k, v in snapshot.items() if k.startswith("ai.")}
+    ai_dates = {k: v for k, v in ai_dates.items() if v is not None}
+    opening = [v for k, v in ai_dates.items() if any(h in k.lower() for h in ("lavratura", "abertura", "emissao", "inicio"))]
+    closing = [v for k, v in ai_dates.items() if any(h in k.lower() for h in ("fechamento", "encerramento", "termino", "conclusao"))]
+    if opening and closing and min(closing) < max(opening):
+        issues.append("data_ai_fora_de_ordem")
     for alias in ("parent1", "parent2"):
         if alias in roles and roles[alias] in (roles.get("mother"), roles.get("father")):
             del roles[alias]

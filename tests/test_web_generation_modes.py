@@ -205,7 +205,10 @@ class GenerationModeTests(unittest.TestCase):
         self.assertIn("Reprodução de registros da IA", replay_details.text)
         self.assertIn("fake", replay_details.text)
 
-    def test_invalid_ai_output_fails_job_with_diagnostic(self):
+    def test_invalid_ai_output_falls_back_to_deterministic_generation_and_job_succeeds(self):
+        # item 2: a document whose AI-constrained registry record never validates must not fail
+        # the whole job any more -- it falls back to the deterministic generator for that one
+        # document, and the fallback is recorded in its provenance.
         self.start_ai()
         FakeRecordModel.mode = "invalid"
         draft = self.wizard("ai", count="1")
@@ -213,10 +216,12 @@ class GenerationModeTests(unittest.TestCase):
         job = self.app.state.store.list_jobs(self.owner)[0]
         self.run_worker()
         row = self.app.state.store.get(job["id"])
-        self.assertEqual(row["status"], "failed")
-        self.assertTrue(row["error"].startswith("A geração assistida por IA falhou: A IA não produziu um registro válido"), row["error"])
-        self.assertIn("A geração assistida por IA falhou", self.hx("GET", f'/resultados/{job["id"]}').text)
-        self.assertEqual(self.hx("POST", f'/resultados/{job["id"]}/reproduzir').status_code, 422)
+        self.assertEqual(row["status"], "succeeded", row["error"])
+        manifest, truths = self.outputs(job["id"])
+        provenance = truths[0]["semantic_provenance"]
+        self.assertEqual(provenance["validation"]["status"], "fallback")
+        self.assertIn("registry_fallback", provenance)
+        self.assertEqual(manifest["generation"]["documents"][0]["status"], "fallback")
 
     def test_partial_ai_response_records_which_values_were_generated_by_ai(self):
         self.start_ai()

@@ -480,5 +480,204 @@ class WebGenericAiEndToEndTests(unittest.TestCase):
         self.assertEqual(replay_truth["semantic_provenance"]["mode"], "ai_replay")
 
 
+class EverySlotChoiceSatisfiableTests(unittest.TestCase):
+    """Item 1: every choice the AI is offered for a registry slot must be realizable by the
+    deterministic generator -- otherwise plan.apply rejects it on every attempt and
+    (pre-fix) the whole job used to fail (see certidao_casamento_cnj's nationality and
+    property_regime slots in var/audit/ai_real/report.md, section 3.1)."""
+
+    def test_every_offered_choice_is_satisfiable_by_the_generator(self):
+        from src.semantic.record import SemanticRecord
+        from src.semantic.assisted import SLOTS, OCCUPATION_SLOT_KEYS, OCCUPATION_OPPOSITE_FORM
+
+        unsatisfiable = []
+        for context, slots in SLOTS.items():
+            for slot in slots:
+                if not slot.choices:
+                    continue
+                for choice in slot.choices:
+                    allowed = (choice, OCCUPATION_OPPOSITE_FORM[choice]) if (
+                        slot.key in OCCUPATION_SLOT_KEYS and choice in OCCUPATION_OPPOSITE_FORM) else (choice,)
+                    ok = False
+                    for seed in range(20):
+                        record = SemanticRecord(seed=seed, context=context)
+                        record.require(slot.key, allowed, "valor proposto pela IA")
+                        try:
+                            record.resolve([slot.key])
+                            ok = True
+                            break
+                        except Exception:
+                            continue
+                    if not ok:
+                        unsatisfiable.append(f"{context}:{slot.key}={choice!r}")
+        self.assertEqual(unsatisfiable, [], f"choices the generator can never produce: {unsatisfiable}")
+
+
+class RegistryFallbackTests(unittest.TestCase):
+    """Item 2: a single document whose AI-constrained registry record can never validate must
+    fall back to a deterministic record (and record it in provenance) instead of raising and
+    failing the whole job."""
+
+    def test_unsatisfiable_registry_slot_falls_back_instead_of_raising(self):
+        # Always answer with no usable values at all for the registry batch: every attempt hits
+        # the "poucos valores válidos" guard, the retry budget is exhausted, and (pre-fix)
+        # AssistedRecords.__call__ would raise AssistedGenerationError, failing the whole job even
+        # though nothing is actually wrong with the other, already-generated documents.
+        def always_empty(payload):
+            return {}
+
+        fields_path = ROOT / "documents/certidao_casamento_cnj/modelo.json"
+        if not fields_path.is_file():
+            self.skipTest("mapeamento de certidão de casamento não encontrado neste checkout")
+        mapping_id = json.loads(fields_path.read_text(encoding="utf-8"))["active_mapping"]
+        mapping_path = ROOT / f"documents/certidao_casamento_cnj/mappings/{mapping_id}.json"
+        definition = json.loads(mapping_path.read_text(encoding="utf-8"))
+        selected = {str(field["field_id"]) for field in definition["fields"] if not field.get("unsupported_reason")}
+        assistant = FakeAssistant(always_empty)
+        factory = AssistedRecords(assistant, fields=definition["fields"], dpi=definition.get("dpi", 300), attempts=2)
+        with tempfile.TemporaryDirectory() as directory:
+            generated = generate_dataset(ROOT / "documents/certidao_casamento_cnj/template.pdf", mapping_path, selected,
+                                         Path(directory) / "out", 1, seed=205, record_factory=factory)
+            truth = json.loads(generated[0].json_path.read_text(encoding="utf-8"))
+            self.assertEqual(truth["semantic_provenance"]["validation"]["status"], "fallback")
+            self.assertIn("registry_fallback", truth["semantic_provenance"])
+            self.assertEqual(truth["semantic_record"]["spouse1.nationality"], "BRASILEIRA")
+
+
+class HonorificAndNameSexTests(unittest.TestCase):
+    def test_check_name_strips_honorific_prefixes(self):
+        from src.semantic.assisted import check_name
+
+        self.assertEqual(check_name("Dr. João Pedro Silveira"), ("João Pedro Silveira", None))
+        self.assertEqual(check_name("Dra. Fernanda Lima"), ("Fernanda Lima", None))
+        self.assertEqual(check_name("Doutora Ana Souza"), ("Ana Souza", None))
+
+    def test_name_sex_mismatch_flags_crossing_unambiguous_names(self):
+        from src.semantic.assisted import name_sex_mismatch
+
+        self.assertTrue(name_sex_mismatch("João Pedro Vasconcelos", "F"))
+        self.assertTrue(name_sex_mismatch("Maria Clara Souza", "M"))
+        self.assertFalse(name_sex_mismatch("João Pedro Vasconcelos", "M"))
+        self.assertFalse(name_sex_mismatch("Maria Clara Souza", "F"))
+        self.assertFalse(name_sex_mismatch("", "F"))
+
+    def test_fake_ai_run_rejects_name_crossing_the_deterministic_sex_then_retries(self):
+        calls = []
+
+        def sex_crossing_then_fixed(payload):
+            values = {}
+            for campo in payload["campos"]:
+                key = campo["chave"]
+                if key == "newborn.name":
+                    values[key] = "Pedro Henrique Souza" if len(calls) else "Maria Clara Souza"
+                elif "opcoes" in campo:
+                    values[key] = campo["opcoes"][0]  # newborn.sex -> "M"
+                elif "intervalo" in campo:
+                    values[key] = sum(campo["intervalo"]) // 2
+                else:
+                    values[key] = "Carlos Souza"
+            calls.append(1)
+            return values
+
+        mapping_id = json.loads((ROOT / "documents/dnv/modelo.json").read_text(encoding="utf-8"))["active_mapping"]
+        mapping_path = ROOT / f"documents/dnv/mappings/{mapping_id}.json"
+        definition = json.loads(mapping_path.read_text(encoding="utf-8"))
+        selected = {str(field["field_id"]) for field in definition["fields"] if not field.get("unsupported_reason")}
+        assistant = FakeAssistant(sex_crossing_then_fixed)
+        factory = AssistedRecords(assistant, fields=definition["fields"], dpi=definition.get("dpi", 300), attempts=3)
+        with tempfile.TemporaryDirectory() as directory:
+            generated = generate_dataset(ROOT / "documents/dnv/template.pdf", mapping_path, selected,
+                                         Path(directory) / "out", 1, seed=204, record_factory=factory)
+            truth = json.loads(generated[0].json_path.read_text(encoding="utf-8"))
+            self.assertEqual(truth["semantic_record"]["newborn.name"], "Pedro Henrique Souza")
+            self.assertEqual(truth["semantic_record"]["newborn.sex"], "M")
+            self.assertEqual(truth["semantic_provenance"]["validation"]["status"], "accepted")
+
+    def test_name_sex_check_does_not_flag_a_relationship_name_sharing_the_entity_prefix(self):
+        # Regression: "deceased.mother_name"/"deceased.father_name" share the "deceased." prefix
+        # with "deceased.sex", but they name a DIFFERENT person (the deceased's parents) -- the
+        # real-call confirmation run for `do` found this wrongly rejecting 4/6 documents (every
+        # one where the AI-proposed deceased.sex was "M" and deceased.mother_name was, correctly,
+        # a female name) before the key was restricted to literal ".name" suffixes.
+        def male_deceased_with_mother_name(payload):
+            values = {}
+            for campo in payload["campos"]:
+                key = campo["chave"]
+                if key == "deceased.sex":
+                    values[key] = "M"
+                elif key == "deceased.mother_name":
+                    values[key] = "Maria Clara Souza"
+                elif key == "deceased.name":
+                    values[key] = "Carlos Eduardo Souza"
+                elif "opcoes" in campo:
+                    values[key] = campo["opcoes"][0]
+                elif "intervalo" in campo:
+                    values[key] = sum(campo["intervalo"]) // 2
+                else:
+                    values[key] = "Fernando Alves"
+            return values
+
+        mapping_id = json.loads((ROOT / "documents/do/modelo.json").read_text(encoding="utf-8"))["active_mapping"]
+        mapping_path = ROOT / f"documents/do/mappings/{mapping_id}.json"
+        definition = json.loads(mapping_path.read_text(encoding="utf-8"))
+        selected = {str(field["field_id"]) for field in definition["fields"] if not field.get("unsupported_reason")}
+        assistant = FakeAssistant(male_deceased_with_mother_name)
+        factory = AssistedRecords(assistant, fields=definition["fields"], dpi=definition.get("dpi", 300), attempts=1)
+        with tempfile.TemporaryDirectory() as directory:
+            generated = generate_dataset(ROOT / "documents/do/do.pdf", mapping_path, selected,
+                                         Path(directory) / "out", 1, seed=402, record_factory=factory)
+            truth = json.loads(generated[0].json_path.read_text(encoding="utf-8"))
+            self.assertEqual(truth["semantic_provenance"]["validation"]["status"], "accepted")
+            self.assertEqual(truth["semantic_record"]["deceased.mother_name"], "Maria Clara Souza")
+            self.assertEqual(truth["semantic_record"]["deceased.sex"], "M")
+
+
+class GenericSlotChoiceCapTests(unittest.TestCase):
+    """Item 3: an enum/allowed_values field must not be rejected by the bbox-derived length cap
+    for one of its own legitimate (long) choices."""
+
+    def test_allowed_value_longer_than_bbox_capacity_is_not_truncated(self):
+        field = {"field_id": "tipo_documento", "label": "Tipo de documento", "data_type": "enum",
+                 "validation": {"allowed_values": ["CARTEIRA DE IDENTIDADE (RG)", "PASSAPORTE",
+                                                   "CARTEIRA NACIONAL DE HABILITAÇÃO (CNH)"]},
+                 # a box only wide enough for a single short word at 300dpi
+                 "bbox": [0, 0, 150, 30]}
+        slot = build_generic_slots([field], dpi=300)[0]
+        self.assertIsNone(slot.max_length)
+        value, error = validate_generic_value(slot, "CARTEIRA NACIONAL DE HABILITAÇÃO (CNH)")
+        self.assertIsNone(error)
+        self.assertEqual(value, "CARTEIRA NACIONAL DE HABILITAÇÃO (CNH)")
+
+
+class IdentifierDistinctnessTests(unittest.TestCase):
+    """Item 6: an invented identifier (passport number, etc.) must not repeat across documents
+    of the same job -- the simpler of the two coherent fixes item 6 allows (validate
+    distinctness instead of a deterministic seed-based generator)."""
+
+    def test_repeated_passport_number_is_rejected_and_differs_on_retry(self):
+        field = {"field_id": "outorgado_numero_documento", "label": "Número do passaporte do outorgado",
+                 "description": "Número do passaporte do outorgado", "data_type": "text", "bbox": [0, 0, 900, 60]}
+        calls = {"n": 0}
+
+        def repeats_then_varies(payload):
+            calls["n"] += 1
+            return {"outorgado_numero_documento": "AB1234567" if calls["n"] % 2 else f"CD{calls['n']:07d}"}
+
+        assistant = FakeAssistant(repeats_then_varies)
+        factory = AssistedRecords(assistant, fields=[field], dpi=300, attempts=3)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mapping = _mapping(root, [field])
+            first = generate_dataset(_template(root), mapping, {"outorgado_numero_documento"}, root / "out1", 1, seed=1,
+                                     record_factory=factory)
+            second = generate_dataset(_template(root), mapping, {"outorgado_numero_documento"}, root / "out2", 1, seed=2,
+                                      record_factory=factory)
+            truth1 = json.loads(first[0].json_path.read_text())
+            truth2 = json.loads(second[0].json_path.read_text())
+            values1 = {e["field_id"]: e["value"] for e in truth1["fields"]}
+            values2 = {e["field_id"]: e["value"] for e in truth2["fields"]}
+            self.assertNotEqual(values1["outorgado_numero_documento"], values2["outorgado_numero_documento"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -127,6 +127,22 @@ class WritingAuditMetricsTest(unittest.TestCase):
         issues = check_coherence({"birth.place.ibge": "3304557", "birth.place.uf": "SP"})  # 33 = RJ, not SP
         self.assertIn("municipio_uf_inconsistente", issues)
 
+    def test_coherence_flags_name_inconsistent_with_sex(self):
+        # R-3.3: the real-call audit found "João Pedro ..." paired with sex="F" (and vice versa)
+        # accepted because name and sex were independent AI slots with no cross-check.
+        issues = check_coherence({"newborn.name": "João Pedro Vasconcelos", "newborn.sex": "F"})
+        self.assertIn("nome_inconsistente_com_sexo", issues)
+        issues = check_coherence({"newborn.name": "Maria Clara Souza", "newborn.sex": "F"})
+        self.assertNotIn("nome_inconsistente_com_sexo", issues)
+
+    def test_coherence_flags_ai_dates_out_of_chronological_order(self):
+        # Custom "ai.*" field ids (procuração closing/drafting dates) don't match the
+        # key-suffix convention the generic date-ordering check relies on.
+        issues = check_coherence({"ai.data_lavratura": "2024-03-15", "ai.data_fechamento": "2022-03-22"})
+        self.assertIn("data_ai_fora_de_ordem", issues)
+        issues = check_coherence({"ai.data_lavratura": "2024-03-15", "ai.data_fechamento": "2024-03-22"})
+        self.assertNotIn("data_ai_fora_de_ordem", issues)
+
     def test_cer_basic(self):
         self.assertEqual(cer("abc", "abc"), 0.0)
         self.assertAlmostEqual(cer("abd", "abc"), 1 / 3, places=3)

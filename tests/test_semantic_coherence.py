@@ -399,6 +399,12 @@ class AiOccupationAgreesWithSexTests(unittest.TestCase):
                     key = campo["chave"]
                     if key == "mother.occupation":
                         values[key] = "Enfermeiro"  # canonical, masculine, requires inflection for the mother (F)
+                    elif key == "newborn.name":
+                        # newborn.sex resolves to its first "opcoes" entry ("M") below, so the name
+                        # must agree with that sex or assisted.py's name/sex coherence check
+                        # (R-3.3) rejects it and the whole document falls back to a deterministic
+                        # mother.occupation, which is not what this test is exercising.
+                        values[key] = "Pedro Henrique Souza"
                     elif "opcoes" in campo:
                         values[key] = campo["opcoes"][0]
                     elif "intervalo" in campo:

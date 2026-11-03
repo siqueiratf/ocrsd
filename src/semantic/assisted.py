@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from datetime import date, time, datetime
 from typing import Any, Iterable, Protocol
 
-from src.semantic.data import LOCATION_PROFILES, OCCUPATION_CODES, OCCUPATION_OPPOSITE_FORM, OCCUPATIONS, UF_VALUES
+from src.semantic.data import (FEMALE_ASSOCIATED_FIRST_NAMES, LOCATION_PROFILES, MALE_ASSOCIATED_FIRST_NAMES,
+                               OCCUPATION_CODES, OCCUPATION_OPPOSITE_FORM, OCCUPATIONS, UF_VALUES)
 from src.semantic.plan import SemanticPlan, semantic_plan
 from src.semantic.present import validation_rules
 from src.semantic.record import SemanticRecord
@@ -39,6 +40,15 @@ OCCUPATION_CHOICES = tuple(dict.fromkeys((*OCCUPATIONS, *OCCUPATION_CODES)))
 OCCUPATION_SLOT_KEYS = frozenset({"mother.occupation", "deceased.occupation"})
 CONNECTORS = frozenset({"da", "das", "de", "do", "dos", "e"})
 NAME_WORD = re.compile(r"^[A-ZÀ-Ý][a-zà-ÿ]+(?:['-][A-Za-zÀ-ÿ][a-zà-ÿ]+)?$")
+# R-f: the model sometimes prefixes a professional's name with an honorific (Dr./Dra./
+# Doutor(a)/Sr./Sra.) even though SYSTEM_PROMPT already asks for none. Stripping it here (instead
+# of rejecting the whole name and burning a retry) fixes the ~45% rejection rate observed on
+# certifier.name in the real-call audit without weakening the "no titles" rule itself.
+HONORIFIC_PREFIX = re.compile(r"^(?:dra?|doutora?|sra?|senhora?)\.?\s+", re.IGNORECASE)
+_FEMALE_FIRST_NAMES = {unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().casefold()
+                       for name in FEMALE_ASSOCIATED_FIRST_NAMES}
+_MALE_FIRST_NAMES = {unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().casefold()
+                     for name in MALE_ASSOCIATED_FIRST_NAMES}
 DOCUMENT_TITLES = {"dnv": "Declaração de Nascido Vivo (DNV)", "declaracao_obito": "Declaração de Óbito (DO)"}
 AI_KEY_PREFIX = "ai."
 _AI_KEY_SUFFIX = {"sex": "sex", "uf": "uf", "cep": "cep"}
@@ -129,19 +139,29 @@ SLOTS: dict[str, tuple[Slot, ...]] = {
         Slot("spouse2.name", "nome completo do segundo cônjuge no momento da habilitação"),
         Slot("spouse1.age", "idade do primeiro cônjuge em anos completos na celebração", low=16, high=95),
         Slot("spouse2.age", "idade do segundo cônjuge em anos completos na celebração", low=16, high=95),
-        Slot("spouse1.nationality", "nacionalidade do primeiro cônjuge",
-             ("BRASILEIRA", "PORTUGUESA", "ITALIANA", "ESPANHOLA", "ARGENTINA", "ANGOLANA", "JAPONESA")),
-        Slot("spouse2.nationality", "nacionalidade do segundo cônjuge",
-             ("BRASILEIRA", "PORTUGUESA", "ITALIANA", "ESPANHOLA", "ARGENTINA", "ANGOLANA", "JAPONESA")),
+        # R-3.1: the deterministic generator (generators.SPOUSE_NATIONALITIES) only ever produces
+        # "BRASILEIRA" -- offering the AI a wider set of nationalities here made any foreign pick
+        # permanently unsatisfiable (plan.apply always rejects it), burning the full retry budget
+        # and failing the entire job (0/12 documents kept in the real-call audit). The AI's choice
+        # set must never be wider than what the generator can actually produce; restrict to match
+        # it rather than add (unvalidated) foreign-spouse support across naturalidade/CPF/etc.
+        Slot("spouse1.nationality", "nacionalidade do primeiro cônjuge", ("BRASILEIRA",)),
+        Slot("spouse2.nationality", "nacionalidade do segundo cônjuge", ("BRASILEIRA",)),
         Slot("spouse1.marital_status_before", "estado civil do primeiro cônjuge antes do casamento",
              ("SOLTEIRO(A)", "DIVORCIADO(A)", "VIÚVO(A)")),
         Slot("spouse2.marital_status_before", "estado civil do segundo cônjuge antes do casamento",
              ("SOLTEIRO(A)", "DIVORCIADO(A)", "VIÚVO(A)")),
         Slot("spouse1.naturalidade.municipality", "município da naturalidade do primeiro cônjuge", CITIES),
         Slot("spouse2.naturalidade.municipality", "município da naturalidade do segundo cônjuge", CITIES),
+        # R-3.1: "SEPARAÇÃO OBRIGATÓRIA DE BENS" is not a free choice -- the generator
+        # (generators.marriage) only ever assigns it when max(age1, age2) >= 70
+        # (MANDATORY_SEPARATION_AGE), which the AI cannot guarantee (ages are themselves AI slots
+        # resolved in the same request). Dropping it from the offered choices avoids the same
+        # unsatisfiable-pick failure as the nationality slot above; the deterministic generator
+        # still applies it on its own for an elderly couple, independently of this AI slot.
         Slot("marriage.property_regime", "regime de bens do casamento",
              ("COMUNHÃO PARCIAL DE BENS", "COMUNHÃO UNIVERSAL DE BENS", "SEPARAÇÃO TOTAL DE BENS",
-              "SEPARAÇÃO OBRIGATÓRIA DE BENS", "PARTICIPAÇÃO FINAL NOS AQUESTOS")),
+              "PARTICIPAÇÃO FINAL NOS AQUESTOS")),
         Slot("marriage.celebrant.name", "nome completo de quem presidiu a celebração"),
     ),
 }
@@ -174,6 +194,7 @@ def _unwrap(value: Any) -> Any:
 def check_name(value: Any) -> tuple[str | None, str | None]:
     if not isinstance(value, str):
         return None, "o nome precisa ser um texto"
+    value = HONORIFIC_PREFIX.sub("", value.strip())
     words = value.split()
     if not 2 <= len(words) <= 6 or len(value) > 70:
         return None, "o nome precisa ter de 2 a 6 palavras e até 70 caracteres"
@@ -182,6 +203,21 @@ def check_name(value: Any) -> tuple[str | None, str | None]:
     if words[0] in CONNECTORS or words[-1] in CONNECTORS:
         return None, "o nome não pode começar nem terminar com conectivo"
     return " ".join(words), None
+
+
+def name_sex_mismatch(name: str, sex: str) -> bool:
+    """True when `name`'s first given name is unambiguously associated (in the project's own
+    name lists, see src/semantic/data.py) with the OTHER sex than `sex` -- e.g. "João" with
+    sex="F". Names absent from both lists, or present in both, are never flagged (R-3.3: catches
+    the glaring newborn.name-vs-newborn.sex mismatch from the real-call audit without rejecting
+    plausible or ambiguous names)."""
+    if sex not in {"M", "F"} or not name:
+        return False
+    first = _plain(name.split()[0])
+    in_female, in_male = first in _FEMALE_FIRST_NAMES, first in _MALE_FIRST_NAMES
+    if in_female == in_male:
+        return False
+    return (sex == "F" and in_male) or (sex == "M" and in_female)
 
 
 def check_value(slot: Slot, raw: Any) -> tuple[Any, str | None]:
@@ -318,12 +354,28 @@ def _generic_slot(field: dict, dpi: float) -> GenericSlot:
     element_count = len(elements) if data_type == "text_sequence" and elements else None
     if element_count is not None:
         max_length = element_count
-    elif data_type not in {"integer", "decimal", "date", "time", "sex", "checkbox"} and field.get("bbox"):
+    # R-3.2: a field with explicit `choices` (allowed_values/enum, checkbox) already has its
+    # values validated against that fixed set by the deterministic path -- the mapping author is
+    # responsible for the bbox fitting the longest allowed value. Applying the generic bbox-derived
+    # single-line length cap on top of that silently rejected the field's OWN valid choices (e.g.
+    # "CARTEIRA NACIONAL DE HABILITAÇÃO (CNH)", 38 chars, in a box sized for that exact enum)
+    # before the model's answer was even compared against `choices` -- a straight code bug.
+    elif not choices and data_type not in {"integer", "decimal", "date", "time", "sex", "checkbox"} and field.get("bbox"):
         capacity = bbox_capacity(field["bbox"], dpi)
         max_length = capacity if max_length is None else min(max_length, capacity)
     return GenericSlot(field_id=str(field["field_id"]), descricao=_descricao(field), data_type=data_type,
                        choices=choices, low=low, high=high, max_length=max_length, element_count=element_count,
                        decimals=validation.get("decimals"), formato=_formato(data_type))
+
+
+_IDENTIFIER_HINTS = ("numero_documento", "num_documento", "passaporte", "identidade", "rg", "registro_numero")
+
+
+def _looks_like_identifier(slot: GenericSlot) -> bool:
+    if slot.choices or slot.data_type not in {"text", "text_sequence"}:
+        return False
+    haystack = _plain(f"{slot.field_id} {slot.descricao}")
+    return any(hint in haystack for hint in _IDENTIFIER_HINTS)
 
 
 def build_generic_slots(fields: Iterable[dict], dpi: float = 300.0) -> list[GenericSlot]:
@@ -457,6 +509,13 @@ class AssistedRecords:
         self.rules_text = rules_text
         self.max_fields_per_request = max(1, int(max_fields_per_request))
         self.documents: list[dict] = []
+        # R-3.5/item-6: qwen2.5:7b-instruct collapsed onto a single "plausible" invented ID
+        # string (e.g. the same passport number "AB1234567") across independent documents of the
+        # same job. Tracking accepted values per field_id across the whole job and rejecting an
+        # exact repeat (for identifier-looking free-text fields only) is the simpler of the two
+        # coherent fixes in item 6 -- it forces the retry loop to ask for a different value
+        # instead of silently keeping a duplicate.
+        self._seen_identifier_values: dict[str, set[str]] = {}
 
     @property
     def parameters(self) -> dict:
@@ -506,12 +565,18 @@ class AssistedRecords:
                     errors[slot.field_id] = "valor ausente"
                     continue
                 value, problem = validate_generic_value(slot, proposed[slot.field_id])
+                if not problem and _looks_like_identifier(slot):
+                    seen = self._seen_identifier_values.setdefault(slot.field_id, set())
+                    if isinstance(value, str) and value in seen:
+                        problem = "esse valor já foi usado em outro documento; gere um identificador diferente"
                 if problem:
                     rejected.append({"key": slot.field_id, "reason": problem})
                     errors[slot.field_id] = problem
                 else:
                     resolved[slot.field_id] = value
                     errors.pop(slot.field_id, None)
+                    if _looks_like_identifier(slot) and isinstance(value, str):
+                        self._seen_identifier_values.setdefault(slot.field_id, set()).add(value)
             entry.update({"accepted": sorted(resolved), "rejected": rejected})
             corrections = [f"{item['key']}: {item['reason']}" for item in rejected]
         return resolved, errors
@@ -576,14 +641,50 @@ class AssistedRecords:
                     entry["error"] = f"o registro proposto viola restrições semânticas: {exc}"
                     corrections = [str(exc)[:600]]
                     continue
+                # R-3.3: cross-check any AI-authored name against a `.sex` field of the same
+                # entity (e.g. newborn.name vs newborn.sex), using the project's own name/sex
+                # association lists -- the real-call audit found "João Pedro ..." paired with
+                # sex="F" accepted because the two slots are otherwise independent.
+                mismatches = []
+                for key, value in accepted.items():
+                    # Only a key that IS the entity's own name (e.g. "newborn.name",
+                    # "deceased.name") -- not a relationship name sharing the same entity
+                    # prefix like "deceased.mother_name"/"deceased.father_name", whose sex has
+                    # nothing to do with "deceased.sex" and was wrongly flagged by prefix alone.
+                    if REGISTRY[key].kind != "name" or not key.endswith(".name"):
+                        continue
+                    sex_key = f"{key.rsplit('.', 1)[0]}.sex"
+                    if sex_key not in REGISTRY:
+                        continue
+                    try:
+                        sex_value = candidate.value(sex_key)
+                    except Exception:
+                        sex_value = None
+                    if isinstance(sex_value, str) and name_sex_mismatch(value, sex_value):
+                        mismatches.append({"key": key, "reason": "o nome não condiz com o sexo já definido para a mesma pessoa"})
+                if mismatches:
+                    entry["error"] = "nome incoerente com o sexo da pessoa"
+                    entry["rejected"] = rejected + mismatches
+                    corrections = [f"{item['key']}: {item['reason']}" for item in mismatches]
+                    continue
                 record, registry_accepted, registry_rejected_total = candidate, accepted, len(rejected)
                 break
+            registry_fallback: str | None = None
             if record is None:
-                self.documents.append({"index": index, "status": "rejected", "attempts": len(attempts)})
+                # R-3.1/item-2: an AI-constrained record that never validates after the full retry
+                # budget used to fail the WHOLE job (AssistedGenerationError propagates out of
+                # generate_dataset's per-document loop with no recovery, see
+                # src/synthetic_dataset.py). Instead, drop the AI requirements for just this
+                # document and fall back to the deterministic generator, recording why in
+                # provenance -- the job keeps going and the other documents are unaffected.
                 reasons = "; ".join(entry["error"] for entry in attempts if entry.get("error"))
-                raise AssistedGenerationError(
-                    f"A IA não produziu um registro válido para o documento {index} após {self.attempts} tentativas: {reasons}", attempts)
+                registry_fallback = (f"A IA não produziu um registro válido para os campos de registro do documento "
+                                     f"{index} após {self.attempts} tentativas; gerado de forma determinística. "
+                                     f"Motivos: {reasons}")
+                record = SemanticRecord(seed, context)
+                plan.apply(record, legacy_keys)
         else:
+            registry_fallback = None
             record = SemanticRecord(seed, context)
             plan.apply(record, legacy_keys)
         ja_definidos: dict[str, Any] = dict(registry_accepted)
@@ -603,15 +704,39 @@ class AssistedRecords:
                     ja_definidos[slot.field_id] = _display_value(resolved[slot.field_id])
                 else:
                     fallback_fields[slot.field_id] = errors.get(slot.field_id, "sem resposta válida da IA")
-        if not registry_slots and generic_slots and not any(not entry.get("error") for entry in attempts):
+        # R-3.3 (dates): two independently-proposed AI generic dates in the same document can come
+        # out chronologically backwards (e.g. procuração "data de fechamento" before "data de
+        # lavratura") -- nothing enforces order between generic date slots of the same batch/field
+        # set. Demote any such pair (by field-id hint, since there is no registry "role" for
+        # custom fields) to fallback instead of silently keeping a visibly wrong pair of dates.
+        opening_ids = [fid for fid, value in generic_accepted.items()
+                      if isinstance(value, date) and any(hint in _plain(fid) for hint in ("lavratura", "abertura", "emissao", "inicio"))]
+        closing_ids = [fid for fid, value in generic_accepted.items()
+                      if isinstance(value, date) and any(hint in _plain(fid) for hint in ("fechamento", "encerramento", "termino", "conclusao"))]
+        for open_id in opening_ids:
+            for close_id in closing_ids:
+                if generic_accepted[close_id] < generic_accepted[open_id]:
+                    for fid in (open_id, close_id):
+                        fallback_fields.setdefault(fid, "datas propostas pela IA fora de ordem cronológica")
+                        generic_accepted.pop(fid, None)
+        if (not registry_slots and generic_slots and registry_fallback is None
+                and not any(not entry.get("error") for entry in attempts)):
+            # Only when there were no registry slots at all (so no prior fallback decision was
+            # made) and the assistant never answered a single generic batch either -- still a hard
+            # failure, since there is nothing usable to fall back on at the document level besides
+            # the fully deterministic generator, which the caller can retry with generation_mode
+            # "traditional" instead.
             self.documents.append({"index": index, "status": "rejected", "attempts": len(attempts)})
             reasons = "; ".join(entry["error"] for entry in attempts if entry.get("error"))
             raise AssistedGenerationError(f"Assistente de IA indisponível para o documento {index}: {reasons}", attempts)
         record.ai_values = generic_accepted
+        status = "accepted" if registry_fallback is None else "fallback"
         record.provenance = {"mode": "ai", **self.parameters, "scenario": scenario, "ai_keys": sorted(registry_accepted),
                              "accepted": registry_accepted, "attempts": attempts,
-                             "validation": {"status": "accepted", "rejected_values": registry_rejected_total},
-                             "ai_fields": sorted(generic_accepted), "fallback_fields": fallback_fields}
-        self.documents.append({"index": index, "status": "accepted", "attempts": len(attempts), "ai_keys": sorted(registry_accepted),
-                               "ai_fields": sorted(generic_accepted), "fallback_fields": sorted(fallback_fields)})
+                             "validation": {"status": status, "rejected_values": registry_rejected_total},
+                             "ai_fields": sorted(generic_accepted), "fallback_fields": fallback_fields,
+                             **({"registry_fallback": registry_fallback} if registry_fallback else {})}
+        self.documents.append({"index": index, "status": status, "attempts": len(attempts), "ai_keys": sorted(registry_accepted),
+                               "ai_fields": sorted(generic_accepted), "fallback_fields": sorted(fallback_fields),
+                               **({"registry_fallback": registry_fallback} if registry_fallback else {})})
         return record
