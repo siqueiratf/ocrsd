@@ -107,7 +107,10 @@ SLOTS: dict[str, tuple[Slot, ...]] = {
         # (see generators.death), so any age outside a chain's range would be unreachable.
         Slot("deceased.age", "idade em anos completos na data do óbito; fase 1 é somente adulta (18 anos ou mais)",
              low=18, high=102),
-        Slot("deceased.occupation", "ocupação habitual", ("Não se aplica", *OCCUPATIONS)),
+        # m-d: "Não se aplica" removed — the slot only ever resolves to an adult (18+) chain, and
+        # "Não se aplica" is never the deceased's occupation at any DO adult age, so requiring it
+        # used to fail after the full retry budget (51% of the time, vs 100% on HEAD).
+        Slot("deceased.occupation", "ocupação habitual", OCCUPATIONS),
         Slot("deceased.mother_name", "nome completo da mãe da pessoa falecida"),
         Slot("deceased.father_name", "nome completo do pai da pessoa falecida"),
         Slot("deceased.residence.municipality", "município de residência da pessoa falecida", CITIES),

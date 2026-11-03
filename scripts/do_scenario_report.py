@@ -24,7 +24,7 @@ sys.path.insert(0, ".")
 from src.document_types import discover_document_types
 from src.semantic.plan import semantic_plan
 from src.semantic.record import SemanticRecord
-from src.semantic.cause_chains import CAUSE_CHAINS, PART2_POOL
+from src.semantic.cause_chains import CAUSE_CHAINS, CHILD_PART2_POOL, PART2_POOL
 
 CID_PATTERN = re.compile(r"^[A-Z][0-9]{2}(\.?[0-9X])?$")
 CHAINS_BY_ID = {c.chain_id: c for c in CAUSE_CHAINS}
@@ -36,6 +36,8 @@ for _chain in CAUSE_CHAINS:
         _key = _line.cid[:3] if re.fullmatch(r"[WXY][0-9]{2}", _line.cid) else _line.cid
         CID_WHITELIST.setdefault(_key, set()).update(_line.text_variants)
 for _line in PART2_POOL:
+    CID_WHITELIST.setdefault(_line.cid, set()).update(_line.text_variants)
+for _line in CHILD_PART2_POOL:
     CID_WHITELIST.setdefault(_line.cid, set()).update(_line.text_variants)
 
 
@@ -73,8 +75,23 @@ def main(n: int = 1000) -> None:
         if v["death.scenario"] not in chain.scenario_ids: bad["B1 scenario/chain mismatch"] += 1
         if chain.manner != v["death.cause.manner"]: bad["B2 manner mismatch"] += 1
         if chain.external_type and chain.external_type != v["death.external.type"]: bad["B1 field48 != chain"] += 1
-        if v["deceased.age"] < 18: bad["C minor"] += 1
-        if not (chain.min_age <= v["deceased.age"] <= chain.max_age): bad["age outside chain gate"] += 1
+        age_group = v.get("death.age_group", "adult")
+        if age_group == "adult" and (v["deceased.age"] is None or v["deceased.age"] < 18): bad["C minor"] += 1
+        if chain.age_unit == "anos" and not (chain.min_age <= v["deceased.age"] <= chain.max_age):
+            bad["age outside chain gate"] += 1
+        if age_group in ("fetal", "infant") and v["deceased.age"] is not None:
+            bad["phase2 fetal/infant age not blank"] += 1
+        if age_group == "fetal" and sum(v.get(f"deceased.age_{u}") is not None for u in ("minutes", "hours", "days", "months")):
+            bad["phase2 fetal has an age-unit field filled"] += 1
+        if age_group == "infant" and sum(v.get(f"deceased.age_{u}") is not None for u in ("minutes", "hours", "days", "months")) != 1:
+            bad["phase2 infant age-unit not exactly one"] += 1
+        if (v.get("deceased.birth.dnv_number") is not None) != (age_group == "infant"):
+            bad["phase2 DN only for infant"] += 1
+        if age_group == "fetal" and v["deceased.name"] != "Natimorto":
+            bad["phase2 fetal name not Natimorto"] += 1
+        weeks = v.get("deceased.gestation_weeks")
+        if weeks is not None and not (22 <= weeks <= 42):
+            bad["phase2 gestation weeks out of range"] += 1
         if chain.sex and chain.sex != v["deceased.sex"]: bad["sex mismatch"] += 1
         if chain.setting == "hospital" and not hospital: bad["hospital-only chain outside hospital"] += 1
         manner = v["death.cause.manner"]

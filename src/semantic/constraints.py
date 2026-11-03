@@ -312,8 +312,11 @@ CONSTRAINTS: tuple[Constraint, ...] = (
                lambda v: None if v["deceased.naturalidade"] in
                {f"{profile['city']} - {profile['uf']}" for profile in LOCATION_PROFILES}
                else "naturalidade não pertence a um município e UF do catálogo"),
-    Constraint("obito_nao_fetal", ("death.type",), ("death",),
-               lambda v: None if v["death.type"] == "2" else "death.type precisa ser 2 (não fetal) no cenário adulto da fase 1",),
+    Constraint("tipo_de_obito_valido", ("death.type",), ("death",),
+               lambda v: None if v["death.type"] in ("1", "2") else "death.type precisa ser 1 (fetal) ou 2 (não fetal)"),
+    Constraint("tipo_de_obito_coerente_com_grupo_de_idade", ("death.type", "death.age_group"), ("death",),
+               lambda v: None if (v["death.type"] == "1") == (v["death.age_group"] == "fetal")
+               else "death.type = 1 (fetal) só pode acompanhar o grupo de idade “fetal”, e vice-versa"),
     Constraint("cenario_e_local_de_ocorrencia", ("death.place.category", "death.medical_assistance", "death.autopsy",
                                                   "death.cause.manner"), ("death",), _scenario_consistency),
     Constraint("idade_da_mae_no_nascimento", ("mother.birth_date", "mother.age", "birth.date"), ("mother",), _mother_age),
@@ -343,8 +346,10 @@ CONSTRAINTS: tuple[Constraint, ...] = (
     Constraint("historico_obstetrico", tuple(f"mother.obstetric.{name}" for name in (
         "previous_pregnancies", "vaginal_births", "cesareans", "live_births", "fetal_losses")), ("mother",), _obstetric),
     *(_address(prefix) for prefix in ADDRESS_PREFIXES),
+    # Fetal/infant deaths export deceased.age = None (field 9_anos genuinely has no value — see
+    # generators.deceased) — the general years-based age rule only applies when it's filled.
     Constraint("idade_do_falecido_no_obito", ("deceased.birth_date", "deceased.age", "death.date"), ("deceased",),
-               _age_rule("deceased", "death.date", "falecido")),
+               lambda v: None if v["deceased.age"] is None else _age_rule("deceased", "death.date", "falecido")(v)),
     _sex("newborn.sex"),
     _sex("deceased.sex"),
     Constraint("filiacao_coerente", ("parents.names", "mother.name", "father.name"), ("parents",), _parents),
@@ -361,6 +366,20 @@ CONSTRAINTS: tuple[Constraint, ...] = (
                _newborn_naturalidade_uf),
     Constraint("conjuge_do_falecido_coerente", ("deceased.marital_status", "deceased.spouse_name"), ("deceased",),
                _deceased_spouse_name),
+    Constraint("dn_so_para_obito_infantil", ("death.age_group", "deceased.birth.dnv_number"), ("deceased",),
+               lambda v: None if (v["deceased.birth.dnv_number"] is not None) == (v["death.age_group"] == "infant")
+               else "o número da DN só existe para óbito de menor de 1 ano (nunca para óbito fetal/adulto/criança)"),
+    Constraint("idade_de_menor_de_1_ano_unica", ("death.age_group", "deceased.age_minutes", "deceased.age_hours",
+                                                  "deceased.age_days", "deceased.age_months"), ("deceased",),
+               lambda v: None if (sum(v[k] is not None for k in
+                                       ("deceased.age_minutes", "deceased.age_hours", "deceased.age_days", "deceased.age_months"))
+                                   == (1 if v["death.age_group"] == "infant" else 0))
+               else "exatamente uma unidade de idade de menor de 1 ano deve estar preenchida, e só para óbito infantil"),
+    Constraint("semanas_de_gestacao_coerentes", ("death.age_group", "deceased.gestation_weeks", "deceased.gestation_weeks_unknown"),
+               ("deceased",),
+               lambda v: None if v["death.age_group"] not in ("fetal", "infant") or v["deceased.gestation_weeks_unknown"]
+               or (v["deceased.gestation_weeks"] is not None and 22 <= v["deceased.gestation_weeks"] <= 42)
+               else "semanas de gestação fora do intervalo plausível (22-42) para óbito fetal/infantil"),
     _spouse_minimum_age(1), _spouse_minimum_age(2),
     Constraint("idade_do_1_conjuge_no_casamento", ("spouse1.birth_date", "spouse1.age", "marriage.date"), ("marriage",),
                _age_rule("spouse1", "marriage.date", "1º cônjuge")),

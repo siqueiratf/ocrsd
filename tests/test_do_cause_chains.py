@@ -4,13 +4,15 @@ import unittest
 from collections import Counter
 
 from src.semantic.cause_chains import CAUSE_CHAINS, PART2_POOL, UNIT_RANK, chains_for_scenario, format_interval
-from src.semantic.death_scenarios import ADULT_SCENARIOS, applicable_field_groups, pick_scenario
+from src.semantic.death_scenarios import ADULT_SCENARIOS, ALL_SCENARIOS, applicable_field_groups, pick_scenario
 from src.semantic.plan import semantic_plan
 from src.semantic.record import SemanticRecord
 import random
 
 CID_PATTERN = re.compile(r"^[A-Z][0-9]{2}(\.?[0-9X])?$")
-SCENARIO_IDS = {s.scenario_id for s in ADULT_SCENARIOS}
+# Phase 2: every scenario (adult, fetal, infant, child) a chain may legitimately declare.
+SCENARIO_IDS = {s.scenario_id for s in ALL_SCENARIOS}
+ADULT_SCENARIO_IDS = {s.scenario_id for s in ADULT_SCENARIOS}
 _UNIT_MINUTES = {"minutos": 1, "horas": 60, "dias": 1440, "semanas": 10080, "meses": 43200, "anos": 525600}
 CHAINS_BY_ID = {c.chain_id: c for c in CAUSE_CHAINS}
 
@@ -55,7 +57,11 @@ class CauseChainLibraryTests(unittest.TestCase):
             self.assertTrue(set(chain.scenario_ids) <= SCENARIO_IDS, chain.chain_id)
 
     def test_external_chains_declare_a_single_scenario_and_matching_manner_type(self):
-        scenario_manner = {s.scenario_id: s.manner for s in ADULT_SCENARIOS}
+        scenario_manner = {s.scenario_id: s.manner for s in ALL_SCENARIOS}
+        # Phase 2 natural, non-external chains may also belong to the fetal/infant/child
+        # natural scenarios (perinatal/congenital/infections/respiratory categories), not just
+        # the two adult ones.
+        natural_scenarios = {"natural_hospital", "natural_home", "fetal_death", "infant_death", "child_natural"}
         for chain in CAUSE_CHAINS:
             if chain.category == "external":
                 self.assertEqual(len(chain.scenario_ids), 1, chain.chain_id)
@@ -65,7 +71,7 @@ class CauseChainLibraryTests(unittest.TestCase):
             else:
                 self.assertEqual(chain.manner, "Natural", chain.chain_id)
                 self.assertIsNone(chain.external_type, chain.chain_id)
-                self.assertTrue(set(chain.scenario_ids) <= {"natural_hospital", "natural_home"}, chain.chain_id)
+                self.assertTrue(set(chain.scenario_ids) <= natural_scenarios, chain.chain_id)
 
     def test_chains_for_scenario_matches_declared_scenario_ids(self):
         for scenario_id in SCENARIO_IDS:
@@ -77,9 +83,24 @@ class CauseChainLibraryTests(unittest.TestCase):
             self.assertTrue(matches, scenario_id)
             self.assertTrue(any(c.setting != "hospital" for c in matches), scenario_id)
 
-    def test_min_age_is_at_least_18_phase_1(self):
+    def test_adult_scenario_chains_have_min_age_at_least_18(self):
+        # Phase 2: this gate is now specific to chains used by the adult scenarios — fetal
+        # (age_unit "fetal"), infant (age_unit in minutos/horas/dias/meses) and child (1-17)
+        # chains legitimately have a lower min_age.
         for chain in CAUSE_CHAINS:
-            self.assertGreaterEqual(chain.min_age, 18, chain.chain_id)
+            if set(chain.scenario_ids) <= ADULT_SCENARIO_IDS:
+                self.assertGreaterEqual(chain.min_age, 18, chain.chain_id)
+
+    def test_infant_and_child_chains_declare_the_right_age_unit(self):
+        for chain in CAUSE_CHAINS:
+            if "fetal_death" in chain.scenario_ids:
+                self.assertEqual(chain.age_unit, "fetal", chain.chain_id)
+            elif "infant_death" in chain.scenario_ids:
+                self.assertIn(chain.age_unit, ("minutos", "horas", "dias", "meses"), chain.chain_id)
+            elif set(chain.scenario_ids) & {"child_natural", "child_external"}:
+                self.assertEqual(chain.age_unit, "anos", chain.chain_id)
+                self.assertGreaterEqual(chain.min_age, 1, chain.chain_id)
+                self.assertLessEqual(chain.max_age, 17, chain.chain_id)
 
     def test_no_duplicate_part1_cid_within_a_chain(self):
         for chain in CAUSE_CHAINS:

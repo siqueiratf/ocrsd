@@ -94,11 +94,12 @@ class InterfaceTests(unittest.TestCase):
         self.hx("POST", "/geracao/etapa/1", data={"draft_id": draft, "document_type": "do"})
         page = self.page(f"/geracao?draft={draft}&etapa=2").text
         # "40_a_causa" (cause-of-death chain) and the external-cause block were made
-        # deterministic in phase 1 (topic 5); "9_meses" (age in months, <1 year) is still
-        # unsupported because the infant/fetal scenarios are phase 2.
-        self.assertIn('value="9_meses"', page)
-        self.assertIn('name="fields" value="9_meses" disabled', page)
-        response = self.client.post("/api/v1/generation/validate", json={"document_type": "do", "fields": ["9_meses"]})
+        # deterministic in phase 1 (topic 5); "9_meses" (age in months, <1 year) became
+        # supported in phase 2 (fetal/infant scenarios) — "58" (block IX, declared without a
+        # physician) remains out of scope.
+        self.assertIn('value="58"', page)
+        self.assertIn('name="fields" value="58" disabled', page)
+        response = self.client.post("/api/v1/generation/validate", json={"document_type": "do", "fields": ["58"]})
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["error"]["code"], "unsupported_field")
 

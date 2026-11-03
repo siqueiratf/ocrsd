@@ -48,7 +48,7 @@ class Scenario:
     # Distribution over field-20 place categories: "1" hospital, "2" other health
     # establishment, "3" domicílio, "4" via pública. Must sum to 100 (checked by tests).
     place_weights: dict[str, float]
-    age_group: str = "adult"  # "adult" | "infant" | "fetal" (infant/fetal: see NOT_IMPLEMENTED)
+    age_group: str = "adult"  # "adult" | "child" | "infant" | "fetal"
 
 
 # Adult scenarios implemented in phase 1. Weights are relative frequencies
@@ -71,17 +71,41 @@ ADULT_SCENARIOS: tuple[Scenario, ...] = (
              {"3": 75, "1": 15, "4": 10}),
 )
 
-# Documented but not yet generated in phase 1 — see final report for the
-# exact field groups ("infant_under_1", "maternal_history", "no_physician")
-# each would need, plus fetal-specific handling (parts 30-37, age expressed
-# in hours/days).
-NOT_IMPLEMENTED: tuple[str, ...] = ("infant_under_1_year", "fetal_death", "declared_without_physician")
+# Phase 2: fetal (óbito fetal, field 1 = "1"), neonatal/infant (<1 year, age expressed in
+# minutes/hours/days/months) and child/adolescent (1-17) scenarios. Weights are relative to
+# ADULT_SCENARIOS' sum of 100: Brazilian SIM data puts fetal deaths (stillbirths) and infant
+# deaths each at a few percent of all deaths recorded, and child/adolescent deaths lower still
+# (infant mortality itself has fallen under ~15/1000 live births, and under-1 and fetal deaths
+# are a small slice of total mortality, which is dominated by the elderly) — so these scenarios
+# get small weights added on top of, not carved out of, the adult total.
+FETAL_SCENARIOS: tuple[Scenario, ...] = (
+    Scenario("fetal_death", "Óbito fetal", "Natural", 2.2, {"1": 90, "2": 5, "3": 4, "4": 1}, age_group="fetal"),
+)
+INFANT_SCENARIOS: tuple[Scenario, ...] = (
+    Scenario("infant_death", "Óbito de menor de 1 ano", "Natural", 2.6, {"1": 85, "2": 9, "3": 5, "4": 1},
+             age_group="infant"),
+)
+# Natural and external deaths of children/adolescents (1-17): rare in absolute terms, external
+# causes (drowning, traffic) now outweigh natural disease deaths in this age band in Brazil.
+CHILD_SCENARIOS: tuple[Scenario, ...] = (
+    Scenario("child_natural", "Morte natural de criança/adolescente", "Natural", 0.4,
+             {"1": 80, "2": 10, "3": 10}, age_group="child"),
+    Scenario("child_external", "Causa externa de criança/adolescente", "Não natural", 0.5,
+             {"1": 45, "4": 35, "3": 20}, age_group="child"),
+)
 
-SCENARIOS_BY_ID = {s.scenario_id: s for s in ADULT_SCENARIOS}
+ALL_SCENARIOS: tuple[Scenario, ...] = ADULT_SCENARIOS + FETAL_SCENARIOS + INFANT_SCENARIOS + CHILD_SCENARIOS
+
+# Declared without physician (block IX — a leigo/non-medical declarant, e.g. a remote area
+# without a certifying doctor) is still not implemented; everything else phase 1 documented
+# here (infant/fetal/child scenarios, their field groups and cause chains) now is.
+NOT_IMPLEMENTED: tuple[str, ...] = ("declared_without_physician",)
+
+SCENARIOS_BY_ID = {s.scenario_id: s for s in ALL_SCENARIOS}
 
 
 def pick_scenario(rng) -> Scenario:
-    return rng.choices(ADULT_SCENARIOS, weights=[s.weight for s in ADULT_SCENARIOS])[0]
+    return rng.choices(ALL_SCENARIOS, weights=[s.weight for s in ALL_SCENARIOS])[0]
 
 
 def pick_place(rng, scenario: Scenario, allowed_categories: tuple[str, ...] | None = None) -> str:
@@ -103,8 +127,15 @@ def pick_place(rng, scenario: Scenario, allowed_categories: tuple[str, ...] | No
 
 
 def applicable_field_groups(scenario: Scenario, hospital: bool) -> tuple[str, ...]:
+    # "core" is coarse-grained (it bundles "9_anos" with unrelated fields); fetal/infant drop
+    # the main age-in-years field specifically — see FIELD_GROUPS["infant_under_1"] and the
+    # generator, which blanks "9_anos" directly for both age groups (R: exactly one age unit).
     groups = ["core", "cause_chain"]
     groups.append("hospital_occurrence" if hospital else "home_or_public_occurrence")
     if scenario.manner == "Não natural":
         groups.append("external_cause")
+    if scenario.age_group == "infant":
+        groups.append("infant_under_1")
+    if scenario.age_group in ("infant", "fetal"):
+        groups.append("maternal_history")
     return tuple(groups)

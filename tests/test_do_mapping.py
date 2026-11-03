@@ -9,7 +9,7 @@ from pathlib import Path
 import fitz
 
 from src.document_types import discover_document_types
-from src.semantic.cause_chains import CAUSE_CHAINS, PART2_POOL
+from src.semantic.cause_chains import CAUSE_CHAINS, CHILD_PART2_POOL, PART2_POOL
 from src.semantic.constraints import completed_years
 from src.semantic.plan import semantic_plan
 from src.semantic.record import SemanticRecord
@@ -32,6 +32,8 @@ for _chain in CAUSE_CHAINS:
         _key = _line.cid[:3] if re.fullmatch(r"[WXY][0-9]{2}", _line.cid) else _line.cid
         CID_WHITELIST.setdefault(_key, set()).update(_line.text_variants)
 for _line in PART2_POOL:
+    CID_WHITELIST.setdefault(_line.cid, set()).update(_line.text_variants)
+for _line in CHILD_PART2_POOL:
     CID_WHITELIST.setdefault(_line.cid, set()).update(_line.text_variants)
 
 
@@ -58,11 +60,13 @@ class DOModelTests(unittest.TestCase):
         unsupported = {field["field_id"] for field in self.mapping["fields"] if field.get("unsupported_reason")}
         # Phase 1 (topic 5, post-verification v2) added deterministic support for the
         # cause-of-death chain, the external-cause block and the certificate signature.
-        # Fetal/infant fields AND block IX ("Localidade sem médico", 58/59) remain out of
-        # scope — block IX is only filled on the real form when no physician certifies the
-        # death, a separate rare scenario phase 1 does not implement (see verifier B3).
-        self.assertTrue({"9_meses", "9_dias", "9_horas", "9_minutos", "58", "59_a", "59_b"} <= unsupported)
-        self.assertFalse({"40_a_causa", "40_a_cid", "47", "48"} & unsupported)
+        # Phase 2 (v3) added the fetal/infant age-unit block, the maternal/obstetric block
+        # (27-37) and the Part II intervals. Block IX ("Localidade sem médico", 58/59) remains
+        # out of scope — it is only filled on the real form when no physician certifies the
+        # death, a separate rare scenario this phase does not implement (see verifier B3).
+        self.assertTrue({"58", "59_a", "59_b", "9_ignorado"} <= unsupported)
+        self.assertFalse({"40_a_causa", "40_a_cid", "47", "48", "9_meses", "9_dias", "9_horas", "9_minutos",
+                          "27", "31", "35", "36"} & unsupported)
         self.assertEqual(len(next(field for field in self.mapping["fields"]
                                   if field["field_id"] == "9_ignorado")["elements"]), 1)
         for field in self.mapping["fields"]:
@@ -90,7 +94,11 @@ class DOModelTests(unittest.TestCase):
                 registered = date.fromisoformat(record["death_registration.date"])
                 self.assertLessEqual(born, died)
                 self.assertLessEqual(died, registered)
-                self.assertEqual(record["deceased.age"], completed_years(born, died))
+                age_group = record.get("death.age_group", "adult")
+                if age_group == "adult":
+                    self.assertEqual(record["deceased.age"], completed_years(born, died))
+                else:
+                    self.assertIsNone(record["deceased.age"])
                 self.assertEqual(values["2"], died.strftime("%d%m%Y"))
                 self.assertEqual(values["8"], born.strftime("%d%m%Y"))
                 self.assertEqual(values["46"], died.strftime("%d%m%Y"))
@@ -99,14 +107,15 @@ class DOModelTests(unittest.TestCase):
                 self.assertEqual(values["19"], record["deceased.residence.uf"])
                 self.assertEqual(values["25"], record["death.place.municipality"])
                 self.assertEqual(values["26"], record["death.place.uf"])
-                self.assertEqual(values["1"], "2")
+                self.assertEqual(values["1"], "1" if age_group == "fetal" else "2")
                 self.assertIn(values["20"], {"1", "2", "3", "4"})
                 hospital = values["20"] in {"1", "2"}
                 if hospital:
                     self.assertEqual(values["38"], "1")
                 self.assertIn(values["39"], {"1", "2"})
                 self.assertIn(values["43"], {"1", "2", "3", "4"})
-                self.assertGreaterEqual(record["deceased.age"], 18)
+                if age_group == "adult":
+                    self.assertGreaterEqual(record["deceased.age"], 18)
                 # Part I line "a" (immediate cause) is always filled with a well-formed CID.
                 self.assertTrue(values["40_a_causa"])
                 self.assertRegex(values["40_a_cid"], r"^[A-Z][0-9]{2}(\.?[0-9X])?$")
@@ -151,9 +160,15 @@ class DOPropertyTests(unittest.TestCase):
     def test_age_sex_always_inside_the_chosen_chain_gate_and_at_least_18(self):
         for v in self.records:
             chain = CHAINS_BY_ID[v["death.cause.chain_id"]]
-            self.assertGreaterEqual(v["deceased.age"], 18)
-            self.assertLessEqual(chain.min_age, v["deceased.age"])
-            self.assertLessEqual(v["deceased.age"], chain.max_age)
+            if chain.age_unit == "anos":
+                # Phase 2: only "anos"-gated chains (adult, 18+; child, 1-17) have an integer
+                # deceased.age at all — fetal/infant export None (see generators.deceased).
+                self.assertLessEqual(chain.min_age, v["deceased.age"])
+                self.assertLessEqual(v["deceased.age"], chain.max_age)
+                if v["death.age_group"] == "adult":
+                    self.assertGreaterEqual(v["deceased.age"], 18)
+            else:
+                self.assertIsNone(v["deceased.age"])
             if chain.sex:
                 self.assertEqual(chain.sex, v["deceased.sex"])
 

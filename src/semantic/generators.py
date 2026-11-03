@@ -4,7 +4,7 @@ import hashlib
 import math
 import random
 import re
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any, Callable
 
 from src.field_rules import DNV_TEST_PREFIX, cpf, format_date
@@ -14,7 +14,7 @@ from src.semantic.data import (ADULT_ESTABLISHMENT_NAMES, COMPLEMENTS, ESTABLISH
                                OCCUPATION_GENDER, OCCUPATION_OPPOSITE_FORM, OTHER_HEALTH_ESTABLISHMENT_NAMES,
                                PROFILES_BY_IBGE, REGION_BY_UF, REGISTRY_OFFICE_NAMES, SURNAMES)
 from src.semantic.present import format_matricula
-from src.semantic.cause_chains import CAUSE_CHAINS, PART2_POOL, format_interval
+from src.semantic.cause_chains import CAUSE_CHAINS, CHILD_PART2_POOL, PART2_POOL, format_interval
 
 EVENT_START, EVENT_END = date(1980, 1, 1), REFERENCE_END
 MINUTES = tuple(time(minute // 60, minute % 60) for minute in range(24 * 60))
@@ -44,12 +44,40 @@ OCCUPATION_MIN_AGE = {occupation: (22 if minimum == "Superior completo" else 16)
 MIN_WORKING_AGE = 16
 
 
-def _schooling_for_age(rng: random.Random, age: int, occupation: str | None = None) -> tuple[str, int | None]:
+def _max_schooling_level_for_age(age: int, medio_age: int = 15) -> int:
+    """M2/R2: the highest SCHOOLING_LEVELS index plausible at `age` — Fundamental I only from 7
+    (R2: a child starts 1st grade at 6, so nothing is "completed" before 7), Fundamental II from
+    11, Médio from `medio_age` (15 for a child/adolescent deceased; the mother's own call site
+    passes 17 — re-verification m-a: a 15-year-old mother should not show a COMPLETED Médio
+    série yet), Superior incompleto from 18, Superior completo from 22 (a degree takes time to
+    finish). Used for the deceased's own schooling (any age group, R2) and the mother's."""
+    if age < 7:
+        return 0  # nothing completed yet
+    if age < 11:
+        return 1  # Fundamental I at most
+    if age < medio_age:
+        return 2  # Fundamental II
+    if age < 18:
+        return 3  # Médio
+    if age < 22:
+        return 4  # Superior incompleto — 18-21 (inclusive) never "completo"
+    return 5  # Superior completo
+
+
+def _schooling_for_age(rng: random.Random, age: int, occupation: str | None = None,
+                       cap_by_age: bool = False, medio_age: int = 15) -> tuple[str, int | None]:
+    """`cap_by_age` (M2/R2) is opt-in: it is passed True ONLY from the DO's own deceased and
+    block-IV mother call sites (see deceased()/deceased_birth_block() below) — the generic
+    mother()/deceased() paths shared with the OTHER documents (certidão de nascimento, DNV,
+    certidão de óbito outside the DO...) keep calling this with the old, uncapped behaviour, so
+    those documents stay byte-identical to before phase 2 (M1's own requirement)."""
     minimum = OCCUPATION_MIN_SCHOOLING.get(occupation or "")
+    cap = _max_schooling_level_for_age(age, medio_age) if cap_by_age else 5
     if minimum == "Superior completo":
         return "Superior completo", None
     if minimum == "Médio (antigo 2º grau)":
-        level = rng.choices(SCHOOLING_LEVELS[3:], (60, 20, 20))[0]
+        levels = [level for level in SCHOOLING_LEVELS[3:] if SCHOOLING_LEVELS.index(level) <= cap] or [SCHOOLING_LEVELS[min(cap, 3)]]
+        level = rng.choices(levels, (60, 20, 20)[:len(levels)])[0]
         series_range = SCHOOLING_SERIES_RANGE.get(level)
         return level, rng.randint(*series_range) if series_range else None
     if age < 5:
@@ -57,11 +85,19 @@ def _schooling_for_age(rng: random.Random, age: int, occupation: str | None = No
     if age < 7:
         levels, weights = SCHOOLING_LEVELS[:2], (60, 40)
     elif age < 15:
-        levels, weights = SCHOOLING_LEVELS[:3], (10, 40, 50)
+        levels, weights = SCHOOLING_LEVELS[:min(cap + 1, 3)], (10, 40, 50)
     else:
-        levels, weights = SCHOOLING_LEVELS, (8, 15, 22, 30, 10, 15)
-    level = rng.choices(levels, weights[:len(levels)])[0]
+        levels, weights = SCHOOLING_LEVELS[:cap + 1], (8, 15, 22, 30, 10, 15)
+    levels = levels[:cap + 1]
+    weights = weights[:len(levels)]
+    level = rng.choices(levels, weights)[0]
     series_range = SCHOOLING_SERIES_RANGE.get(level)
+    if cap_by_age and series_range and level in (SCHOOLING_LEVELS[1], SCHOOLING_LEVELS[2]):
+        # R2: completed série must never exceed age - 6 (a child enters 1st grade at 6) — this
+        # applies to BOTH Fundamental I (série 1-4) and Fundamental II (série 5-8), not only
+        # Fundamental II: a 7-year-old with Fundamental I série 4 is just as wrong.
+        max_series = min(series_range[1], max(series_range[0], age - 6))
+        series_range = (series_range[0], max_series)
     series = rng.randint(*series_range) if series_range else None
     return level, series
 
@@ -86,25 +122,37 @@ def _place_coded_cid(base_cid: str, category: str) -> str:
     return base_cid
 
 
-def _ordered_intervals(rng: random.Random, part1: list) -> dict[int, int]:
+def _ordered_intervals(rng: random.Random, part1: list, age_minutes: int | None = None) -> dict[int, int]:
     """Sample each line's interval value so they are non-decreasing from ``a`` to ``d`` in
     minutes, by construction (R1): walk from ``d`` (longest) down to ``a`` (shortest), capping
     each line's range at the minutes of the line already sampled below it. Lines sharing a
-    `group` id (near-simultaneous events) reuse one sampled value."""
+    `group` id (near-simultaneous events) reuse one sampled value.
+
+    B2: `age_minutes`, when given, caps every interval so Part I never claims the condition
+    started before the deceased was born/conceived of the event; a `since_birth` line (B2:
+    prematurity, congenital heart disease, birth asphyxia) is forced to exactly the age, in its
+    own unit (never sampled, never 0 — these conditions exist for the deceased's whole life)."""
     shared: dict[int, int] = {}
     values: dict[int, int] = {}
-    cap_minutes: int | None = None
+    cap_minutes: int | None = age_minutes
     for index in reversed(range(len(part1))):
         line = part1[index]
         if line is None:
             continue
-        if line.group and line.group in shared:
+        if line.since_birth and age_minutes is not None:
+            value = max(1, age_minutes // _UNIT_MINUTES[line.unit])
+            value = max(line.lo, min(line.hi, value)) if value <= line.hi else value
+        elif line.group and line.group in shared:
             value = shared[line.group]
         else:
             hi = line.hi
             if cap_minutes is not None:
-                hi = max(line.lo, min(line.hi, cap_minutes // _UNIT_MINUTES[line.unit]))
-            value = rng.randint(line.lo, hi)
+                capped_hi = cap_minutes // _UNIT_MINUTES[line.unit]
+                hi = capped_hi if capped_hi >= line.lo else line.lo
+                hi = min(hi, line.hi) if capped_hi >= line.lo else hi
+            value = rng.randint(line.lo, max(line.lo, hi))
+            if value == 0:
+                value = 1
             if line.group:
                 shared[line.group] = value
         values[index] = value
@@ -113,17 +161,24 @@ def _ordered_intervals(rng: random.Random, part1: list) -> dict[int, int]:
     return values
 
 
-def _render_chain(rng: random.Random, chain, category: str, scenario: str | None) -> dict[str, Any]:
+def _render_chain(rng: random.Random, chain, category: str, scenario: str | None,
+                  age_minutes: int | None = None, age_group: str = "adult") -> dict[str, Any]:
     """Render a chosen CauseChain's Part I/II into the death.cause.* fields.
 
     Text variants are sampled per record (variety); interval numbers are sampled so they stay
-    non-decreasing from ``a`` to ``d`` (R1, see `_ordered_intervals`). W00-Y34 external-cause
-    codes get the 4th "place of occurrence" character appended from the DO's own field 20
-    (`category`); V01-V99 codes are stored complete in the table (R3). Part II never repeats a
-    Part I code/category and is restricted to scenarios where a comorbidity is plausible (R2/m-e).
+    non-decreasing from ``a`` to ``d``, and never exceed `age_minutes` when given (R1/B2, see
+    `_ordered_intervals`) — `age_minutes` is now passed for every non-fetal age group, adult and
+    child included, not just infant. W00-Y34 external-cause codes get the 4th "place of
+    occurrence" character appended from the DO's own field 20 (`category`); V01-V99 codes are
+    stored complete in the table (R3). Part II never repeats a Part I code/category; the pool is
+    picked by `age_group` (R1: the adult comorbidity pool — diabetes, hypertension, COPD... — is
+    never medically plausible for a child, so children draw from their own small pool instead,
+    and fetal/infant draw from neither); any pool line whose OWN minimum duration already
+    exceeds the age is dropped rather than clamped up to it (R1 — clamping up to `lo` is how a
+    1-year-old used to get "Etilismo crônico 13 anos").
     """
     part1 = list(chain.part1) + [None] * (4 - len(chain.part1))
-    interval_values = _ordered_intervals(rng, part1)
+    interval_values = _ordered_intervals(rng, part1, age_minutes)
     values: dict[str, Any] = {"death.cause.chain_id": chain.chain_id}
     used_cids = set()
     for index, (letter, line) in enumerate(zip(_CAUSE_LINE_LETTERS, part1)):
@@ -139,16 +194,29 @@ def _render_chain(rng: random.Random, chain, category: str, scenario: str | None
         used_cids.add(base)  # base ICD-10 category, so E11.2 also excludes E11.9 (same disease)
         if base == "I11":
             used_cids.add("I10")  # hypertensive heart disease already implies the hypertension
-    part2_eligible = chain.manner == "Natural" or scenario in _PART2_ELIGIBLE_EXTERNAL
-    pool = [line for line in PART2_POOL if line.cid.split(".")[0] not in used_cids] if part2_eligible else []
+    part2_eligible = chain.age_unit == "anos" and (chain.manner == "Natural" or scenario in _PART2_ELIGIBLE_EXTERNAL)
+    source_pool = (PART2_POOL if age_group == "adult" else CHILD_PART2_POOL if age_group == "child" else ()) \
+        if part2_eligible else ()
+    pool = [line for line in source_pool if line.cid.split(".")[0] not in used_cids]
+    if age_minutes is not None:
+        pool = [line for line in pool if line.lo * _UNIT_MINUTES[line.unit] <= age_minutes]
     rng.shuffle(pool)
     count_options, count_weights = ((0, 1), (90, 10)) if chain.manner == "Não natural" else ((0, 1, 2), (35, 45, 20))
     count = rng.choices(count_options, count_weights)[0] if part2_eligible else 0
     chosen = (pool[:count] + [None, None])[:2]
-    values["death.cause.ii1_text"] = chosen[0].text_variants[0] if chosen[0] else None
-    values["death.cause.ii1_cid"] = chosen[0].cid if chosen[0] else None
-    values["death.cause.ii2_text"] = chosen[1].text_variants[0] if chosen[1] else None
-    values["death.cause.ii2_cid"] = chosen[1].cid if chosen[1] else None
+    for slot, line in enumerate(chosen, start=1):
+        if line is None:
+            values[f"death.cause.ii{slot}_text"] = None
+            values[f"death.cause.ii{slot}_cid"] = None
+            values[f"death.cause.ii{slot}_interval"] = None
+            continue
+        hi = line.hi
+        if age_minutes is not None:
+            hi = min(line.hi, age_minutes // _UNIT_MINUTES[line.unit])
+        value = max(1, rng.randint(line.lo, max(line.lo, hi)))
+        values[f"death.cause.ii{slot}_text"] = line.text_variants[0]
+        values[f"death.cause.ii{slot}_cid"] = line.cid
+        values[f"death.cause.ii{slot}_interval"] = format_interval(line.unit, value)
     return values
 
 
@@ -169,6 +237,10 @@ SPOUSE_AGE_WEIGHTS = _weights(16, 95, ((19, 1), (24, 7), (29, 9), (34, 8), (44, 
 WEEKS = range(22, 43)
 WEEK_WEIGHTS = _weights(22, 42, ((27, 0.3), (31, 0.8), (33, 1.5), (36, 4), (37, 10), (38, 22), (39, 28), (40, 20), (41, 8),
                                  (42, 1)))
+# m1: SIM stillbirths skew preterm much more than live births (roughly 22-27w 15-20%, 28-31w
+# 15%, 32-36w 25%, 37+w ~40-45%) — unlike WEEK_WEIGHTS above (78% term), used only for a live
+# birth's own gestation.
+FETAL_WEEK_WEIGHTS = _weights(22, 42, ((27, 3.2), (31, 3), (36, 5), (42, 8)))
 PRENATAL_MONTHS = range(1, 10)
 PRENATAL_MONTH_WEIGHTS = (20, 30, 22, 12, 7, 4, 2, 2, 1)
 PREGNANCY_COUNTS = range(0, 9)
@@ -361,15 +433,85 @@ def age_and_birth_date(record, rng: random.Random, person: str, on: date, ages: 
     return completed_years(born, on), born
 
 
-def age_and_birth_date_in_range(record, rng: random.Random, person: str, on: date, lo: int, hi: int) -> tuple[int, date]:
-    """Like age_and_birth_date, but drawing uniformly from [lo, hi] (a chosen chain's own
-    age gate) instead of the general population pyramid — used so the DO's deceased age is
-    always inside the cause-of-death chain's plausible range, by construction."""
-    return age_and_birth_date(record, rng, person, on, range(lo, hi + 1), tuple(1.0 for _ in range(lo, hi + 1)))
+def age_and_birth_date_in_range(record, rng: random.Random, person: str, on: date, lo: int, hi: int,
+                                age_weights: tuple[float, ...] | None = None) -> tuple[int, date]:
+    """Like age_and_birth_date, but drawing from [lo, hi] (a chosen chain's own age gate)
+    instead of the general population pyramid — used so the DO's deceased age is always
+    inside the cause-of-death chain's plausible range, by construction. B5: when the chain
+    declares its own `age_weights` (falls, traffic, Alzheimer...), they are used here instead
+    of the flat draw that silently ignored them before."""
+    weights = age_weights if age_weights is not None else tuple(1.0 for _ in range(lo, hi + 1))
+    return age_and_birth_date(record, rng, person, on, range(lo, hi + 1), weights)
 
 
-def gestational_history(rng: random.Random, pick: Callable, age: int) -> dict[str, int]:
-    prefix = "mother.obstetric."
+def _completed_months(born: date, on: date) -> int:
+    months = (on.year - born.year) * 12 + (on.month - born.month)
+    if on.day < born.day:
+        months -= 1
+    return months
+
+
+def _subtract_calendar_months(d: date, months: int) -> date:
+    total = d.year * 12 + (d.month - 1) - months
+    year, month = divmod(total, 12)
+    month += 1
+    import calendar
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _birth_date_for_months(rng: random.Random, value: int, on: date) -> date:
+    """B1: the completed calendar months from `born` to `on` must equal `value` exactly — never
+    30*n days (which usually completes one month short). Start from exactly `value` months
+    before `on` (same day-of-month, so the month count is exact by construction: on.day is never
+    < born.day there), then subtract a few extra days (0-27) for variety, retrying if that extra
+    step ever changes the completed-month count (rare, near a short month)."""
+    base = _subtract_calendar_months(on, value)
+    for _ in range(40):
+        born = base - timedelta(days=rng.randint(0, 27))
+        if _completed_months(born, on) == value:
+            return born
+    return base
+
+
+def infant_or_fetal_age(record, rng: random.Random, chain, on: date, value: int | None,
+                        death_time: time | None) -> dict[str, Any]:
+    """Age/birth-date fields for a fetal or infant (<1 year) chain (phase 2).
+
+    Fetal (`chain.age_unit == "fetal"`): field 1 is "Fetal" and the DO has no age field for the
+    deceased at all — the fetus "is born" the day it dies, so `deceased.birth_date` = death.date
+    and `deceased.age` = 0 (keeps the general idade_do_falecido_no_obito constraint satisfied;
+    field 9_anos itself is hidden by the mapping's render_when on death.age_group, not by this
+    value).
+
+    Infant (`chain.age_unit` in "minutos"/"horas"/"dias"/"meses"): `value` (drawn by death(),
+    BEFORE the Part I interval is rendered — B2) is the age in the chain's own unit; the birth
+    date/time is derived so recomputing the age from (birth, death date, death time) gives back
+    exactly `value` (B1) — calendar months for "meses" (never 30*n days), full datetimes
+    (death.time included) for "horas"/"minutos" so the hour unit is never off by a rounding
+    error, and a plain calendar-day difference for "dias". `value` is never 0 (the DO rule:
+    under 1 month is always given in days, never "0 meses"; under 1 day in hours, etc. — the
+    chain's own [min_age, max_age] already enforces min_age >= 1 for every infant chain).
+    """
+    if chain.age_unit == "fetal":
+        return {"deceased.age": 0, "deceased.birth_date": on,
+                "deceased.age_minutes": None, "deceased.age_hours": None,
+                "deceased.age_days": None, "deceased.age_months": None}
+    unit_key = {"minutos": "minutes", "horas": "hours", "dias": "days", "meses": "months"}[chain.age_unit]
+    if chain.age_unit == "meses":
+        born = _birth_date_for_months(rng, value, on)
+    elif chain.age_unit == "dias":
+        born = on - timedelta(days=value)
+    else:  # "horas" / "minutos": exact datetime arithmetic, including the death TIME (B1)
+        on_dt = datetime.combine(on, death_time or time(0, 0))
+        delta = timedelta(hours=value) if chain.age_unit == "horas" else timedelta(minutes=value)
+        born = (on_dt - delta).date()
+    fields = {"deceased.age_minutes": None, "deceased.age_hours": None, "deceased.age_days": None, "deceased.age_months": None}
+    fields[f"deceased.age_{unit_key}"] = value
+    return {"deceased.age": 0, "deceased.birth_date": born, **fields}
+
+
+def gestational_history(rng: random.Random, pick: Callable, age: int, prefix: str = "mother.obstetric.") -> dict[str, int]:
     limit = max(0, (age - 13) // 2 + 1)
     weights = [weight if count <= limit else weight * 0.001 for count, weight in zip(PREGNANCY_COUNTS, PREGNANCY_COUNT_WEIGHTS)]
     gestacoes = pick(rng, prefix + "previous_pregnancies", PREGNANCY_COUNTS, weights)
@@ -379,6 +521,94 @@ def gestational_history(rng: random.Random, pick: Callable, age: int) -> dict[st
     nascidos = pick(rng, prefix + "live_births", (births, births - 1) if births else (0,), (3, 1) if births else None)
     return {prefix + "previous_pregnancies": gestacoes, prefix + "vaginal_births": births - cesareas,
             prefix + "cesareans": cesareas, prefix + "live_births": nascidos, prefix + "fetal_losses": perdas}
+
+
+_WEIGHT_FOR_WEEKS = {22: 500, 24: 650, 26: 900, 28: 1150, 30: 1500, 32: 1900, 34: 2300,
+                     36: 2700, 38: 3100, 39: 3250, 40: 3400, 41: 3450, 42: 3500}
+
+
+def _birth_weight_for_weeks(rng: random.Random, weeks: int) -> int:
+    """Birth weight (g) plausible for `weeks` of gestation (R: weight/gestation coherence) —
+    linear interpolation over typical fetal-growth percentiles, +/- noise, clamped >= 100g."""
+    points = sorted(_WEIGHT_FOR_WEEKS)
+    w = max(min(weeks, points[-1]), points[0])
+    lo = max(p for p in points if p <= w)
+    hi = min(p for p in points if p >= w)
+    base = (_WEIGHT_FOR_WEEKS[lo] if lo == hi else
+            _WEIGHT_FOR_WEEKS[lo] + (_WEIGHT_FOR_WEEKS[hi] - _WEIGHT_FOR_WEEKS[lo]) * (w - lo) / (hi - lo))
+    return max(100, min(6000, int(rng.gauss(base, max(60.0, base * 0.12)))))
+
+
+INFANT_GESTATION_WEEKS = range(24, 43)
+INFANT_GESTATION_WEIGHTS = _weights(24, 42, ((31, 2), (33, 3), (36, 6), (37, 10), (38, 18), (39, 22), (40, 18), (41, 8), (42, 2)))
+PRETERM_GESTATION_WEEKS = range(24, 33)
+
+
+def deceased_birth_block(record, rng: random.Random, age_group: str, chain) -> dict[str, Any]:
+    """Fields 27-37 (block IV/V — mother's age/schooling/occupation/obstetric history, gestation,
+    pregnancy/delivery type, death-vs-delivery timing, birth weight, DN number) for a fetal or
+    infant (<1 year) scenario; blank for every other scenario (phase 2)."""
+    if age_group not in ("fetal", "infant"):
+        return {
+            "deceased.mother_age": None, "deceased.mother_schooling": None, "deceased.mother_schooling_series": None,
+            "deceased.mother_occupation": None, "deceased.mother_occupation_cbo": None,
+            "deceased.mother_live_births": None, "deceased.mother_fetal_losses": None,
+            "deceased.gestation_weeks": None, "deceased.gestation_weeks_unknown": False,
+            "deceased.pregnancy_type": None, "deceased.delivery_type": None,
+            "deceased.death_relative_to_delivery": None, "deceased.birth_weight_g": None, "deceased.birth.dnv_number": None,
+        }
+    mother_age = record.pick(rng, "deceased.mother_age", MOTHER_AGES, MOTHER_AGE_WEIGHTS)
+    if mother_age < MIN_WORKING_AGE:
+        mother_occupation_canonical = "Estudante"
+    else:
+        pool = tuple(o for o in (*OCCUPATIONS, *OCCUPATION_CODES) if mother_age >= OCCUPATION_MIN_AGE.get(o, 0))
+        mother_occupation_canonical = record.pick(
+            rng, lambda value: {"deceased.mother_occupation": value, "deceased.mother_occupation_cbo": OCCUPATION_CODES.get(value)},
+            pool)
+    mother_occupation = inflect_occupation(mother_occupation_canonical, "F")
+    # m-a: the mother's own cap uses medio_age=17 (not 15) — re-verification found 15-year-old
+    # mothers with a COMPLETED "Médio" level, which needs at least two more years from the
+    # typical starting age to show any real complete série.
+    mother_schooling, mother_series = _schooling_for_age(rng, mother_age, mother_occupation_canonical,
+                                                         cap_by_age=True, medio_age=17)
+    obstetric = gestational_history(rng, record.pick, mother_age, prefix="deceased.mother_obstetric_")
+
+    # B4: a prematurity/SDR chain declares its own plausible gestation band
+    # (`gestation_weeks_range`) — never "unknown" (which would otherwise draw a term weight for
+    # a chain whose text says "Prematuridade"), and the weeks drawn are ALWAYS inside that band
+    # so the ICD-10 code (chosen per-chain, P07.2 vs P07.3) stays consistent with the weeks.
+    gestation_range = getattr(chain, "gestation_weeks_range", None)
+    weeks_unknown = (False if gestation_range else record.pick(rng, "deceased.gestation_weeks_unknown", (False, True), (95, 5)))
+    if gestation_range is not None:
+        weeks = record.pick(rng, "deceased.gestation_weeks_chain_range", range(gestation_range[0], gestation_range[1] + 1))
+    elif age_group == "fetal":
+        # m1: SIM stillbirths are mostly preterm, unlike live births — a fetal-specific weight.
+        weeks = None if weeks_unknown else record.pick(rng, "deceased.gestation_weeks", WEEKS, FETAL_WEEK_WEIGHTS)
+    else:
+        weeks = None if weeks_unknown else record.pick(rng, "deceased.gestation_weeks_infant", INFANT_GESTATION_WEEKS, INFANT_GESTATION_WEIGHTS)
+    weight = _birth_weight_for_weeks(rng, weeks if weeks is not None else 38)
+
+    twins = record.pick(rng, "deceased.pregnancy_twins", (False, True), (97, 3))
+    pregnancy_type = "Dupla" if twins else "Única"
+    delivery_type = record.pick(rng, "deceased.delivery_type", ("Vaginal", "Cesáreo", "Ignorado"), (52, 44, 4))
+    if age_group == "fetal":
+        # B3: field 34 is tied to the chosen chain (fetal_timing) — never drawn independently,
+        # so it never contradicts the chain's own P20.0 ("Antes")/P20.1 ("Durante") coding.
+        relative = chain.fetal_timing or record.pick(rng, "deceased.death_relative_to_delivery", ("Antes", "Durante"), (70, 30))
+        dn_number = None
+    else:
+        relative = "Depois"
+        dn_number = record.draw("deceased.birth.dnv_number", rng, lambda: DNV_TEST_PREFIX + digits(rng, 8) + digits(rng, 1))
+    return {
+        "deceased.mother_age": mother_age, "deceased.mother_schooling": mother_schooling,
+        "deceased.mother_schooling_series": mother_series,
+        "deceased.mother_occupation": mother_occupation, "deceased.mother_occupation_cbo": OCCUPATION_CODES.get(mother_occupation_canonical),
+        "deceased.mother_live_births": obstetric["deceased.mother_obstetric_live_births"],
+        "deceased.mother_fetal_losses": obstetric["deceased.mother_obstetric_fetal_losses"],
+        "deceased.gestation_weeks": weeks, "deceased.gestation_weeks_unknown": weeks_unknown,
+        "deceased.pregnancy_type": pregnancy_type, "deceased.delivery_type": delivery_type,
+        "deceased.death_relative_to_delivery": relative, "deceased.birth_weight_g": weight, "deceased.birth.dnv_number": dn_number,
+    }
 
 
 def birth(record, rng: random.Random) -> dict[str, Any]:
@@ -590,6 +820,7 @@ def registration(record, rng: random.Random) -> dict[str, Any]:
 EXTERNAL_SOURCE_BY_SCENARIO = {
     "external_traffic": "Boletim de Ocorrência", "external_fall": "Boletim de Ocorrência",
     "external_homicide": "Boletim de Ocorrência", "external_suicide": "Família",
+    "child_external": "Boletim de Ocorrência",
 }
 EXTERNAL_DESCRIPTIONS = {
     ("external_traffic", "hospital"): "Vítima de acidente de trânsito, socorrida e encaminhada ao hospital, onde veio a óbito.",
@@ -607,6 +838,26 @@ EXTERNAL_DESCRIPTIONS = {
     ("external_suicide", "hospital"): ("Vítima de lesão autoprovocada intencionalmente, socorrida e encaminhada "
                                        "ao hospital, onde veio a óbito."),
     ("external_suicide", "public"): "Vítima de lesão autoprovocada intencionalmente em via pública.",
+    ("child_external", "hospital"): "Vítima de causa externa, socorrida e encaminhada ao hospital, onde veio a óbito.",
+    ("child_external", "home_own"): "Vítima de causa externa no próprio domicílio.",
+    ("child_external", "home_other"): "Vítima de causa externa em domicílio.",
+    ("child_external", "public"): "Vítima de causa externa, com óbito no local.",
+}
+# M4: field 51 gets a chain-specific description (not the generic "causa externa" fallback
+# above) for the child-external chains whose event is specific enough to describe precisely.
+CHILD_EXTERNAL_DESCRIPTIONS = {
+    ("crianca_afogamento", "hospital"): "Vítima de afogamento, socorrida e encaminhada ao hospital, onde veio a óbito.",
+    ("crianca_afogamento", "home_own"): "Vítima de afogamento em piscina do próprio domicílio.",
+    ("crianca_afogamento", "home_other"): "Vítima de afogamento em piscina residencial.",
+    ("crianca_afogamento", "public"): "Vítima de afogamento em rio, represa ou praia.",
+    ("crianca_atropelamento", "hospital"): "Vítima de atropelamento por veículo, socorrida e encaminhada ao hospital, onde veio a óbito.",
+    ("crianca_atropelamento", "public"): "Vítima de atropelamento por veículo em via pública.",
+    ("adolescente_paf", "hospital"): "Vítima de agressão por disparo de arma de fogo, socorrida e encaminhada ao hospital, onde veio a óbito.",
+    ("adolescente_paf", "home_own"): "Vítima de agressão por disparo de arma de fogo no próprio domicílio.",
+    ("adolescente_paf", "home_other"): "Vítima de agressão por disparo de arma de fogo em domicílio.",
+    ("adolescente_paf", "public"): "Vítima de agressão por disparo de arma de fogo, com óbito no local, em via pública.",
+    ("adolescente_moto", "hospital"): "Vítima de acidente de trânsito com motocicleta, socorrida e encaminhada ao hospital, onde veio a óbito.",
+    ("adolescente_moto", "public"): "Vítima de acidente de trânsito com motocicleta, com óbito no local, em via pública.",
 }
 UF_DDD = {"AC": "68", "AL": "82", "AP": "96", "AM": "92", "BA": "71", "CE": "85", "DF": "61", "ES": "27", "GO": "62",
          "MA": "98", "MT": "65", "MS": "67", "MG": "31", "PA": "91", "PB": "83", "PR": "41", "PE": "81", "PI": "86",
@@ -635,6 +886,10 @@ def death(record, rng: random.Random) -> dict[str, Any]:
     # (CNS exists since 1996) without a separate date cutoff for field 3.
     event_start = date(2011, 1, 1) if is_do else EVENT_START
     profile = pick_profile(record, rng, "death.place", parts=("municipality", "uf", "ibge"))
+    # Drawn here (not inline in the `values` dict below) because B1 needs the death TIME to
+    # compute an infant's hour/minute age precisely (datetime arithmetic, not a day-rounding).
+    death_date = record.pick(rng, "death.date", DateSpan(event_start, EVENT_END))
+    death_time = record.pick(rng, "death.time", MINUTES)
 
     scenario = chain = None
     category, hospital, external, manner = "1", True, False, "Natural"
@@ -646,8 +901,12 @@ def death(record, rng: random.Random) -> dict[str, Any]:
         required_ages = record.required_values("deceased.age") if hasattr(record, "required_values") else None
         if required_ages:
             target_age = min(required_ages)
+            # Phase 2: an AI-required deceased.age is still always in completed YEARS (the AI
+            # slot only offers adult ages — see assisted.py's open item in the final report), so
+            # only "anos"-gated chains (adult/child) are eligible here; fetal/infant chains
+            # (age_unit "fetal"/"dias"/"horas"/"meses") are never forced by this path.
             eligible = [(sid, c) for sid in SCENARIOS_BY_ID for c in chains_for_scenario(sid)
-                       if c.min_age <= target_age <= c.max_age]
+                       if c.age_unit == "anos" and c.min_age <= target_age <= c.max_age]
         else:
             eligible = None
         if eligible:
@@ -662,12 +921,39 @@ def death(record, rng: random.Random) -> dict[str, Any]:
             chain = rng.choices(candidates, weights=[c.weight for c in candidates])[0]
         picked = SCENARIOS_BY_ID[scenario]
         manner = picked.manner
+        age_group = picked.age_group
         external = manner == "Não natural"
         if chain.setting == "hospital":
             category = rng.choices(["1", "2"], (90, 10))[0]
+        elif chain.place_weights:
+            # M4: a chain-specific place distribution (e.g. a pedestrian death is never "at
+            # home") overrides the scenario's own generic distribution.
+            cats = list(chain.place_weights)
+            category = rng.choices(cats, [chain.place_weights[c] for c in cats])[0]
         else:
             category = pick_place(rng, picked)
         hospital = category in ("1", "2")
+    else:
+        age_group = "adult"
+
+    # B1/B2/R1: the age (in the chain's own unit — "anos" for adult/child, minutos/horas/
+    # dias/meses for infant) is drawn HERE, before the Part I/Part II intervals are rendered
+    # below, so EVERY interval (not just an infant's) can be capped at it by construction;
+    # deceased() (which renders the birth date) reuses this exact value instead of drawing a
+    # second, inconsistent one. Fetal has no real duration to cap against (age is always 0).
+    age_unit_value = age_unit_minutes = None
+    if is_do and chain is not None and chain.age_unit != "fetal":
+        if chain.age_unit == "anos":
+            # Drawn under the "deceased.age" key (via a callable project) so an AI-required
+            # deceased.age (R5) still filters the candidates here, exactly as it used to when
+            # this draw happened inside deceased() — required_ages/eligible above already
+            # restricted the scenario/chain pair to one whose gate contains the required age.
+            age_unit_value = record.pick(rng, lambda v: {"deceased.age": v},
+                                         range(chain.min_age, chain.max_age + 1), chain.age_weights)
+        else:
+            age_unit_value = record.pick(rng, "death.cause.age_unit_value",
+                                         range(chain.min_age, chain.max_age + 1), chain.age_weights)
+        age_unit_minutes = age_unit_value * _UNIT_MINUTES[chain.age_unit]
 
     # Whether a category-"3" (domicílio) death happened in the deceased's OWN residence (~85%,
     # field 22 blank, field 51 says "próprio domicílio") or a different address (~15%, field 22
@@ -676,12 +962,14 @@ def death(record, rng: random.Random) -> dict[str, Any]:
     own_home = category == "3" and record.link("death.own_residence", _own_residence_draw)
 
     values: dict[str, Any] = {
-        "death.date": record.pick(rng, "death.date", DateSpan(event_start, EVENT_END)),
-        "death.time": record.pick(rng, "death.time", MINUTES),
-        "death.type": "2",
+        "death.date": death_date,
+        "death.time": death_time,
+        "death.type": "1" if age_group == "fetal" else "2",
+        "death.age_group": age_group,
         "death.place.category": category,
         "death.cause.manner": manner,
         "death.scenario": scenario,
+        "death.cause.age_unit_value": age_unit_value,
         **address("death.place", profile, "", ("municipality", "uf", "ibge")),
     }
 
@@ -735,7 +1023,8 @@ def death(record, rng: random.Random) -> dict[str, Any]:
             "death.external.type": chain.external_type,
             "death.external.work_accident": "1" if is_work_accident else "2",
             "death.external.source": "Hospital" if hospital else EXTERNAL_SOURCE_BY_SCENARIO[scenario],
-            "death.external.description": EXTERNAL_DESCRIPTIONS[(scenario, place_group)],
+            "death.external.description": CHILD_EXTERNAL_DESCRIPTIONS.get((chain.chain_id, place_group))
+                                          or EXTERNAL_DESCRIPTIONS[(scenario, place_group)],
             "death.external.place.municipality": profile["city"], "death.external.place.uf": profile["uf"],
         })
     else:
@@ -745,12 +1034,13 @@ def death(record, rng: random.Random) -> dict[str, Any]:
         })
 
     if is_do:
-        values.update(_render_chain(rng, chain, category, scenario))
+        values.update(_render_chain(rng, chain, category, scenario, age_unit_minutes, age_group))
     else:
         values.update({f"death.cause.{letter}_{suffix}": None
                        for letter in _CAUSE_LINE_LETTERS for suffix in ("text", "cid", "interval")})
         values.update({"death.cause.chain_id": None, "death.cause.ii1_text": None, "death.cause.ii1_cid": None,
-                       "death.cause.ii2_text": None, "death.cause.ii2_cid": None})
+                       "death.cause.ii1_interval": None, "death.cause.ii2_text": None, "death.cause.ii2_cid": None,
+                       "death.cause.ii2_interval": None})
     return values
 
 
@@ -797,17 +1087,35 @@ def _occurrence_address(record, rng: random.Random, category: str, own_home: boo
 def deceased(record, rng: random.Random) -> dict[str, Any]:
     is_do = record.context == "declaracao_obito"
     on = record.value("death.date")
+    infant_fields: dict[str, Any] = {}
     if is_do:
         from src.semantic.cause_chains import CAUSE_CHAINS
         chain_id = record.value("death.cause.chain_id")
         chain = next(c for c in CAUSE_CHAINS if c.chain_id == chain_id)
-        age, born = age_and_birth_date_in_range(record, rng, "deceased", on, chain.min_age, chain.max_age)
-        sex = chain.sex or record.pick(rng, "deceased.sex", ("M", "F"), (52, 48))
+        if chain.age_unit == "anos":
+            # R1: the age was already drawn in death() (under the "deceased.age" key, so an
+            # AI-required age still filtered it there) — reuse it instead of drawing again, so
+            # death()'s Part I/Part II interval caps are guaranteed consistent with this age.
+            age = record.value("death.cause.age_unit_value")
+            born = record.pick(rng, "deceased.birth_date", birth_dates_for_age(age, on))
+        else:
+            infant_value = record.value("death.cause.age_unit_value") if chain.age_unit != "fetal" else None
+            death_time = record.value("death.time")
+            infant_fields = infant_or_fetal_age(record, rng, chain, on, infant_value, death_time)
+            age, born = infant_fields["deceased.age"], infant_fields["deceased.birth_date"]
+        sex = chain.sex or record.pick(rng, "deceased.sex", ("M", "F"), chain.sex_weights or (52, 48))
     else:
+        chain = None
         age, born = age_and_birth_date(record, rng, "deceased", on, DECEASED_AGES, DECEASED_AGE_WEIGHTS)
         sex = record.pick(rng, "deceased.sex", ("M", "F"), (52, 48))
-    name = record.draw("deceased.name", rng, lambda: person_name(record, rng, sex))
-    mother_name, father_name = parent_names(record, rng, name)
+    age_group = record.value("death.age_group") if is_do else "adult"
+    name = (record.draw("deceased.name", rng, lambda: "Natimorto") if age_group == "fetal"
+            else record.draw("deceased.name", rng, lambda: person_name(record, rng, sex)))
+    # A fetal death ("Natimorto") has no surname of its own to derive the parents' surnames from
+    # (parent_names() would otherwise literally surname them "Natimorto") — draw the parents
+    # independently instead, same as any other unrelated pair of names.
+    mother_name, father_name = ((person_name(record, rng, "F"), person_name(record, rng, "M")) if age_group == "fetal"
+                                else parent_names(record, rng, name))
     category = record.value("death.place.category") if is_do else None
     # Home deaths (category "3") must be in the deceased's own residence city (M1) — a death at
     # home is, by definition, in the municipality the person lived in. Otherwise (item 1), Lei
@@ -817,11 +1125,39 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     # toward a neighbouring region instead of spreading it uniformly over the whole country.
     residence_bias = 1.0 if (is_do and category == "3") else 0.95
     residence = pick_profile(record, rng, "deceased.residence", favoring(profile_of(record, "death.place"), residence_bias))
-    birthplace = rng.choice(LOCATION_PROFILES)
+    # M1: for a fetal/neonatal in-hospital death, naturalidade is the municipality of
+    # delivery/death, not an arbitrary one — mostly the death municipality itself (fetal/early
+    # neonatal: delivery and death are the same hospital), and for older infants mostly the
+    # death municipality or residence.
+    if is_do and age_group in ("fetal", "infant"):
+        death_profile_for_birthplace = profile_of(record, "death.place")
+        birthplace = record.pick(rng, "deceased.naturalidade_profile", LOCATION_PROFILES,
+                                 [92 if p is death_profile_for_birthplace else 8 / (len(LOCATION_PROFILES) - 1)
+                                  for p in LOCATION_PROFILES])
+    else:
+        birthplace = rng.choice(LOCATION_PROFILES)
     # "Estudante" is implausible for an elderly DO death (M4) — exclude it from the pool once
-    # the person is well past typical student age in the DO context.
+    # the person is well past typical student age in the DO context. M2: under 18, occupation
+    # is "Estudante" (>= 6) or "Não se aplica" — never the full adult occupation pool (no
+    # "Engenheiro"/"Superior completo" at 14).
+    # R2/m-a: OCCUPATION_MIN_AGE (a graduate title needs ~22, a technical/"Médio" title ~16) is
+    # applied to the DO deceased's own pool too — this is what actually fixed the 78 DO adults
+    # aged 18-20 with "Superior completo": the schooling cap alone cannot catch it, because the
+    # occupation-driven fast path in _schooling_for_age is unconditional once the occupation
+    # itself is drawn. Outside the DO this filter is skipped (byte-identical to before phase 2).
     occupation_pool = tuple(o for o in OCCUPATIONS if o != "Estudante") if (is_do and age >= 65) else OCCUPATIONS
-    occupation_canonical = "Não se aplica" if age < 14 else record.pick(rng, "deceased.occupation", occupation_pool)
+    if is_do:
+        occupation_pool = tuple(o for o in occupation_pool if age >= OCCUPATION_MIN_AGE.get(o, 0))
+    if is_do and age < 6:
+        occupation_canonical = "Não se aplica"
+    elif is_do and age < 18:
+        occupation_canonical = rng.choices(("Estudante", "Não se aplica"), (90, 10))[0]
+    elif not is_do and age < 14:
+        # Outside the DO (other documents sharing this generator) keep the exact pre-phase-2
+        # rule — M2's "Estudante <18" fix is DO-specific, so those documents stay byte-identical.
+        occupation_canonical = "Não se aplica"
+    else:
+        occupation_canonical = record.pick(rng, "deceased.occupation", occupation_pool)
     # R-c: always inflect to the deceased's sex, even when the AI required a specific
     # canonical value — assisted.py widens that requirement to accept either grammatical
     # form, so the inflected value still satisfies it.
@@ -829,8 +1165,13 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     residence_fields = address("deceased.residence", residence, house_number(record, rng, "deceased.residence.number"),
                                ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge"),
                                *pick_street(record, rng, "deceased.residence.street", residence))
+    # Field 9_anos ("Idade - Anos completos") genuinely has no value for fetal/infant deaths —
+    # not just a blank render: the field's own validation (min=1) would otherwise reject the
+    # internal age=0 used above for occupation/schooling logic, so the EXPORTED value is None
+    # (field 9's own "menores de 1 ano" / "fetal" blocks are what carry the age instead).
+    exported_age = None if age_group in ("fetal", "infant") else age
     values = {
-        "deceased.name": name, "deceased.sex": sex, "deceased.birth_date": born, "deceased.age": age,
+        "deceased.name": name, "deceased.sex": sex, "deceased.birth_date": born, "deceased.age": exported_age,
         "deceased.cpf": record.draw("deceased.cpf", rng, lambda: cpf_digits(rng)),
         "deceased.naturalidade": f"{birthplace['city']} - {birthplace['uf']}",
         "deceased.naturalidade.municipality": birthplace["city"], "deceased.naturalidade.uf": birthplace["uf"],
@@ -838,8 +1179,28 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
         "deceased.father_name": record.draw("deceased.father_name", rng, lambda: father_name),
         "deceased.parents_names": f"{mother_name}; {father_name}",
         "deceased.occupation": occupation, "deceased.occupation_cbo": OCCUPATION_CODES.get(occupation_canonical),
+        "deceased.age_minutes": infant_fields.get("deceased.age_minutes"), "deceased.age_hours": infant_fields.get("deceased.age_hours"),
+        "deceased.age_days": infant_fields.get("deceased.age_days"), "deceased.age_months": infant_fields.get("deceased.age_months"),
         **residence_fields,
     }
+    if is_do:
+        values.update(deceased_birth_block(record, rng, age_group, chain))
+        # Field 37 ("a morte ocorreu...") targets any woman of fertile age (10-49) at death,
+        # independent of scenario — the vast majority of such deaths are unrelated to pregnancy.
+        # M5: "No parto"/"No aborto" imply an obstetric (O-code) cause, which no chain in this
+        # library models yet — so those two values are dropped until such chains exist; the
+        # realistic "Na gravidez"/puerperal rates are also lowered (~1-2% each, not ~8% total).
+        if sex == "F" and age_group in ("adult", "child") and 10 <= age <= 49:
+            values["deceased.fertile_context"] = record.pick(
+                rng, "deceased.fertile_context",
+                ("Não ocorreu nestes períodos", "Na gravidez", "Até 42 dias após o parto",
+                 "De 43 dias a 1 ano após o parto", "Ignorado"),
+                (93.5, 1.5, 1.5, 1.5, 2))
+        else:
+            values["deceased.fertile_context"] = None
+    else:
+        values.update(deceased_birth_block(record, rng, "adult", None))
+        values["deceased.fertile_context"] = None
     if is_do:
         death_profile = profile_of(record, "death.place")
         own_home = category == "3" and record.link("death.own_residence", _own_residence_draw)
@@ -853,7 +1214,13 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     values["deceased.cns"] = (record.draw("deceased.cns", rng, lambda: cns_digits(rng))
                               if (not is_do or on >= date(1997, 1, 1)) else None)
     values["deceased.race"] = record.pick(rng, "deceased.race", RACES, RACE_WEIGHTS)
-    schooling, series = _schooling_for_age(rng, age, occupation_canonical if is_do else None)
+    # R2/m-a: the age cap now applies to the DO deceased's own schooling at EVERY age group, not
+    # only children — this is what fixed 78 DO adults aged 18-20 showing "Superior completo"
+    # (the occupation fast path inside _schooling_for_age is unconditional, so a real graduate
+    # occupation like "Advogada" is unaffected: OCCUPATION_MIN_AGE already keeps it out of the
+    # pool before the real minimum age).
+    schooling, series = _schooling_for_age(rng, age, occupation_canonical if is_do else None,
+                                           cap_by_age=is_do)
     values["deceased.schooling"] = schooling
     values["deceased.schooling_series"] = series
     marital_options, marital_weights = _DECEASED_MARITAL_WEIGHTS(age)
@@ -866,6 +1233,20 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
                                       if married_like else None)
     values["deceased.children_summary"] = record.draw("deceased.children_summary", rng,
                                                       lambda: _children_summary(record, rng, age, name))
+    if is_do and age_group == "fetal":
+        # M1: a stillbirth has no CNS (field 3), marital status (12), schooling (13) or
+        # occupation (14) of its own — the DO instructions describe these as fields of the
+        # DECEASED, and a fetus never acquired any of them; left entirely BLANK (None), not
+        # "Não se aplica" (that value is for an infant/child who is simply too young, which
+        # still legally has e.g. a marital status concept — a fetal death does not).
+        values["deceased.cns"] = None
+        values["deceased.marital_status"] = None
+        values["deceased.marital_status_do"] = None
+        values["deceased.spouse_name"] = None
+        values["deceased.schooling"] = None
+        values["deceased.schooling_series"] = None
+        values["deceased.occupation"] = None
+        values["deceased.occupation_cbo"] = None
     return values
 
 
