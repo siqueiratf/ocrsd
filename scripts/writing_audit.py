@@ -409,6 +409,14 @@ def checkbox_mark_metrics(page_img: Image.Image, blank_img: Image.Image | None, 
     }
 
 
+def is_numeric_value(value: str | None) -> bool:
+    """True for values made of digits and separators only (dates, CPF, codes)."""
+    if not value:
+        return False
+    stripped = "".join(ch for ch in value if ch not in " .-/:")
+    return stripped.isdigit()
+
+
 def run_tesseract(img: Image.Image, digits_only: bool = False, psm: int = 7) -> str:
     args = [TESSERACT_BIN, "stdin", "stdout", "-l", "por", "--psm", str(psm)]
     if digits_only:
@@ -744,11 +752,12 @@ def run_one(document_key: str, document, definition: dict, preset: dict, seed: i
                 row.max_gap_over_median = metrics.max_gap_over_median
                 row.max_gap_over_ink_height = metrics.max_gap_over_ink_height
                 row.excessive_spacing = metrics.excessive_spacing
-                row.is_digit_field = data_type in {"date", "cpf", "digit_sequence", "integer"} or bool(
-                    value and value.replace(".", "").replace("-", "").replace("/", "").isdigit())
+                # The value decides digit mode, not only the data type: a date written in
+                # words ("25 de abril de 2018") must not be read with a digits-only OCR.
+                row.is_digit_field = is_numeric_value(value)
                 if row.is_digit_field:
                     row.digit_height_ratio = metrics.ink_height_ratio
-                digits_only = data_type in {"date", "cpf", "digit_sequence", "integer"}
+                digits_only = row.is_digit_field
                 # Composite digit/letter boxes (one printed cell per character) are OCR'd
                 # per cell at psm 10, not as a whole run at psm 7: psm 7 was reading the
                 # separator rules between cells as part of the line and coming back EMPTY

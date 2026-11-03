@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from writing_audit import (  # noqa: E402
+    is_numeric_value,
     analyze_ink, cer, check_coherence, check_mapping_overlaps, checkbox_mark_metrics,
     classify_field_shape, cpf_check_digits_ok, normalize_loose, validate_value,
 )
@@ -98,6 +99,12 @@ class WritingAuditMetricsTest(unittest.TestCase):
                     "death_registration.date": "1999-06-20"}
         issues = check_coherence(snapshot)
         self.assertEqual(issues, [])
+
+    def test_numeric_value_decides_digit_ocr_mode(self):
+        self.assertTrue(is_numeric_value("25/04/2018"))
+        self.assertTrue(is_numeric_value("123.456.789-09"))
+        self.assertFalse(is_numeric_value("25 de abril de 2018"))
+        self.assertFalse(is_numeric_value(""))
 
     def test_coherence_flags_future_date(self):
         issues = check_coherence({"filling.date": "2999-01-01"})
