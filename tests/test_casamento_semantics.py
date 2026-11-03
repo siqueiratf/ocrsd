@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CASAMENTO_CNJ_MAPPING = ROOT / "documents/certidao_casamento_cnj/mappings/mapeamento_certidao_casamento_cnj_v1.json"
 CASAMENTO_CNJ_TEMPLATE = ROOT / "documents/certidao_casamento_cnj/template.pdf"
 CASAMENTO_MAPPING = ROOT / "documents/certidao_casamento/mappings/mapeamento_certidao_casamento_v1.json"
-OBITO_MAPPING = ROOT / "documents/certidao_obito/mappings/mapeamento_certidao_obito_v2.json"
+OBITO_MAPPING = ROOT / "documents/certidao_obito/mappings/mapeamento_certidao_obito_v3.json"
 NASCIMENTO_CNJ_MAPPING = ROOT / "documents/certidao_nascimento_cnj/mappings/mapeamento_certidao_nascimento_cnj_v2.json"
 
 MARRIAGE_KEYS = (ENTITY_KEYS["spouse1"] + ENTITY_KEYS["spouse2"] + ENTITY_KEYS["marriage"]
