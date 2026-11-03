@@ -1,50 +1,50 @@
 {
   "per_preset": {
     "padrao_fonte_natural": {
-      "mean_cer_loose": 0.562,
-      "mean_cer_loose_digits_only": 0.626,
-      "excessive_spacing_count": 2,
-      "mean_left_margin_h": 0.261,
-      "mean_digit_height_ratio": 0.544,
+      "mean_cer_loose": 0.529,
+      "mean_cer_loose_digits_only": 0.622,
+      "excessive_spacing_count": 0,
+      "mean_left_margin_h": 0.265,
+      "mean_digit_height_ratio": 0.538,
       "right_overflow_count": 0
     },
     "padrao_fonte_homemade_apple": {
-      "mean_cer_loose": 0.795,
-      "mean_cer_loose_digits_only": 0.755,
-      "excessive_spacing_count": 2,
-      "mean_left_margin_h": 0.23,
-      "mean_digit_height_ratio": 0.592,
+      "mean_cer_loose": 0.801,
+      "mean_cer_loose_digits_only": 0.759,
+      "excessive_spacing_count": 0,
+      "mean_left_margin_h": 0.236,
+      "mean_digit_height_ratio": 0.593,
       "right_overflow_count": 0
     },
     "padrao_digitada_arimo": {
-      "mean_cer_loose": 0.224,
-      "mean_cer_loose_digits_only": 0.225,
-      "excessive_spacing_count": 2,
-      "mean_left_margin_h": 0.32,
-      "mean_digit_height_ratio": 0.51,
+      "mean_cer_loose": 0.2,
+      "mean_cer_loose_digits_only": 0.21,
+      "excessive_spacing_count": 0,
+      "mean_left_margin_h": 0.321,
+      "mean_digit_height_ratio": 0.505,
       "right_overflow_count": 0
     },
     "style_20260921_140241_6d9869": {
-      "mean_cer_loose": 0.834,
-      "mean_cer_loose_digits_only": 0.87,
-      "excessive_spacing_count": 1,
-      "mean_left_margin_h": 0.255,
-      "mean_digit_height_ratio": 0.747,
+      "mean_cer_loose": 0.805,
+      "mean_cer_loose_digits_only": 0.824,
+      "excessive_spacing_count": 0,
+      "mean_left_margin_h": 0.256,
+      "mean_digit_height_ratio": 0.74,
       "right_overflow_count": 0
     },
     "style_20260921_144107_d6344a": {
-      "mean_cer_loose": 0.719,
-      "mean_cer_loose_digits_only": 0.81,
-      "excessive_spacing_count": 1,
-      "mean_left_margin_h": 0.238,
-      "mean_digit_height_ratio": 0.616,
+      "mean_cer_loose": 0.728,
+      "mean_cer_loose_digits_only": 0.806,
+      "excessive_spacing_count": 0,
+      "mean_left_margin_h": 0.242,
+      "mean_digit_height_ratio": 0.611,
       "right_overflow_count": 0
     }
   },
   "per_document_fill_pct": {
-    "do": 71.5,
+    "do": 57.6,
     "dnv": 86.0,
-    "certidao_obito": 96.1,
+    "certidao_obito": 95.8,
     "cnpj_quadro_socios_administradores": 53.8
   },
   "coherence_issue_counts": {
