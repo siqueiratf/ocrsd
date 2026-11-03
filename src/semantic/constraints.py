@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Callable, Mapping
 
 from src.field_rules import format_date
-from src.semantic.data import LOCATION_PROFILES, OCCUPATION_CODES, occupation_cbo_for
+from src.semantic.data import ANOMALY_CODES, LOCATION_PROFILES, OCCUPATION_CODES, occupation_cbo_for
 from src.semantic.registry import REGISTRY
 
 ADDRESS_PARTS = {"municipality": "city", "uf": "uf", "ibge": "ibge", "cep": "cep"}
@@ -283,6 +284,21 @@ def _newborn_naturalidade_uf(values: Mapping[str, Any]) -> str | None:
     return None if values["newborn.naturalidade.uf"] == expected else "a UF da naturalidade não corresponde ao município"
 
 
+_ANOMALY_DESCRIPTION_RE = re.compile(r"\(([A-Z]\d{2}(?:\.\d)?)\)$")
+
+
+def _anomaly_block_coherent(values: Mapping[str, Any]) -> str | None:
+    status, description = values["newborn.anomaly_status"], values["newborn.anomaly_description"]
+    if status != "Sim":
+        return None if description is None else "só pode haver descrição de anomalia quando o campo 6 é “Sim”"
+    if not description:
+        return "campo 6 “Sim” exige descrição da anomalia (campo 41)"
+    match = _ANOMALY_DESCRIPTION_RE.search(description)
+    if not match or match.group(1) not in ANOMALY_CODES:
+        return "descrição da anomalia não traz um código CID-10 válido"
+    return None
+
+
 def _deceased_spouse_name(values: Mapping[str, Any]) -> str | None:
     married_like = values["deceased.marital_status"] in {"CASADO(A)", "VIÚVO(A)", "UNIÃO ESTÁVEL"}
     if married_like != (values["deceased.spouse_name"] is not None):
@@ -301,8 +317,8 @@ CONSTRAINTS: tuple[Constraint, ...] = (
                lambda v: None if v["birth.pregnancy_type"] == ("Dupla" if v["birth.twins"] else "Única") else "tipo de gravidez difere da gemelaridade"),
     Constraint("cesarea_e_via_de_parto", ("birth.delivery_type", "birth.cesarean_before_labor"), ("birth",),
                lambda v: None if v["birth.cesarean_before_labor"] == ("Não se aplica" if v["birth.delivery_type"] == "Vaginal" else "Ignorado") else "indicação de cesárea incompatível com a via de parto"),
-    Constraint("anomalia_sem_diagnostico", ("newborn.anomaly_status", "newborn.anomaly_description"), ("newborn",),
-               lambda v: None if v["newborn.anomaly_status"] == "Ignorado" and v["newborn.anomaly_description"] is None else "diagnóstico não validado"),
+    Constraint("anomalia_congenita_coerente", ("newborn.anomaly_status", "newborn.anomaly_description"), ("newborn",),
+               _anomaly_block_coherent),
     Constraint("ocupacao_e_cbo", ("mother.occupation", "mother.occupation_cbo"), ("mother",),
                lambda v: None if v["mother.occupation_cbo"] == occupation_cbo_for(v["mother.occupation"]) else "CBO não corresponde à ocupação documentada"),
     Constraint("ocupacao_do_falecido_e_cbo", ("deceased.occupation", "deceased.occupation_cbo"), ("deceased",),

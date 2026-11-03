@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 from src.field_rules import DNV_TEST_PREFIX, cpf, format_date
 from src.semantic.constraints import REFERENCE_END, completed_years
-from src.semantic.data import (ADULT_ESTABLISHMENT_NAMES, COMPLEMENTS, ESTABLISHMENT_NAMES, FEMALE_ASSOCIATED_FIRST_NAMES,
+from src.semantic.data import (ADULT_ESTABLISHMENT_NAMES, ANOMALIES, COMPLEMENTS, ESTABLISHMENT_NAMES, FEMALE_ASSOCIATED_FIRST_NAMES,
                                ISSUERS, LOCATION_PROFILES, MALE_ASSOCIATED_FIRST_NAMES, OCCUPATIONS, OCCUPATION_CODES,
                                OCCUPATION_GENDER, OCCUPATION_OPPOSITE_FORM, OTHER_HEALTH_ESTABLISHMENT_NAMES,
                                PROFILES_BY_IBGE, REGION_BY_UF, REGISTRY_OFFICE_NAMES, SURNAMES)
@@ -689,6 +689,24 @@ def father(record, rng: random.Random) -> dict[str, Any]:
             "father.birth_date": born, "father.age": age}
 
 
+def _anomaly_block(record, rng: random.Random, sex: str) -> dict[str, Any]:
+    """Field 6 ("Detectada alguma anomalia congênita?") and, when "Sim", field 41's
+    description + ICD-10 code (R8/item 1): real DNVs record "Não" in the large majority of
+    cases, "Sim" in ~1-2% (SINASC prevalence of recorded anomalies is ~0.8-1%), and the
+    remainder "Ignorado". Only "Sim" carries a description; it is drawn from ANOMALIES,
+    restricted to the newborn's sex and weighted so Down syndrome is more likely with an
+    older mother (maternal-age-related trisomy 21 risk)."""
+    status = record.pick(rng, "newborn.anomaly_status", ("Não", "Sim", "Ignorado"), (975, 15, 10))
+    if status != "Sim":
+        return {"newborn.anomaly_status": status, "newborn.anomaly_description": None}
+    mother_age = record.value("mother.age")
+    pool = tuple(entry for entry in ANOMALIES if entry[2] in (None, sex))
+    weights = [weight * (3 if code == "Q90.9" and mother_age >= 35 else 1) for _, code, _, weight in pool]
+    description, code, _, _ = record.pick(
+        rng, lambda entry: {"newborn.anomaly_description": f"{entry[0]} ({entry[1]})"}, pool, weights)
+    return {"newborn.anomaly_status": status, "newborn.anomaly_description": f"{description} ({code})"}
+
+
 def newborn(record, rng: random.Random) -> dict[str, Any]:
     maternal, paternal = family_names(record.value("mother.name"))[-1], family_names(record.value("father.name"))[-1]
     sex = record.pick(rng, "newborn.sex", ("M", "F"), (51, 49))
@@ -700,7 +718,7 @@ def newborn(record, rng: random.Random) -> dict[str, Any]:
     head = max(25, min(40, round(rng.gauss(34 + (weeks - 39) * 0.4, 1.4))))
     apgar_1 = record.pick(rng, "newborn.apgar_1min", range(5, 11), (1, 2, 4, 13, 35, 45))
     values = {
-        "newborn.anomaly_status": "Ignorado", "newborn.anomaly_description": None,
+        **_anomaly_block(record, rng, sex),
         "newborn.race": record.pick(rng, "newborn.race", ("Branca", "Preta", "Amarela", "Parda", "Indígena"), (38, 10, 1, 49, 2)),
         "newborn.weight_g": weight, "newborn.length_tenths_cm": length, "newborn.head_circumference_cm": head,
         "newborn.apgar_1min": apgar_1, "newborn.apgar_5min": record.pick(rng, "newborn.apgar_5min", range(apgar_1, 11)),

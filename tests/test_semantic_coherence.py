@@ -442,5 +442,71 @@ class BairroPerStreetTests(unittest.TestCase):
         self.assertGreater(mismatched_default, 0, "no residence used a non-default bairro across 300 records")
 
 
+class AnomalyAndCboTests(unittest.TestCase):
+    """Item 8: DNV congenital-anomaly block (field 6 status + field 41 description/ICD-10
+    code) and CBO-2002 codes for every working occupation (DNV mother, DO deceased, DO
+    deceased's mother)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dnv = _dnv_records(2000)
+        cls.do = _do_records(2000)
+
+    def test_anomaly_status_distribution_is_realistic(self):
+        from collections import Counter
+        counts = Counter(v["newborn.anomaly_status"] for v in self.dnv)
+        total = len(self.dnv)
+        self.assertLess(counts["Sim"] / total, 0.04)
+        self.assertGreater(counts["Não"] / total, 0.90)
+        self.assertLess(counts.get("Ignorado", 0) / total, 0.04)
+
+    def test_anomaly_block_is_coherent(self):
+        import re
+        from src.semantic.data import ANOMALY_CODES
+        code_re = re.compile(r"\(([A-Z]\d{2}(?:\.\d)?)\)$")
+        sim_count = 0
+        for v in self.dnv:
+            status, description = v["newborn.anomaly_status"], v["newborn.anomaly_description"]
+            if status == "Sim":
+                sim_count += 1
+                self.assertIsNotNone(description)
+                match = code_re.search(description)
+                self.assertIsNotNone(match, description)
+                self.assertIn(match.group(1), ANOMALY_CODES)
+            else:
+                self.assertIsNone(description)
+        self.assertGreater(sim_count, 0, "no “Sim” case drawn across 2000 seeds")
+
+    def test_hypospadia_only_affects_male_newborns(self):
+        for v in self.dnv:
+            description, sex = v["newborn.anomaly_description"], v["newborn.sex"]
+            if description and "Q54.9" in description:
+                self.assertEqual(sex, "M")
+
+    def test_cbo_present_and_well_formed_for_every_working_occupation(self):
+        from src.semantic.data import occupation_cbo_for
+        samples = [(v["mother.occupation"], v["mother.occupation_cbo"]) for v in self.dnv]
+        samples += [(v["deceased.occupation"], v["deceased.occupation_cbo"]) for v in self.do]
+        samples += [(v["deceased.mother_occupation"], v["deceased.mother_occupation_cbo"]) for v in self.do
+                    if v.get("deceased.mother_occupation")]
+        non_cbo = {"Estudante", "Não se aplica", None}
+        seen_working = set()
+        for occupation, cbo in samples:
+            self.assertEqual(cbo, occupation_cbo_for(occupation), occupation)
+            if occupation in non_cbo:
+                self.assertIsNone(cbo, occupation)
+            else:
+                self.assertIsNotNone(cbo, occupation)
+                self.assertRegex(cbo, r"^\d{6}$", occupation)
+                seen_working.add(occupation)
+        self.assertGreater(len(seen_working), 5, "too few distinct working occupations sampled")
+
+    def test_cbo_stable_under_sex_inflection(self):
+        from src.semantic.data import OCCUPATION_OPPOSITE_FORM, occupation_cbo_for
+        for occupation in OCCUPATION_OPPOSITE_FORM:
+            opposite = OCCUPATION_OPPOSITE_FORM[occupation]
+            self.assertEqual(occupation_cbo_for(occupation), occupation_cbo_for(opposite), occupation)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -95,9 +95,13 @@ class SemanticGenerationTests(unittest.TestCase):
             self.assertEqual(by_id["38"]["value"], delivery[record["birth.delivery_type"]])
             self.assertEqual(by_id["39"]["value"], cesarean[record["birth.cesarean_before_labor"]])
             self.assertEqual(record["birth.pregnancy_type"], "Dupla" if record["birth.twins"] else "Única")
-            self.assertEqual(by_id["6"]["semantic"]["value"], "Ignorado")
-            self.assertEqual(by_id["41"]["value"], "")
-            self.assertTrue(by_id["41"]["blank"])
+            self.assertEqual(by_id["6"]["semantic"]["value"], record["newborn.anomaly_status"])
+            if record["newborn.anomaly_status"] == "Sim":
+                self.assertEqual(by_id["41"]["value"], record["newborn.anomaly_description"])
+                self.assertFalse(by_id["41"]["blank"])
+            else:
+                self.assertEqual(by_id["41"]["value"], "")
+                self.assertTrue(by_id["41"]["blank"])
             self.assertEqual(by_id["17_codigo_cbo"]["value"], record["mother.occupation_cbo"] or "")
 
     def test_dnv_date_boxes_and_rule_match_the_form(self):

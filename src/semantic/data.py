@@ -144,17 +144,55 @@ ISSUERS = ("SSP", "SESP", "SDS", "PC", "IFP", "DETRAN", "SJS", "IGP")
 COMPLEMENTS = ("Apto 101", "Apto 302", "Bloco B", "Casa 2", "Fundos", "Sala 4", "Casa", "Térreo")
 PROFILES_BY_IBGE = {profile["ibge"]: profile for profile in LOCATION_PROFILES}
 
+# CBO 2002 codes checked against the official titles (buscadorncm.com.br/cbo, 2026-11-03).
 OCCUPATION_CODES = {
-    "Técnico de enfermagem": "322205",
-    "Psicólogo clínico": "251510",
-    "Assistente administrativo": "411010",
+    "Professora": "231210",       # Professor de nível superior do ensino fundamental (primeira a quarta série) (CBO 2312-10)
+    "Enfermeiro": "223505",       # Enfermeiro (CBO 2235-05)
+    "Agricultora": "621005",      # Trabalhador agropecuário em geral (CBO 6210-05)
+    "Comerciante": "141410",      # Comerciante varejista (CBO 1414-10)
+    "Motorista": "782305",        # Motorista de carro de passeio (CBO 7823-05)
+    "Engenheira": "214205",       # Engenheiro civil (CBO 2142-05)
+    "Pedreiro": "715210",         # Pedreiro (CBO 7152-10)
+    "Advogada": "241005",         # Advogado (CBO 2410-05)
+    "Técnico em informática": "317210",     # Técnico de suporte ao usuário de tecnologia da informação (CBO 3172-10)
+    "Auxiliar administrativo": "411005",    # Auxiliar de escritório/administrativo (CBO 4110-05)
+    "Costureira": "763210",       # Costureiro na confecção em série (CBO 7632-10)
+    "Técnico de enfermagem": "322205",      # Técnico de enfermagem (CBO 3222-05)
+    "Psicólogo clínico": "251510",          # Psicólogo clínico (CBO 2515-10)
+    "Assistente administrativo": "411010",  # Assistente administrativo (CBO 4110-10)
+    # "Estudante", "Não se aplica" (and real-world "Do lar"/"Aposentado"/"Desempregado", not
+    # modeled here) are not CBO-2002 occupations: no entry here means the CBO field stays
+    # blank for them (occupation_cbo_for returns None), matching the DO/DNV instructions.
 }
+
+
 def occupation_cbo_for(name: str | None) -> str | None:
     """CBO code for an occupation title, whichever grammatical gender it was inflected to
     (item 4) — the code is the same regardless of the displayed form."""
     if not name:
         return None
     return OCCUPATION_CODES.get(name) or OCCUPATION_CODES.get(OCCUPATION_OPPOSITE_FORM.get(name, ""))
+
+
+# Congenital anomalies recorded on the DNV (field 41) when field 6 ("Detectada alguma
+# anomalia congênita?") is "Sim": (description, ICD-10 code, sex restriction or None, base
+# weight). Weights are loosely calibrated to the relative frequency of these categories among
+# SINASC-recorded anomalies; hypospadias is male-only (urethral meatus anomaly) and
+# anencephaly is kept rare (largely incompatible with live birth / registration). Down
+# syndrome's weight is boosted for older mothers (maternal-age-related trisomy 21 risk) by
+# the caller.
+ANOMALIES = (
+    ("Pé torto congênito", "Q66.8", None, 25),
+    ("Polidactilia", "Q69.9", None, 15),
+    ("Espinha bífida", "Q05.9", None, 10),
+    ("Anencefalia", "Q00.0", None, 2),
+    ("Fissura labial e palatina", "Q37.9", None, 12),
+    ("Síndrome de Down", "Q90.9", None, 8),
+    ("Hidrocefalia congênita", "Q03.9", None, 8),
+    ("Hipospádia", "Q54.9", "M", 12),
+    ("Cardiopatia congênita", "Q24.9", None, 15),
+)
+ANOMALY_CODES = frozenset(code for _, code, _, _ in ANOMALIES)
 
 
 OCCUPATION_CODE_SOURCES = (
