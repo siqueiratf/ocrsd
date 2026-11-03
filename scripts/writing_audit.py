@@ -912,8 +912,14 @@ def check_coherence(snapshot: dict) -> list[str]:
 
     # repeated person names across different roles in the same document (e.g. the
     # declarant sharing a name with a parent/spouse they are not supposed to be)
-    name_by_key = {k: v for k, v in snapshot.items() if isinstance(v, str) and v.strip() and k.endswith(".name")}
+    # Only person roles count: office and establishment names are institutions.
+    # parent1/parent2 are display aliases of mother/father (the same person).
+    name_by_key = {k: v for k, v in snapshot.items() if isinstance(v, str) and v.strip() and k.endswith(".name")
+                   and not any(part in k for part in ("office.", "establishment."))}
     roles = {re.sub(r"\.name$", "", k): v for k, v in name_by_key.items()}
+    for alias in ("parent1", "parent2"):
+        if alias in roles and roles[alias] in (roles.get("mother"), roles.get("father")):
+            del roles[alias]
     values_seen: dict[str, str] = {}
     for role, value in roles.items():
         norm = normalize_loose(value)

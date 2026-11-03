@@ -1,49 +1,49 @@
 {
   "per_preset": {
     "padrao_fonte_natural": {
-      "mean_cer_loose": 0.523,
-      "mean_cer_loose_digits_only": 0.628,
+      "mean_cer_loose": 0.562,
+      "mean_cer_loose_digits_only": 0.626,
       "excessive_spacing_count": 2,
-      "mean_left_margin_h": 0.26,
+      "mean_left_margin_h": 0.261,
       "mean_digit_height_ratio": 0.544,
       "right_overflow_count": 0
     },
     "padrao_fonte_homemade_apple": {
-      "mean_cer_loose": 0.783,
-      "mean_cer_loose_digits_only": 0.748,
+      "mean_cer_loose": 0.795,
+      "mean_cer_loose_digits_only": 0.755,
       "excessive_spacing_count": 2,
-      "mean_left_margin_h": 0.229,
-      "mean_digit_height_ratio": 0.59,
+      "mean_left_margin_h": 0.23,
+      "mean_digit_height_ratio": 0.592,
       "right_overflow_count": 0
     },
     "padrao_digitada_arimo": {
-      "mean_cer_loose": 0.222,
-      "mean_cer_loose_digits_only": 0.217,
+      "mean_cer_loose": 0.224,
+      "mean_cer_loose_digits_only": 0.225,
       "excessive_spacing_count": 2,
       "mean_left_margin_h": 0.32,
       "mean_digit_height_ratio": 0.51,
       "right_overflow_count": 0
     },
     "style_20260921_140241_6d9869": {
-      "mean_cer_loose": 0.847,
-      "mean_cer_loose_digits_only": 0.863,
+      "mean_cer_loose": 0.834,
+      "mean_cer_loose_digits_only": 0.87,
       "excessive_spacing_count": 1,
       "mean_left_margin_h": 0.255,
-      "mean_digit_height_ratio": 0.745,
+      "mean_digit_height_ratio": 0.747,
       "right_overflow_count": 0
     },
     "style_20260921_144107_d6344a": {
-      "mean_cer_loose": 0.731,
-      "mean_cer_loose_digits_only": 0.825,
+      "mean_cer_loose": 0.719,
+      "mean_cer_loose_digits_only": 0.81,
       "excessive_spacing_count": 1,
-      "mean_left_margin_h": 0.239,
-      "mean_digit_height_ratio": 0.608,
+      "mean_left_margin_h": 0.238,
+      "mean_digit_height_ratio": 0.616,
       "right_overflow_count": 0
     }
   },
   "per_document_fill_pct": {
     "do": 71.5,
-    "dnv": 86.2,
+    "dnv": 86.0,
     "certidao_obito": 96.1,
     "cnpj_quadro_socios_administradores": 53.8
   },

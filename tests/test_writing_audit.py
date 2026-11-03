@@ -107,6 +107,15 @@ class WritingAuditMetricsTest(unittest.TestCase):
         issues = check_coherence({"mother.name": "Ana Paula Ferreira", "father.name": "Ana Paula Ferreira"})
         self.assertIn("nome_repetido_entre_papeis", issues)
 
+    def test_coherence_ignores_parent_aliases_and_institution_names(self):
+        issues = check_coherence({"mother.name": "Ana Paula Ferreira", "father.name": "Carlos Souza Lima",
+                                  "parent1.name": "Carlos Souza Lima", "parent2.name": "Ana Paula Ferreira",
+                                  "registration.office.name": "Cartório do 1º Ofício",
+                                  "death_registration.office.name": "Cartório do 1º Ofício",
+                                  "birth.establishment.name": "Hospital São Lucas",
+                                  "death.place.establishment.name": "Hospital São Lucas"})
+        self.assertNotIn("nome_repetido_entre_papeis", issues)
+
     def test_coherence_municipio_uf_inconsistente(self):
         issues = check_coherence({"birth.place.ibge": "3304557", "birth.place.uf": "SP"})  # 33 = RJ, not SP
         self.assertIn("municipio_uf_inconsistente", issues)
