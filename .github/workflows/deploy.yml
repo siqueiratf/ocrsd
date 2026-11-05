@@ -27,6 +27,8 @@ jobs:
           git fetch origin main
           git checkout --force "${{ github.event.workflow_run.head_sha }}"
       - name: Build and restart production containers
+        env:
+          OCRSD_COMMIT: ${{ github.event.workflow_run.head_sha }}
         run: |
           cd /opt/ocrsd
           docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production \

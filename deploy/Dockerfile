@@ -10,6 +10,8 @@ COPY src ./src
 COPY documents ./documents
 COPY assets ./assets
 RUN uv sync --frozen --extra web --no-dev && useradd --uid 10001 --create-home ocrsd && mkdir /data && chown 10001:10001 /data
+ARG OCRSD_COMMIT=unknown
+ENV OCRSD_COMMIT=${OCRSD_COMMIT}
 USER 10001:10001
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["uvicorn", "src.web.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "172.30.85.2"]

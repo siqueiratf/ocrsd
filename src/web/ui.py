@@ -35,6 +35,7 @@ from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS,
                               render_preview, revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping,
                               with_approved_semantics, writing_issues, writing_message, count_limit, count_limit_message, warm_writing_samples)
 from src.web.settings import Settings
+from src.web.version import commit as version_commit
 from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model_defaults, preset_title, writing_summary
 
 ROOT = Path(__file__).resolve().parent
@@ -187,9 +188,11 @@ def set_cookie(response: Response, request: Request, name: str, value: str, max_
 def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=None) -> Callable[[Request, int, str], Response]:
     templates = Jinja2Templates(directory=ROOT / "templates")
     templates.env.filters.update(data=format_date, tamanho=format_size)
+    deployed_commit = version_commit()
     templates.env.globals.update(FILTERS=FILTERS, STATUS=STATUS, ACTIVE=ACTIVE, TYPE_LABELS=TYPE_LABELS,
                                  PAGE_SIZES=PAGE_SIZES, ORIENTATIONS=ORIENTATIONS, GENERATION_MODES=GENERATION_MODES,
-                                 STANDARD_EDITS=settings.standard_edits, FONT_FAMILIES=FONT_FAMILIES)
+                                 STANDARD_EDITS=settings.standard_edits, FONT_FAMILIES=FONT_FAMILIES,
+                                 OCRSD_COMMIT=deployed_commit)
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
     @functools.lru_cache(maxsize=128)

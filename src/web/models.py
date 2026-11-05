@@ -342,3 +342,4 @@ class Results(BaseModel):
 class Health(BaseModel):
     status: Literal["ok", "degraded"]
     worker_ready: bool
+    commit: str | None = None

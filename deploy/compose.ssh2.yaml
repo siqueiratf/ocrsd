@@ -7,6 +7,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        OCRSD_COMMIT: "${OCRSD_COMMIT:-unknown}"
     command: [uvicorn, src.web.api:create_app, --factory, --host, 127.0.0.1, --port, "8000", --proxy-headers, --forwarded-allow-ips, 127.0.0.1]
     network_mode: host
     env_file: .env.production
@@ -34,6 +36,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        OCRSD_COMMIT: "${OCRSD_COMMIT:-unknown}"
     command: [python, -m, src.web.worker]
     network_mode: host
     env_file: .env.production

@@ -556,6 +556,44 @@ class WebTests(unittest.TestCase):
         self.assertIsNotNone(revoked.json()["revoked_at"])
         self.assertEqual(self.client.get(f'/api/v1/shared/{share["id"]}', headers=share_headers).status_code, 410)
 
+    def test_health_reports_commit_from_env(self):
+        from src.web import version
+
+        version.commit.cache_clear()
+        self.addCleanup(version.commit.cache_clear)
+        with patch.dict(os.environ, {"OCRSD_COMMIT": "a" * 40}):
+            response = self.client.get("/api/v1/health")
+        self.assertEqual(response.json()["commit"], "a" * 40)
+
+    def test_header_shows_github_link_and_short_commit(self):
+        from src.web import version
+
+        version.commit.cache_clear()
+        self.addCleanup(version.commit.cache_clear)
+        with patch.dict(os.environ, {"OCRSD_COMMIT": "b" * 40}):
+            app = create_app(self.settings)
+            client = ASGITestClient(app)
+            self.addCleanup(client.close)
+            page = client.get("/modelos")
+        self.assertEqual(page.status_code, 200, page.text)
+        self.assertIn("https://github.com/siqueiratf/ocrsd", page.text)
+        self.assertIn(f"https://github.com/siqueiratf/ocrsd/commit/{'b' * 40}", page.text)
+        self.assertIn(">" + "b" * 7 + "<", page.text)
+
+    def test_header_hides_sha_link_for_unknown_commit(self):
+        from src.web import version
+
+        version.commit.cache_clear()
+        self.addCleanup(version.commit.cache_clear)
+        with patch.dict(os.environ, {"OCRSD_COMMIT": "unknown"}), patch("subprocess.run", side_effect=OSError("no git")):
+            app = create_app(self.settings)
+            client = ASGITestClient(app)
+            self.addCleanup(client.close)
+            page = client.get("/modelos")
+        self.assertEqual(page.status_code, 200, page.text)
+        self.assertIn("https://github.com/siqueiratf/ocrsd\"", page.text)
+        self.assertNotIn("github.com/siqueiratf/ocrsd/commit/", page.text)
+
     def test_postman_matches_openapi_and_examples(self):
         from scripts.export_postman import build_collection
 

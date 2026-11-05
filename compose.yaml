@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile
+      args:
+        OCRSD_COMMIT: "${OCRSD_COMMIT:-unknown}"
     env_file: deploy/.env.development
     environment:
       OCRSD_STORAGE: /data
@@ -40,6 +42,8 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile
+      args:
+        OCRSD_COMMIT: "${OCRSD_COMMIT:-unknown}"
     command: [python, -m, src.web.worker]
     networks:
       private:

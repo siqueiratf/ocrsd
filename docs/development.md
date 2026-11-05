@@ -315,6 +315,10 @@ curl -fsS http://127.0.0.1:6000/api/v1/capabilities
 curl -fsS https://ocrsd.onrcpn.org.br/api/v1/health
 ```
 
+O build do GitHub Actions passa o commit como `OCRSD_COMMIT` para a imagem
+Docker. `/api/v1/health` devolve esse commit, e o rodapé do cabeçalho mostra
+o link para o GitHub e o hash curto em produção.
+
 Nas atualizações desta instância, use sempre o mesmo arquivo Compose. O volume
 nomeado `ocrsd_jobs` conserva o banco e os resultados. Os arquivos de pesos e
 `deploy/.env.production` não são substituídos pela atualização do código. O

@@ -15,6 +15,7 @@ from src.web.models import AnalysisApply, AnalysisCreate, AnalysisResponse, Arti
 from src.web.services import BUILTIN_PROTECTED, AssistantProbe, Catalog, ServiceError, apply_proposal, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, mapping_issues, promote_model as promote_document_model, realism_previews, render_preview, save_mapping
 from src.web.settings import Settings
 from src.web.ui import file_response, mount_ui
+from src.web.version import commit as version_commit
 
 CONTENT_SECURITY_POLICY = (b"default-src 'self'; img-src 'self' data:; frame-src 'self'; object-src 'none'; "
                            b"base-uri 'self'; form-action 'self'; frame-ancestors 'self'")
@@ -177,7 +178,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/health", response_model=Health, tags=["Operação"])
     async def health():
         ready = store.ready()
-        return Health(status="ok" if ready else "degraded", worker_ready=ready)
+        return Health(status="ok" if ready else "degraded", worker_ready=ready, commit=version_commit())
 
     @app.post("/api/v1/workspaces", response_model=WorkspaceResponse, status_code=201, tags=["Espaço de trabalho"])
     async def create_workspace():
