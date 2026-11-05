@@ -218,6 +218,47 @@ class LocalModelTests(unittest.TestCase):
         finally:
             torch.set_num_threads(previous)
 
+    @unittest.skipUnless((ROOT / "weights.sha256").is_file(), "Download sjvasquez weights for integration tests")
+    def test_sj_prime_cache_is_cold_warm_equal_and_deterministic(self):
+        import torch
+        previous = torch.get_num_threads()
+        try:
+            torch.set_num_threads(1)
+            cold = SjHandwritingModel()
+            warm = SjHandwritingModel()
+            first = cold.sample("Maria", 1, 0.75, 7)
+            second = cold.sample("Maria", 1, 0.75, 7)
+            np.testing.assert_array_equal(first, second)
+            third = warm.sample("Maria", 1, 0.75, 7)
+            warm.sample("Carlos Henrique Souza", 1, 0.75, 9)
+            fourth = warm.sample("Maria", 1, 0.75, 7)
+            np.testing.assert_array_equal(first, third)
+            np.testing.assert_array_equal(first, fourth)
+        finally:
+            torch.set_num_threads(previous)
+
+    @unittest.skipUnless((ROOT / "weights.sha256").is_file(), "Download sjvasquez weights for integration tests")
+    def test_sj_prime_cache_is_not_mutated_by_generation(self):
+        import torch
+        previous = torch.get_num_threads()
+        try:
+            torch.set_num_threads(1)
+            model = SjHandwritingModel()
+            model.sample("Maria", 1, 0.75, 7)
+            cached_states, cached_context, cached_kappa, _split = model._prime_cache[1]
+            snapshot = (
+                [(h.clone(), c.clone()) for h, c in cached_states],
+                cached_context.clone(), cached_kappa.clone(),
+            )
+            model.sample("Carlos Henrique Souza", 1, 0.75, 9)
+            for (h, c), (sh, sc) in zip(cached_states, snapshot[0]):
+                np.testing.assert_array_equal(h.numpy(), sh.numpy())
+                np.testing.assert_array_equal(c.numpy(), sc.numpy())
+            np.testing.assert_array_equal(cached_context.numpy(), snapshot[1].numpy())
+            np.testing.assert_array_equal(cached_kappa.numpy(), snapshot[2].numpy())
+        finally:
+            torch.set_num_threads(previous)
+
 
 class _StubStrokeModel:
     """Deterministic stand-in for a trained model: no weights needed.
