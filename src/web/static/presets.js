@@ -4,7 +4,7 @@
   const isNew = form.dataset.modo === 'novo'
   const stateLabel = form.querySelector('[data-estado]')
   const stateText = form.querySelector('[data-estado-texto]')
-  const stale = form.querySelector('[data-previa-desatualizada]')
+  const playground = document.getElementById('playground')
   const ignored = new Set(['variacoes'])
   const previewIgnored = new Set(['variacoes', 'preset_name', 'description', 'id', 'retorno'])
   const serialize = skip => JSON.stringify([...new FormData(form)].filter(([key]) => !skip.has(key)))
@@ -18,7 +18,10 @@
     const changed = dirty()
     stateLabel.dataset.estado = changed || isNew ? 'pendente' : 'salvo'
     stateText.textContent = isNew ? 'Ainda não salvo' : changed ? 'Alterações não salvas' : 'Sem alterações'
-    stale.hidden = previewed === null || serialize(previewIgnored) === previewed
+  }
+
+  function updatePreview() {
+    if (previewed !== null && serialize(previewIgnored) !== previewed) htmx.trigger(playground, 'atualizar-previa')
   }
 
   function paint() {
@@ -43,9 +46,10 @@
     if (input.matches('[data-nome-preset]')) form.querySelector('[data-preset-titulo]').textContent = input.value || 'Novo preset'
     paint()
     refresh()
+    updatePreview()
   })
 
-  form.addEventListener('change', () => { paint(); refresh() })
+  form.addEventListener('change', () => { paint(); refresh(); updatePreview() })
 
   form.addEventListener('click', event => {
     const swatch = event.target.closest('[data-amostra-cor]')
@@ -66,14 +70,18 @@
     else event.preventDefault()
   })
 
+  document.body.addEventListener('htmx:beforeRequest', event => {
+    if (event.detail.target === playground) previewed = serialize(previewIgnored)
+  })
+
   document.body.addEventListener('htmx:afterRequest', event => {
     if (!event.detail.successful) leaving = false
   })
 
   document.body.addEventListener('htmx:afterSwap', event => {
-    if (event.detail.target.id === 'playground') previewed = serialize(previewIgnored)
     paint()
     refresh()
+    if (event.detail.target !== playground) updatePreview()
   })
 
   document.body.addEventListener('preset-salvo', event => {

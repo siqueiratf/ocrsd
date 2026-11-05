@@ -475,7 +475,8 @@ class InterfaceTests(unittest.TestCase):
 
         editor = self.page("/presets/escrita/novo")
         self.assertIn("Novo preset", editor.text)
-        self.assertIn("Atualizar prévia", editor.text)
+        self.assertNotIn("Atualizar prévia", editor.text)
+        self.assertIn('hx-trigger="load, atualizar-previa delay:400ms"', editor.text)
         self.assertIn('name="intensity"', editor.text)
         self.assertNotIn('name="color" value', editor.text.split("Aparência da escrita")[1].split("Restaurar")[0])
         controls = self.hx("POST", "/presets/escrita/controles", data=self.preset_form(model="aaron1259", modelo_atual="font"))
