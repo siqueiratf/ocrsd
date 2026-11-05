@@ -285,6 +285,27 @@ def _ensure_matches_validation(value: str, field: dict, rng: random.Random,
     return value
 
 
+_MT_BULK_MIN = 4096
+_MT = np.random.MT19937()
+
+
+def _uniform_array(rng: random.Random, a: float, b: float, shape: tuple[int, ...]) -> np.ndarray:
+    """Return float64 values equal to `rng.uniform(a, b)` called in C order, and advance `rng` the same way.
+    Large requests copy the Mersenne Twister state into numpy and back."""
+    count = int(np.prod(shape))
+    if (count < _MT_BULK_MIN or type(rng).random is not random.Random.random
+            or type(rng).uniform is not random.Random.uniform or type(rng).getstate is not random.Random.getstate):
+        uniform = rng.uniform
+        return np.fromiter((uniform(a, b) for _ in range(count)), dtype=np.float64, count=count).reshape(shape)
+    version, state, gauss = rng.getstate()
+    _MT.state = {"bit_generator": "MT19937", "state": {"key": np.array(state[:624], dtype=np.uint32), "pos": state[624]}}
+    raw = _MT.random_raw(2 * count).reshape(count, 2)
+    values = ((raw[:, 0] >> 5).astype(np.float64) * 67108864.0 + (raw[:, 1] >> 6)) * (1.0 / 9007199254740992.0)
+    after = _MT.state["state"]
+    rng.setstate((version, (*after["key"].tolist(), int(after["pos"])), gauss))
+    return (a + (b - a) * values).reshape(shape)
+
+
 def _apply_ballpoint_texture(mask: np.ndarray, rng: random.Random, intensity: float) -> np.ndarray:
     if not intensity or mask.size == 0:
         return mask
@@ -314,10 +335,7 @@ def _apply_ballpoint_texture(mask: np.ndarray, rng: random.Random, intensity: fl
     )
 
 
-    fine = np.asarray(
-        [[rng.uniform(0.78, 1.0) for _ in range(width)] for _ in range(height)],
-        dtype=np.float32,
-    )
+    fine = _uniform_array(rng, 0.78, 1.0, (height, width)).astype(np.float32)
     fine = cv2.GaussianBlur(fine, (0, 0), sigmaX=0.55, sigmaY=0.55)
     texture = np.clip(pressure * patches * fine, 0.12, 1.0)
     texture /= max(float(texture.max()), 0.01)
@@ -330,10 +348,7 @@ def _apply_pencil_texture(mask: np.ndarray, rng: random.Random, intensity: float
     if mask.size == 0:
         return mask
     height, width = mask.shape
-    grain = np.asarray(
-        [[rng.uniform(0.48, 1.0) for _ in range(width)] for _ in range(height)],
-        dtype=np.float32,
-    )
+    grain = _uniform_array(rng, 0.48, 1.0, (height, width)).astype(np.float32)
     grain = cv2.GaussianBlur(grain, (0, 0), sigmaX=0.28, sigmaY=0.28)
     pressure_knots = np.asarray(
         [rng.uniform(0.62, 1.0) for _ in range(max(3, width // 10 + 2))], dtype=np.float32,
@@ -346,24 +361,37 @@ def _apply_pencil_texture(mask: np.ndarray, rng: random.Random, intensity: float
     return np.clip(graphite, 0, 255).astype(np.uint8)
 
 
+@functools.lru_cache(maxsize=64)
+def _handwriting_font(fontfile: str, size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(fontfile, size)
+
+
+@functools.lru_cache(maxsize=512)
+def _glyph_outline(character: str, height: int, font_size: int, stroke: int, fontfile: str) -> Image.Image | None:
+    """Return the cropped 4x glyph mask. Callers must not change the image in place."""
+    scale = 4
+    font = _handwriting_font(fontfile, font_size)
+    bbox = font.getbbox(character or " ", stroke_width=1)
+    width = max(round(height * scale * 0.20), bbox[2] - bbox[0] + 10 * scale)
+    glyph = Image.new("L", (width, height * scale + 12 * scale), 0)
+    ImageDraw.Draw(glyph).text(
+        (glyph.width // 2, glyph.height // 2), character, font=font, fill=235,
+        anchor="mm", stroke_width=stroke, stroke_fill=220,
+    )
+    crop = glyph.getbbox()
+    if crop is None:
+        return None
+    return glyph.crop((max(0, crop[0]-4), max(0, crop[1]-4), min(glyph.width, crop[2]+4), min(glyph.height, crop[3]+4)))
+
+
 def _render_glyph(character: str, height: int, style: HandwritingStyle,
                   rng: random.Random, intensity: float, medium: str = "pen",
                   font_family: str = DEFAULT_FONT_FAMILY) -> Image.Image:
     scale = 4
-    font_size = max(12, round(height * scale * 1.08 * style.size_scale))
-    font = ImageFont.truetype(str(font_path(font_family)), font_size)
-    bbox = font.getbbox(character or " ", stroke_width=1)
-    width = max(round(height * scale * 0.20), bbox[2] - bbox[0] + 10 * scale)
-    glyph = Image.new("L", (width, height * scale + 12 * scale), 0)
-    draw = ImageDraw.Draw(glyph)
-    draw.text(
-        (glyph.width // 2, glyph.height // 2), character, font=font, fill=235,
-        anchor="mm", stroke_width=max(0, 1 + style.stroke_bias), stroke_fill=220,
-    )
-    crop = glyph.getbbox()
-    if crop is None:
+    glyph = _glyph_outline(character, height, max(12, round(height * scale * 1.08 * style.size_scale)),
+                           max(0, 1 + style.stroke_bias), str(font_path(font_family)))
+    if glyph is None:
         return Image.new("L", (max(1, round(height * 0.3)), height), 0)
-    glyph = glyph.crop((max(0, crop[0]-4), max(0, crop[1]-4), min(glyph.width, crop[2]+4), min(glyph.height, crop[3]+4)))
     width_factor = style.width_scale * rng.uniform(1 - 0.10*intensity, 1 + 0.10*intensity)
     glyph = glyph.resize((max(1, round(glyph.width * width_factor)), glyph.height), Image.Resampling.LANCZOS)
     angle = style.rotation + rng.uniform(-3.2, 3.2) * intensity

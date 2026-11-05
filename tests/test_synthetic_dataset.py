@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import random
@@ -13,7 +14,7 @@ import numpy as np
 from PIL import Image
 
 from src.synthetic_dataset import (
-    _apply_ballpoint_texture, _FastImagePage, apply_shared_rules, element_values, generate_dataset, is_numeric_text,
+    _apply_ballpoint_texture, _FastImagePage, _uniform_array, apply_shared_rules, element_values, generate_dataset, is_numeric_text,
     random_handwriting_style, random_value, render_checkbox_mark,
     render_handwritten_numeric, render_handwritten_text, render_neural_text, typed_value,
 )
@@ -155,6 +156,27 @@ class SyntheticValueTests(unittest.TestCase):
         self.assertLess(int(textured.min()), 120)
         self.assertGreater(int(textured.max()), 180)
         self.assertGreater(float(textured.std()), 20)
+
+    def test_uniform_array_matches_rng_uniform_calls(self):
+        for shape in ((3, 5), (70, 90), (1, 5000)):
+            fast, slow = random.Random(31), random.Random(31)
+            fast.gauss(0, 1), slow.gauss(0, 1)
+            values = _uniform_array(fast, 0.48, 1.0, shape)
+            expected = [[slow.uniform(0.48, 1.0) for _ in range(shape[1])] for _ in range(shape[0])]
+            self.assertEqual(values.tolist(), expected)
+            self.assertEqual(fast.getstate(), slow.getstate())
+
+    def test_font_handwriting_output_is_pinned(self):
+        cases = (
+            (render_handwritten_text, ("Ana Silva", 300, 40), {}, "42d346b747b4a098b4e5b28a4743c06c86b06c416233e846486f76d115797db0", 0.2540188673529882),
+            (render_handwritten_text, ("Ana Silva", 300, 40), {"medium": "pen"}, "67243d2f0ed49db9e0d01582172634c0046c64be5d9d2db75a8369c1690ed2ca", 0.4771800584595053),
+            (render_handwritten_numeric, ("58001", 180, 40), {}, "788cdf1cde25a07afbd8eabec467685dc57274de4276d7728006c1b34ff1b168", 0.7614225289864733),
+        )
+        for render, args, options, digest, next_value in cases:
+            rng = random.Random(4242)
+            image = render(*args, rng, **options)
+            self.assertEqual(hashlib.sha256(image.tobytes()).hexdigest(), digest)
+            self.assertEqual(rng.random(), next_value)
 
     def test_renders_text_with_graphite_colored_strokes(self):
         image = render_handwritten_text(
