@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import io
 import functools
@@ -514,6 +515,55 @@ def _split_into_word_chunks(text: str, max_chunk_chars: int = 12) -> list[str]:
     if current:
         chunks.append(current)
     return chunks or [text]
+
+
+class _SampleRecorder:
+    """Model stand-in that keeps each sample request and returns a short stroke. A request that
+    failed in the batch fails again, and a text that the model check refuses fails."""
+
+    def __init__(self, results=None, check=None):
+        self.requests, self.results, self.check = [], results or {}, check
+
+    def sample(self, text, writer, bias, seed):
+        request = (text, writer, bias, seed)
+        if isinstance(self.results.get(request), Exception):
+            raise ValueError(str(self.results[request]))
+        if self.check is not None:
+            self.check(text, writer, bias)
+        self.requests.append(request)
+        return np.array([[0, 0, 0], [4, 2, 0], [8, 0, 1]], dtype=np.float32)
+
+
+class _ScratchPage:
+    """Page stand-in for the recording pass. It drops the images and sends the other calls to the page."""
+
+    def __init__(self, page):
+        self._page = page
+
+    def insert_image(self, *args, **kwargs):
+        return 0
+
+    def __getattr__(self, name):
+        return getattr(self._page, name)
+
+
+class _SampleReplay:
+    """Model wrapper that returns the batch result of a request. A request that is not in the
+    batch calls sample() of the model."""
+
+    def __init__(self, model, results):
+        self.model, self.results = model, results
+        self.hits = self.misses = 0
+
+    def sample(self, text, writer, bias, seed):
+        result = self.results.get((text, writer, bias, seed))
+        if result is None:
+            self.misses += 1
+            return self.model.sample(text, writer, bias, seed)
+        self.hits += 1
+        if isinstance(result, Exception):
+            raise ValueError(str(result))
+        return result.copy()
 
 
 def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
@@ -1224,101 +1274,138 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
                     "requested_value": text}
 
-    for field in field_map.get("fields", []):
-        field_id = str(field["field_id"])
-        if field_id not in selected_ids:
-            continue
-        elements = field.get("elements") or []
-        blank_probability = float((field.get("validation") or {}).get("blank_probability") or 0)
-        if blank_probability > 0 and rng.random() < blank_probability:
-            values[field_id] = ""
-            entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"], "blank": True})
-            continue
-        binding = bindings.get(field_id)
-        meaning = _semantic_entry(binding, snapshot) if binding else {}
-        render_when = field.get("render_when")
-        if render_when and snapshot.get(render_when["key"]) not in render_when["values"]:
-            values[field_id] = ""
-            entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"],
-                            "blank": True, "render_condition": render_when})
-            continue
-        if binding and snapshot[binding.key] is None:
-            values[field_id] = ""
-            entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"], "blank": True,
-                            **meaning})
-            continue
-        if field.get("data_type") == "checkbox" and elements:
+    def fill_fields():
+        for field in field_map.get("fields", []):
+            field_id = str(field["field_id"])
+            if field_id not in selected_ids:
+                continue
+            elements = field.get("elements") or []
+            blank_probability = float((field.get("validation") or {}).get("blank_probability") or 0)
+            if blank_probability > 0 and rng.random() < blank_probability:
+                values[field_id] = ""
+                entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"], "blank": True})
+                continue
+            binding = bindings.get(field_id)
+            meaning = _semantic_entry(binding, snapshot) if binding else {}
+            render_when = field.get("render_when")
+            if render_when and snapshot.get(render_when["key"]) not in render_when["values"]:
+                values[field_id] = ""
+                entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"],
+                                "blank": True, "render_condition": render_when})
+                continue
+            if binding and snapshot[binding.key] is None:
+                values[field_id] = ""
+                entries.append({"field_id": field_id, "label": field.get("label", ""), "value": "", "bbox": field["bbox"], "blank": True,
+                                **meaning})
+                continue
+            if field.get("data_type") == "checkbox" and elements:
+                if binding:
+                    selected_elements = checkbox_choice(field, binding, semantic_value(binding))
+                else:
+                    count = rng.randint(0, 1) if len(elements) == 1 else (1 if field.get("selection_mode", "single") == "single" else rng.randint(1, len(elements)))
+                    selected_elements = rng.sample(elements, count)
+                element_entries = []
+                for element in elements:
+                    checked = element in selected_elements
+                    mark_metadata = {}
+                    if checked:
+                        ex1, ey1, ex2, ey2 = element["bbox"]
+                        rect = fitz.Rect(*(v * point_scale for v in element["bbox"]))
+                        if typed_font and numeric_neural_pen is None:
+                            insert_printed(rect, "X", None, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path)
+                            mark_metadata = {"rendering": {"backend": "font", "mark_variant": "x", "requested_value": "X"}}
+                        else:
+                            image, mark_metadata = render_checkbox_mark(
+                                ex2-ex1, ey2-ey1, rng, style=handwriting_style,
+                                intensity=handwriting_intensity, neural_pen=numeric_neural_pen,
+                                handwriting_model=handwriting_models.get(numeric_neural_pen.model) if numeric_neural_pen else None,
+                                render_rng=render_rng, font_family=font_family,
+                            )
+                            stream = io.BytesIO()
+                            image.save(stream, format="PNG")
+                            page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
+                    element_entries.append({**element, "checked": checked, **mark_metadata})
+                value = ",".join(str(item.get("value") or item["element_id"]) for item in selected_elements)
+                values[field_id] = value
+                entries.append({
+                    "field_id": field_id, "label": field.get("label", ""), "value": value,
+                    "bbox": field["bbox"], "elements": element_entries, **meaning,
+                })
+                continue
             if binding:
-                selected_elements = checkbox_choice(field, binding, semantic_value(binding))
+                value, parts, semantic = _bound_values(field, binding, semantic_value(binding))
+                composite = None if parts is None else (value, parts, semantic)
             else:
-                count = rng.randint(0, 1) if len(elements) == 1 else (1 if field.get("selection_mode", "single") == "single" else rng.randint(1, len(elements)))
-                selected_elements = rng.sample(elements, count)
-            element_entries = []
-            for element in elements:
-                checked = element in selected_elements
-                mark_metadata = {}
-                if checked:
-                    ex1, ey1, ex2, ey2 = element["bbox"]
-                    rect = fitz.Rect(*(v * point_scale for v in element["bbox"]))
-                    if typed_font and numeric_neural_pen is None:
-                        insert_printed(rect, "X", None, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path)
-                        mark_metadata = {"rendering": {"backend": "font", "mark_variant": "x", "requested_value": "X"}}
-                    else:
-                        image, mark_metadata = render_checkbox_mark(
-                            ex2-ex1, ey2-ey1, rng, style=handwriting_style,
-                            intensity=handwriting_intensity, neural_pen=numeric_neural_pen,
-                            handwriting_model=handwriting_models.get(numeric_neural_pen.model) if numeric_neural_pen else None,
-                            render_rng=render_rng, font_family=font_family,
-                        )
-                        stream = io.BytesIO()
-                        image.save(stream, format="PNG")
-                        page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
-                element_entries.append({**element, "checked": checked, **mark_metadata})
-            value = ",".join(str(item.get("value") or item["element_id"]) for item in selected_elements)
-            values[field_id] = value
-            entries.append({
-                "field_id": field_id, "label": field.get("label", ""), "value": value,
-                "bbox": field["bbox"], "elements": element_entries, **meaning,
-            })
-            continue
-        if binding:
-            value, parts, semantic = _bound_values(field, binding, semantic_value(binding))
-            composite = None if parts is None else (value, parts, semantic)
-        else:
-            composite = element_values(field, rng, generation_context)
-        if composite:
-            requested, parts, semantic = composite
-            field_content_class = classify_content(
-                field.get("data_type", "text"), binding.key if binding else None, requested,
-            )
-            element_entries = []
-            for element, character in parts:
-                rendered, metadata = insert_value(
-                    element["bbox"], character,
-                    pencil=field.get("data_type") == "text_sequence",
-                    force_printed=bool(field.get("render_as_printed", False)),
-                    content_class=field_content_class,
+                composite = element_values(field, rng, generation_context)
+            if composite:
+                requested, parts, semantic = composite
+                field_content_class = classify_content(
+                    field.get("data_type", "text"), binding.key if binding else None, requested,
                 )
-                element_entries.append({**element, "value": rendered, **metadata})
-            sequence = "".join(element["value"] for element in element_entries) if field.get("data_type") in {"digit_sequence", "text_sequence"} else requested
-            values[field_id] = sequence
-            entries.append({
-                "field_id": field_id, "label": field.get("label", ""), "value": sequence,
-                "bbox": field["bbox"], "elements": element_entries, **semantic, **meaning,
-                **({"requested_value": requested} if (numeric_neural_pen or text_neural_pen) is not None else {}),
-            })
-            continue
-        if not binding:
-            value, semantic = typed_value(field, rng, generation_context)
-        value, metadata = insert_value(
-            field["bbox"], value,
-            pencil=field.get("data_type", "text") in TEXT_TYPES and not is_numeric_text(value),
-            force_printed=bool(field.get("render_as_printed", False)),
-            content_class=classify_content(field.get("data_type", "text"), binding.key if binding else None, value),
-        )
-        values[field_id] = value
-        entries.append({"field_id": field_id, "label": field.get("label", ""), "value": value, "bbox": field["bbox"], **semantic, **meaning,
-                        **metadata})
+                element_entries = []
+                for element, character in parts:
+                    rendered, metadata = insert_value(
+                        element["bbox"], character,
+                        pencil=field.get("data_type") == "text_sequence",
+                        force_printed=bool(field.get("render_as_printed", False)),
+                        content_class=field_content_class,
+                    )
+                    element_entries.append({**element, "value": rendered, **metadata})
+                sequence = "".join(element["value"] for element in element_entries) if field.get("data_type") in {"digit_sequence", "text_sequence"} else requested
+                values[field_id] = sequence
+                entries.append({
+                    "field_id": field_id, "label": field.get("label", ""), "value": sequence,
+                    "bbox": field["bbox"], "elements": element_entries, **semantic, **meaning,
+                    **({"requested_value": requested} if (numeric_neural_pen or text_neural_pen) is not None else {}),
+                })
+                continue
+            if not binding:
+                value, semantic = typed_value(field, rng, generation_context)
+            value, metadata = insert_value(
+                field["bbox"], value,
+                pencil=field.get("data_type", "text") in TEXT_TYPES and not is_numeric_text(value),
+                force_printed=bool(field.get("render_as_printed", False)),
+                content_class=classify_content(field.get("data_type", "text"), binding.key if binding else None, value),
+            )
+            values[field_id] = value
+            entries.append({"field_id": field_id, "label": field.get("label", ""), "value": value, "bbox": field["bbox"], **semantic, **meaning,
+                            **metadata})
+
+    batched = {name for name, model in handwriting_models.items() if callable(getattr(type(model), "sample_many", None))}
+    if batched:
+        # Fill the fields on a scratch page with a recorder in place of each model, and sample the
+        # recorded requests in one batch. The seeds do not depend on the strokes, thus the real pass
+        # makes the same requests. A failed request makes a retry with a new seed, thus the recorder
+        # fails the known failed requests and the planning pass runs again. A request that is not in
+        # the batch calls sample(). An error in the planning pass only causes such misses.
+        saved = (rng.getstate(), render_rng.getstate(), page, field_map, generation_context, record, snapshot,
+                 values, entries, handwriting_models)
+        results = {name: {} for name in batched}
+        for _ in range(4):
+            recorders = {name: _SampleRecorder(results.get(name), model.check if name in batched else None)
+                         for name, model in handwriting_models.items()}
+            scratch = fitz.open(template_path)
+            field_map, generation_context, record, snapshot = copy.deepcopy(saved[3:7])
+            page, values, entries, handwriting_models = _ScratchPage(scratch[0]), {}, [], recorders
+            try:
+                fill_fields()
+            except Exception:
+                pass
+            finally:
+                scratch.close()
+            state, render_state, page, field_map, generation_context, record, snapshot, values, entries, handwriting_models = saved
+            rng.setstate(state)
+            render_rng.setstate(render_state)
+            failed = False
+            for name in batched:
+                requests = [request for request in dict.fromkeys(recorders[name].requests) if request not in results[name]]
+                results[name].update(zip(requests, handwriting_models[name].sample_many(requests)))
+                failed = failed or any(isinstance(results[name][request], Exception) for request in requests)
+            if not failed:
+                break
+        handwriting_models = {name: _SampleReplay(model, results[name]) if name in batched else model
+                              for name, model in handwriting_models.items()}
+    fill_fields()
 
     file_document_id = document_id_with_preset(document_id, style_preset_uid)
     safe_id = _safe_name(file_document_id)

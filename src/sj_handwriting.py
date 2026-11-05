@@ -79,6 +79,8 @@ class SjHandwritingModel:
         self._prime_probe_pad = 80
         self._prime_split_threshold = 1e-6
         self._prime_split_margin = 10
+        self._styles: dict[int, tuple] = {}
+        self._max_batch = 256
 
     def _lstm(self, inputs, state, index):
         torch = self.torch
@@ -97,28 +99,11 @@ class SjHandwritingModel:
         )
         alpha, beta, delta = params.chunk(3, 1)
         kappa = kappa + delta / 25
-        phi = (alpha.T * torch.exp(-((kappa.T - ruler) ** 2) / beta.T.clamp(min=0.01))).sum(0)
-        context = (phi @ embedding).unsqueeze(0)
+        phi = (alpha.unsqueeze(2) * torch.exp(-((kappa.unsqueeze(2) - ruler) ** 2) / beta.unsqueeze(2).clamp(min=0.01))).sum(1)
+        context = (phi.unsqueeze(1) @ embedding).squeeze(1)
         states[1] = self._lstm(torch.cat((inputs, h0, context), 1), states[1], 1)
         states[2] = self._lstm(torch.cat((inputs, states[1][0], context), 1), states[2], 2)
         return states, context, kappa, phi
-
-    def _output(self, state, bias, rng):
-        torch = self.torch
-        params = (state @ self._gmm_weights + self._gmm_biases)[0]
-        probabilities = torch.softmax(params[:20] * (1 + bias), 0).numpy().astype(float)
-        probabilities[probabilities < 0.01] = 0
-        probabilities /= probabilities.sum()
-        index = rng.choice(20, p=probabilities)
-        params_np = params.numpy()
-        sigmas = np.maximum(np.exp(params_np[20:60] - bias), 1e-4)
-        rho = float(torch.tanh(params[60 + index]).clamp(-1 + 1e-8, 1 - 1e-8))
-        z1, z2 = rng.normal(size=2)
-        x = float(params_np[80 + index]) + sigmas[index] * z1
-        y = float(params_np[100 + index]) + sigmas[20 + index] * (rho * z1 + math.sqrt(max(0, 1-rho*rho)) * z2)
-        probability = float(torch.sigmoid(params[120]))
-        pen_up = float(rng.random() < (probability if probability >= 0.01 else 0))
-        return torch.tensor([[x, y, pen_up]], dtype=torch.float32)
 
     def _probe_prime_split(self, prefix, prime):
         """Find the first prime step K where the attention on the text is more than a small
@@ -133,6 +118,7 @@ class SjHandwritingModel:
             torch.tensor(prefix_codes + [0] * pad), len(ALPHABET),
         ).float()
         embedding[len(prefix_codes):] = 0
+        embedding = embedding.unsqueeze(0)
         ruler = torch.arange(total_len, dtype=torch.float32)
         states = [(torch.zeros(1, 400), torch.zeros(1, 400)) for _ in range(3)]
         context, kappa = torch.zeros(1, 73), torch.zeros(1, 10)
@@ -143,78 +129,180 @@ class SjHandwritingModel:
                 torch.tensor(prime[n - 1].reshape(1, 3), dtype=torch.float32), states, context, kappa, embedding, ruler,
             )
             snapshots.append((list(states), context, kappa))
-            if float(phi[text_start:].sum()) > self._prime_split_threshold:
+            if float(phi[0, text_start:].sum()) > self._prime_split_threshold:
                 split = max(0, n - self._prime_split_margin)
                 break
         cached_states, cached_context, cached_kappa = snapshots[split]
         return cached_states, cached_context, cached_kappa, split
 
-    def _prime(self, writer, prefix, prime, embedding, ruler):
-        if writer not in self._prime_cache:
-            self._prime_cache[writer] = self._probe_prime_split(prefix, prime)
-        cached_states, cached_context, cached_kappa, split = self._prime_cache[writer]
-        torch = self.torch
-        states, context, kappa = list(cached_states), cached_context, cached_kappa
-        for point in prime[split:]:
-            states, context, kappa, _ = self._step(
-                torch.tensor(point.reshape(1, 3), dtype=torch.float32), states, context, kappa, embedding, ruler,
-            )
-        return states, context, kappa
+    def _style(self, writer):
+        if writer not in self._styles:
+            prefix = np.load(self.root / f"styles/style-{writer}-chars.npy", allow_pickle=False).tobytes().decode("utf-8")
+            prime = np.load(self.root / f"styles/style-{writer}-strokes.npy", allow_pickle=False)
+            self._styles[writer] = prefix, prime
+        return self._styles[writer]
 
-    def sample(self, text: str, writer: int, bias: float, seed: int) -> np.ndarray:
+    def check(self, text: str, writer: int, bias: float) -> str:
+        """Return the prepared text, or raise ValueError when the model cannot write it with any seed."""
         from src.neural_handwriting import NeuralPen
-        from scipy.signal import savgol_filter
 
         text = prepare_text(text)
         NeuralPen(model="sjvasquez", writer=writer, bias=bias)
         if len(text) > 75 or not 0 <= writer <= 12:
             raise ValueError("sjvasquez supports lines up to 75 characters and styles 0 to 12")
+        return text
+
+    def _row(self, text, writer, bias, seed):
+        text = self.check(text, writer, bias)
         torch = self.torch
-        prefix = np.load(self.root / f"styles/style-{writer}-chars.npy", allow_pickle=False).tobytes().decode("utf-8")
-        prime = np.load(self.root / f"styles/style-{writer}-strokes.npy", allow_pickle=False)
+        prefix, prime = self._style(writer)
         codes = [ALPHABET.index(c) for c in prefix + " " + text] + [0]
-        total_len = len(codes) + 8
+        if self._cache_primed_style:
+            if writer not in self._prime_cache:
+                with torch.inference_mode():
+                    self._prime_cache[writer] = self._probe_prime_split(prefix, prime)
+            states, context, kappa, split = self._prime_cache[writer]
+        else:
+            states = [(torch.zeros(1, 400), torch.zeros(1, 400)) for _ in range(3)]
+            context, kappa, split = torch.zeros(1, 73), torch.zeros(1, 10), 0
+        return {"text": text, "codes": codes, "bias": float(bias), "rng": np.random.default_rng(seed),
+                "prime": prime[split:].astype(np.float32), "states": states, "context": context, "kappa": kappa,
+                "steps": 0, "offsets": [], "limit": max(2000, len(text) * 100)}
 
-        embedding = torch.nn.functional.one_hot(torch.tensor(codes + [0] * 8), len(ALPHABET)).float()
-        embedding[len(codes):] = 0
-        ruler = torch.arange(total_len, dtype=torch.float32)
-        rng = np.random.default_rng(seed)
+    @staticmethod
+    def _points(offsets):
+        from scipy.signal import savgol_filter
+
+        if len(offsets) < 2:
+            raise ValueError("Model produced no handwriting")
+        points = np.array(offsets, dtype=np.float32)
+        points[:, :2] = np.cumsum(points[:, :2], axis=0)
+        for stroke in np.split(points, np.where(points[:, 2] == 1)[0] + 1):
+            if len(stroke):
+                stroke[:, :2] = savgol_filter(stroke[:, :2], 7, 3, axis=0, mode="nearest")
+        design = np.column_stack((np.ones(len(points)), points[:, 0]))
+        coefficients, _, rank, _ = np.linalg.lstsq(design, points[:, 1], rcond=None)
+        if rank == 2:
+            angle = math.atan(float(coefficients[1]))
+            points[:, :2] = points[:, :2] @ np.array([
+                [math.cos(angle), -math.sin(angle)], [math.sin(angle), math.cos(angle)],
+            ])
+        points[:, 1] *= -1
+        if not np.isfinite(points).all():
+            raise ValueError("Model produced nonfinite pen coordinates")
+        return points
+
+    def _mixture(self, state, rows):
+        torch = self.torch
+        params = state @ self._gmm_weights + self._gmm_biases
+        scale = torch.tensor([[1 + row["bias"]] for row in rows], dtype=torch.float32)
+        probabilities = torch.softmax(params[:, :20] * scale, 1).numpy().astype(float)
+        probabilities[probabilities < 0.01] = 0
+        probabilities /= probabilities.sum(1, keepdims=True)
+        cdf = probabilities.cumsum(1)
+        cdf /= cdf[:, -1:]
+        rho = torch.tanh(params[:, 60:80]).clamp(-1 + 1e-8, 1 - 1e-8).numpy()
+        pen = torch.sigmoid(params[:, 120]).numpy()
+        params = params.numpy()
+        bias = np.array([[row["bias"]] for row in rows], dtype=np.float32)
+        return cdf, rho, np.where(pen >= 0.01, pen, 0), params, np.maximum(np.exp(params[:, 20:60] - bias), 1e-4)
+
+    @staticmethod
+    def _pick(mixture, lines, rows):
+        """Draw a pen offset for each line. Each row uses its own RNG in a fixed order: one uniform
+        for the mixture component (as rng.choice), two normals, and one uniform for the pen."""
+        cdf, rho, pen, params, sigmas = (array[lines] for array in mixture)
+        draws = np.array([(row["rng"].random(), *row["rng"].normal(size=2), row["rng"].random()) for row in rows])
+        index = (cdf <= draws[:, :1]).sum(1)
+        line = np.arange(len(lines))
+        rho = rho[line, index].astype(float)
+        z1, z2 = draws[:, 1], draws[:, 2]
+        x = params[line, 80 + index].astype(float) + sigmas[line, index] * z1
+        y = params[line, 100 + index].astype(float) + sigmas[line, 20 + index] * (
+            rho * z1 + np.sqrt(np.maximum(0, 1 - rho * rho)) * z2)
+        return np.column_stack((x, y, (draws[:, 3] < pen).astype(float))).astype(np.float32)
+
+    def sample_many(self, requests) -> list:
+        """Sample each (text, writer, bias, seed) request. The rows run in batches of up to
+        max_batch rows, and a new row starts when a row stops. Each row uses its own RNG in the
+        same order as one call of sample(). The strokes differ from a batch of one row only by
+        float rounding. A row that fails gets its ValueError in place of the points."""
+        torch = self.torch
+        results: list = [None] * len(requests)
+        waiting = []
+        for index, request in enumerate(requests):
+            try:
+                waiting.append((index, self._row(*request)))
+            except ValueError as exc:
+                results[index] = exc
+        if not waiting:
+            return results
+        length = max(len(row["codes"]) for _, row in waiting) + 8
+        ruler = torch.arange(length, dtype=torch.float32)
+        active, batch = [], None
+        waiting.reverse()
         with torch.inference_mode():
-            if self._cache_primed_style:
-                states, context, kappa = self._prime(writer, prefix, prime, embedding, ruler)
-            else:
-                states = [(torch.zeros(1, 400), torch.zeros(1, 400)) for _ in range(3)]
-                context, kappa = torch.zeros(1, 73), torch.zeros(1, 10)
-                for point in prime:
-                    states, context, kappa, _ = self._step(
-                        torch.tensor(point.reshape(1, 3), dtype=torch.float32), states, context, kappa, embedding, ruler,
+            while waiting or active:
+                if waiting and len(active) < self._max_batch:
+                    added = []
+                    while waiting and len(active) + len(added) < self._max_batch:
+                        added.append(waiting.pop())
+                    embedding = torch.zeros(len(added), length, len(ALPHABET))
+                    for line, (_, row) in enumerate(added):
+                        embedding[line, torch.arange(len(row["codes"])), torch.tensor(row["codes"])] = 1
+                    parts = (
+                        [torch.cat([row["states"][layer][part] for _, row in added]) for layer in range(3) for part in range(2)]
+                        + [torch.cat([row["context"] for _, row in added]), torch.cat([row["kappa"] for _, row in added]), embedding]
                     )
-            inputs = self._output(states[2][0], bias, rng)
-            offsets = []
-            for _ in range(max(2000, len(text) * 100)):
-                states, context, kappa, phi = self._step(inputs, states, context, kappa, embedding, ruler)
-                stop = self._output(states[2][0], bias, rng)
-                position = int(phi.argmax())
-                if position >= len(codes) or (position >= len(codes) - 1 and stop[0, 2]):
-                    if len(offsets) < 2:
-                        raise ValueError("Model produced no handwriting")
-                    points = np.array(offsets, dtype=np.float32)
-                    points[:, :2] = np.cumsum(points[:, :2], axis=0)
+                    batch = parts if batch is None else [torch.cat(pair) for pair in zip(batch, parts)]
+                    active += added
+                ready = [line for line, (_, row) in enumerate(active) if row["steps"] >= len(row["prime"])]
+                done, going = set(), []
+                if ready:
+                    rows = [active[line][1] for line in ready]
+                    mixture = self._mixture(batch[4][ready], rows)
+                    for place, (row, point) in enumerate(zip(rows, self._pick(mixture, list(range(len(ready))), rows))):
+                        index, line = active[ready[place]][0], ready[place]
+                        if row["steps"] == len(row["prime"]):
+                            row["inputs"] = point
+                            continue
+                        codes = len(row["codes"])
+                        position = int(row["phi"][:codes + 8].argmax())
+                        if position >= codes or (position >= codes - 1 and point[2]):
+                            try:
+                                results[index] = self._points(row["offsets"])
+                            except ValueError as exc:
+                                results[index] = exc
+                            done.add(line)
+                        elif row["steps"] - len(row["prime"]) >= row["limit"]:
+                            results[index] = ValueError(f"Model did not finish writing {row['text']!r}; try another seed or style")
+                            done.add(line)
+                        else:
+                            going.append(place)
+                    if going:
+                        rows = [rows[place] for place in going]
+                        for row, point in zip(rows, self._pick(mixture, going, rows)):
+                            row["inputs"] = point
+                            row["offsets"].append(point)
+                if done:
+                    keep = [line for line in range(len(active)) if line not in done]
+                    active = [active[line] for line in keep]
+                    batch = [tensor[keep] for tensor in batch] if keep else None
+                    if not active:
+                        continue
+                inputs = torch.from_numpy(np.stack([
+                    row["prime"][row["steps"]] if row["steps"] < len(row["prime"]) else row["inputs"] for _, row in active
+                ]))
+                states = [(batch[0], batch[1]), (batch[2], batch[3]), (batch[4], batch[5])]
+                states, context, kappa, phi = self._step(inputs, states, batch[6], batch[7], batch[8], ruler)
+                batch = [*states[0], *states[1], *states[2], context, kappa, batch[8]]
+                for line, (_, row) in enumerate(active):
+                    row["steps"] += 1
+                    row["phi"] = phi[line]
+        return results
 
-                    for stroke in np.split(points, np.where(points[:, 2] == 1)[0] + 1):
-                        if len(stroke):
-                            stroke[:, :2] = savgol_filter(stroke[:, :2], 7, 3, axis=0, mode="nearest")
-                    design = np.column_stack((np.ones(len(points)), points[:, 0]))
-                    coefficients, _, rank, _ = np.linalg.lstsq(design, points[:, 1], rcond=None)
-                    if rank == 2:
-                        angle = math.atan(float(coefficients[1]))
-                        points[:, :2] = points[:, :2] @ np.array([
-                            [math.cos(angle), -math.sin(angle)], [math.sin(angle), math.cos(angle)],
-                        ])
-                    points[:, 1] *= -1
-                    if not np.isfinite(points).all():
-                        raise ValueError("Model produced nonfinite pen coordinates")
-                    return points
-                inputs = self._output(states[2][0], bias, rng)
-                offsets.append(inputs[0].numpy().copy())
-        raise ValueError(f"Model did not finish writing {text!r}; try another seed or style")
+    def sample(self, text: str, writer: int, bias: float, seed: int) -> np.ndarray:
+        result = self.sample_many([(text, writer, bias, seed)])[0]
+        if isinstance(result, Exception):
+            raise result
+        return result
