@@ -253,7 +253,9 @@ class GenerationModeTests(unittest.TestCase):
         record = truths[0]["semantic_record"]
         born, died = date.fromisoformat(record["deceased.birth_date"]), date.fromisoformat(record["death.date"])
         self.assertLessEqual(born, died)
-        self.assertEqual(record["deceased.age"], died.year - born.year - ((died.month, died.day) < (born.month, born.day)))
+        # The fake model proposes no age, so the scenario is random. Fetal and infant deaths have no age in years.
+        expected = died.year - born.year - ((died.month, died.day) < (born.month, born.day))
+        self.assertEqual(record["deceased.age"], None if record["death.age_group"] in ("fetal", "infant") else expected)
         self.assertEqual(truths[0]["semantic_provenance"]["mode"], "ai")
 
         # "contradictory" proposes deceased.age = 2, which the DO's AI slot now rejects outright
@@ -269,8 +271,11 @@ class GenerationModeTests(unittest.TestCase):
         self.assertEqual(other["status"], "succeeded", other["error"])
         _, other_truths = self.outputs(other_job["id"])
         other_record = other_truths[0]["semantic_record"]
-        self.assertGreaterEqual(other_record["deceased.age"], 18)
         self.assertNotIn("deceased.age", other_truths[0]["semantic_provenance"]["ai_keys"])
+        if other_record["death.age_group"] == "adult":
+            self.assertGreaterEqual(other_record["deceased.age"], 18)
+        elif other_record["death.age_group"] in ("fetal", "infant"):
+            self.assertIsNone(other_record["deceased.age"])
 
 
 class BuiltinMetadataTests(unittest.TestCase):
