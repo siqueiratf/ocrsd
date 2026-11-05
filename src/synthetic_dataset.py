@@ -547,6 +547,55 @@ class _ScratchPage:
         return getattr(self._page, name)
 
 
+class _FastImagePage:
+    """Page that inserts many images fast. PyMuPDF insert_image scans all page resources on
+    each call to find a free fzImg<N> name. This page scans once and gives the same names.
+    It calls wrap_contents once: each image block has its own q/Q, so the stream stays
+    balanced. It uses the private page._insert_image; FastImagePageTests checks it."""
+
+    def __init__(self, page):
+        self._page = page
+        doc = page.parent
+        used = [i[7] for i in doc.get_page_images(page.number)]
+        used += [i[1] for i in doc.get_page_xobjects(page.number)]
+        used += [i[4] for i in doc.get_page_fonts(page.number)]
+        self._used_names = set(used)
+        self._next_index = 0
+        self._wrapped = False
+
+    def _next_name(self):
+        while True:
+            name = f"fzImg{self._next_index}"
+            self._next_index += 1
+            if name not in self._used_names:
+                self._used_names.add(name)
+                return name
+
+    def insert_image(self, rect, *, stream, overlay=True, keep_proportion=False):
+        page = self._page
+        doc = page.parent
+        clip = fitz.Rect(rect)
+        if clip.is_empty or clip.is_infinite:
+            raise ValueError("rect must be finite and not empty")
+        clip = clip * ~page.transformation_matrix
+        if overlay and not self._wrapped:
+            page.wrap_contents()
+            self._wrapped = True
+        digests = doc.InsertedImages
+        xref, digests = page._insert_image(
+            filename=None, pixmap=None, stream=stream, imask=None,
+            clip=clip, overlay=overlay, oc=0, xref=0, rotate=0,
+            keep_proportion=keep_proportion, width=0, height=0, alpha=-1,
+            _imgname=self._next_name(), digests=digests,
+        )
+        if digests is not None:
+            doc.InsertedImages = digests
+        return xref
+
+    def __getattr__(self, name):
+        return getattr(self._page, name)
+
+
 class _SampleReplay:
     """Model wrapper that returns the batch result of a request. A request that is not in the
     batch calls sample() of the model."""
@@ -1001,7 +1050,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         raise ValueError("O template não contém páginas")
     if len(document) > 1:
         document.select([0])
-    page = document[0]
+    page = _FastImagePage(document[0])
     dpi = float(field_map.get("dpi", 300))
     point_scale = 72.0 / dpi
     values: dict[str, str] = {}

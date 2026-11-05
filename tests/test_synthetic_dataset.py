@@ -1,5 +1,7 @@
+import io
 import json
 import random
+import re
 from datetime import date
 import tempfile
 import unittest
@@ -8,9 +10,10 @@ from unittest.mock import patch
 
 import fitz
 import numpy as np
+from PIL import Image
 
 from src.synthetic_dataset import (
-    _apply_ballpoint_texture, apply_shared_rules, element_values, generate_dataset, is_numeric_text,
+    _apply_ballpoint_texture, _FastImagePage, apply_shared_rules, element_values, generate_dataset, is_numeric_text,
     random_handwriting_style, random_value, render_checkbox_mark,
     render_handwritten_numeric, render_handwritten_text, render_neural_text, typed_value,
 )
@@ -579,6 +582,45 @@ class SyntheticDatasetTests(unittest.TestCase):
 
         build.assert_called_once_with("dnv", 1)
         self.assertEqual(generated[0].pdf_path.parent, output)
+
+
+class FastImagePageTests(unittest.TestCase):
+    """Pins _FastImagePage against plain page.insert_image. A PyMuPDF update that
+    changes insert_image's private API or its resource naming should fail this test."""
+
+    @staticmethod
+    def _png(color):
+        stream = io.BytesIO()
+        Image.new("RGBA", (20, 10), color).save(stream, format="PNG")
+        return stream.getvalue()
+
+    @staticmethod
+    def _strip_id(data: bytes) -> bytes:
+        data = re.sub(rb"/ID\s*\[[^\]]*\]", b"/ID[]", data)
+        return re.sub(rb"\(D:\d+\)", b"(D:0)", data)
+
+    def _build(self, use_fast: bool) -> bytes:
+        document = fitz.open()
+        page = document.new_page(width=200, height=200)
+        target = _FastImagePage(page) if use_fast else page
+        target.insert_image(fitz.Rect(10, 10, 60, 30), stream=self._png((255, 0, 0, 255)), overlay=True, keep_proportion=False)
+        page.insert_text((10, 100), "hello", fontsize=12)
+        target.insert_image(fitz.Rect(10, 40, 60, 60), stream=self._png((0, 255, 0, 255)), overlay=True, keep_proportion=False)
+        target.insert_image(fitz.Rect(10, 70, 60, 90), stream=self._png((0, 0, 255, 255)), overlay=True, keep_proportion=False)
+        document.set_metadata({})
+        data = document.tobytes(garbage=4, deflate=True)
+        document.close()
+        return data
+
+    def test_matches_plain_insert_image(self):
+        self.assertEqual(self._strip_id(self._build(False)), self._strip_id(self._build(True)))
+
+    def test_rejects_empty_rect(self):
+        document = fitz.open()
+        page = document.new_page(width=200, height=200)
+        with self.assertRaises(ValueError):
+            _FastImagePage(page).insert_image(fitz.Rect(10, 10, 10, 10), stream=self._png((255, 0, 0, 255)))
+        document.close()
 
 
 if __name__ == "__main__":
