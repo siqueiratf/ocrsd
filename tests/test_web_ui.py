@@ -265,6 +265,23 @@ class InterfaceTests(unittest.TestCase):
         self.assertIn("Revogado", revoked.text)
         self.assertEqual(self.client.get(f"/compartilhado/{share_id}", headers=share_cookie).status_code, 410)
 
+    def test_topbar_links_to_stars_and_issues(self):
+        from src.web import github
+        page = self.page("/modelos")
+        self.assertIn('hx-get="/github/estrelas"', page.text)
+        self.assertIn('href="https://github.com/siqueiratf/ocrsd/issues"', page.text)
+        github._cache.update(stars=None, expires=0.0)
+        with mock.patch.object(github, "fetch_stars", return_value=1250):
+            count = self.client.get("/github/estrelas")
+        self.assertIn('<span class="repo-stars-count">1,2 mil</span>', count.text)
+        github._cache.update(stars=None, expires=0.0)
+        with mock.patch.object(github, "fetch_stars", return_value=None):
+            self.assertEqual(self.client.get("/github/estrelas").status_code, 204)
+        github._cache.update(stars=None, expires=0.0)
+        with mock.patch.object(github, "fetch_stars", return_value=0):
+            self.assertEqual(self.client.get("/github/estrelas").status_code, 204)
+        github._cache.update(stars=None, expires=0.0)
+
     def test_shared_result_shows_every_document(self):
         queued = self.hx("POST", "/geracao/jobs", data=self.generation_form(count="3"))
         job_id = re.search(r'hx-get="/geracao/jobs/([0-9a-f]{32})"', queued.text).group(1)

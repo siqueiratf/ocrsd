@@ -34,6 +34,7 @@ from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS,
                               preview_strip, promote_model, render_writing_samples, realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count,
                               render_preview, revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping,
                               with_approved_semantics, writing_issues, writing_message, count_limit, count_limit_message, warm_writing_samples)
+from src.web import github
 from src.web.settings import Settings
 from src.web.version import commit as version_commit
 from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model_defaults, preset_title, writing_summary
@@ -1706,6 +1707,14 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             raise ServiceError(422, "validation_error", "Confira o valor de “Seed aleatória”")
         original, filtered, _ = realism_previews(catalog.document(text(form, "document_type"), owner_id).template, preset_name, seed)
         return render(request, "partials/realism.html", preset=preset_name, original=original, filtered=filtered)
+
+    @router.get("/github/estrelas")
+    async def github_stars():
+        value = await run_in_threadpool(github.stars)
+        if not value:
+            return Response(status_code=204)
+        return HTMLResponse(f'<span class="repo-stars-count">{github.compact(value)}</span>',
+                            headers={"Cache-Control": "public, max-age=600"})
 
     @router.get("/compartilhado/{share_id}")
     async def shared_page(request: Request, share_id: Identifier, documento: int = 1, pagina: int | None = None):
