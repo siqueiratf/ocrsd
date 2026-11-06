@@ -1,5 +1,146 @@
 # Desenvolvimento e operação
 
+## Ambiente de desenvolvimento
+
+Para desenvolver com Docker Engine e Compose instalados:
+
+```bash
+cp deploy/.env.development.example deploy/.env.development
+docker compose --env-file deploy/.env.development up -d --build
+docker compose --env-file deploy/.env.development ps
+curl --fail http://127.0.0.1:8080/api/v1/health
+```
+
+Abra **http://127.0.0.1:8080**. O Compose de desenvolvimento usa o projeto
+`ocrsd-dev` e o volume `ocrsd-dev_jobs`, separados da produção no servidor 2.
+A publicação fica restrita ao computador local.
+O Compose monta `assets/handwriting` somente para leitura e habilita os modelos
+neurais quando os pesos completos estão presentes. Ajuste
+`OCRSD_HANDWRITING_ASSETS` se os pesos forem mantidos fora do checkout.
+`OCRSD_BIND_ADDRESS` controla a interface publicada; mantenha `127.0.0.1` quando
+houver proxy no host e use um endereço privado específico para acesso por VPN.
+O OpenAPI está em `/api/openapi.json` e a documentação interativa em `/api/docs`.
+`docker compose --env-file deploy/.env.development logs -f api worker web` mostra os logs; `docker compose --env-file deploy/.env.development stop`
+interrompe os serviços preservando os dados. Não use `down -v` se precisar
+preservar jobs e resultados.
+
+Para desenvolver sem Docker, use Linux, Python 3.11 e uv. A interface usa FastAPI,
+Jinja2 e HTMX, sem etapa de build. O comando abaixo prepara as dependências quando
+necessário e inicia a API, que também entrega a interface, e o worker; pressione
+Ctrl+C para encerrar os dois processos:
+
+```bash
+make web
+```
+
+No modo local, esse alvo habilita automaticamente todos os modelos neurais cujos
+pesos estejam presentes em `assets/handwriting`. Abra **http://127.0.0.1:8000**.
+Se a porta 8000 estiver ocupada, use `make web PORT=8001`. Para usar a IA do servidor 2 em vez da GPU local, conecte a VPN e use `make web AI=ssh2`. `make web` também
+habilita `OCRSD_STANDARD_EDITS`, que adiciona ao editor as ações “Salvar como
+modelo padrão” e “Salvar nova versão do padrão”; ambas gravam em
+`documents/<chave>/` do repositório, então confira o diff e rode
+`git add documents/<chave>` para versionar. Mantenha a variável desativada
+(`OCRSD_STANDARD_EDITS=false`, o padrão em Compose e systemd) fora do
+desenvolvimento local.
+Para iniciar cada processo separadamente:
+
+```bash
+uv sync --locked --extra web --extra test
+```
+
+Execute em dois terminais, ambos na raiz do repositório:
+
+```bash
+uv run --no-sync uvicorn src.web.api:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+```bash
+uv run --no-sync python -m src.web.worker
+```
+
+A interface fica em `http://127.0.0.1:8000` e a API em `/api/v1`. Os jobs ficam
+em `var/web/`; feche o worker com Ctrl+C, aguardando o job atual terminar.
+API e worker devem usar as mesmas variáveis `OCRSD_*`; a execução direta não lê
+`deploy/.env.development` automaticamente. Para carregá-las no shell, use
+`set -a; . deploy/.env.development; set +a` antes de iniciar cada processo.
+
+Importe [a coleção Postman](../postman/ocrsd.postman_collection.json) e
+[o ambiente local](../postman/local.postman_environment.json). Ajuste `baseUrl`
+para `http://127.0.0.1:8080` ao usar Compose. Execute a coleção no Collection
+Runner: ela seleciona recursos, gera um dataset, aguarda a conclusão, baixa
+artefatos e testa o cancelamento de outro job. Requisições individuais podem ser
+executadas na mesma ordem; repita “Aguardar conclusão” até `succeeded`. Para salvar
+o ZIP em disco no Postman, use **Send and Download**. A chave retornada na criação
+é privada, não aparece novamente e não deve ser incluída em exports compartilhados.
+
+```bash
+uv run --no-sync python -m unittest discover -s tests -q
+uv run --no-sync python -m scripts.smoke_generate --output output/smoke --seed 123
+uv run --no-sync python -m scripts.export_postman --check
+```
+
+Após alterar contratos, regenere a coleção com
+`uv run --no-sync python -m scripts.export_postman` e execute os testes.
+O GitHub Actions executa a validação (testes, smoke e conferência do Postman)
+em pushes, pull requests e semanalmente, às segundas-feiras às 06:00 UTC. Os
+documentos sintéticos e o relatório ficam disponíveis como artefatos da execução.
+
+## Branches, CI e deploy automático
+
+O branch `develop` concentra as próximas mudanças e roda a validação no GitHub.
+O branch `main` registra versões aprovadas para produção; o fluxo `deploy.yml`
+atualiza o servidor 2 de forma automática após cada commit aprovado em `main`.
+Cada publicação também recebe uma tag `V*` para a release, mas a tag não é mais
+um passo manual de deploy. Os arquivos `.env.development` e `.env.production`
+são locais a cada ambiente e não entram no Git.
+
+O push para `main` executa o fluxo `validation.yml` no GitHub Actions: testes,
+smoke e conferência do Postman. Quando esse fluxo termina com sucesso em `main`,
+o fluxo `deploy.yml` inicia e atualiza o servidor 2 de forma automática, sem
+passo manual. O push de uma tag `V*` continua a repetir as verificações e a
+criar a release com artefatos, mas a release em si não aciona o deploy; o
+deploy segue cada commit aprovado em `main`.
+
+O fluxo `deploy.yml` roda em um executor próprio (self-hosted runner) instalado
+no servidor 2, porque o servidor fica em uma rede privada. Esse executor:
+
+1. Faz checkout do commit que passou nos testes.
+2. Roda `docker compose -f deploy/compose.ssh2.yaml --env-file deploy/.env.production up -d --build --remove-orphans`.
+3. Verifica `https://ocrsd.onrcpn.org.br/api/v1/health`.
+
+O executor roda sob a conta de sistema `ocrsd`, membro do grupo `docker`. Essa
+conta não usa `sudo`; o grupo `docker` já dá acesso ao comando `docker compose`.
+Para preparar o executor no servidor 2, siga as instruções de "Runners de
+repositório" (ou de organização) em Settings → Actions → Runners no GitHub, e
+dê ao executor o rótulo `ocrsd-server2`.
+
+Para disparar um deploy manual sem um novo push, use `workflow_dispatch` no
+fluxo `validation.yml`, ou publique um commit vazio em `main`.
+
+Mantenha `deploy/.env.production` e os pesos locais no servidor. O volume
+`ocrsd_jobs` preserva banco, histórico e resultados entre atualizações.
+
+O release [V1](https://github.com/siqueiratf/ocrsd/releases/tag/V1) corresponde à
+versão Python `1.0.0`. Seu changelog está em [CHANGELOG.md](../CHANGELOG.md).
+O workflow de publicação valida os documentos e publica as notas, o arquivo do
+código-fonte e documentos sintéticos de validação quando uma tag `V*` é enviada.
+
+## Organização do repositório
+
+| Pasta ou arquivo | Conteúdo |
+| --- | --- |
+| `src/` | Aplicação, CLI, interfaces e configuração em `src/config.py` |
+| `tests/` | Testes automatizados |
+| `scripts/` | Validação sintética e publicação de releases |
+| `documents/` | Templates, mapas e presets |
+| `assets/` | Fonte e informações dos modelos de escrita |
+| `docs/` | Documentação de desenvolvimento e operação |
+| `.github/workflows/` | Validação contínua, publicação e deploy |
+| `CHANGELOG.md` | Alterações por versão |
+
+As configurações da IDE, os datasets gerados, as saídas e os pesos locais dos
+modelos são ignorados. A pasta local `examples/` permanece vazia.
+
 ## Fronteiras da aplicação
 
 A entrega web usa FastAPI/Pydantic, páginas Jinja2 renderizadas no servidor com HTMX,
@@ -47,9 +188,13 @@ Presets criados pela web são privados e armazenados por proprietário, sem um a
 JSON global mutável. A configuração do dataset copia seus parâmetros para o job. O
 catálogo administrado continua somente leitura e só expõe pesos e presets aprovados.
 
-O navegador mantém um token opaco do espaço em `localStorage`; seu hash fica no banco.
-Esse token delimita modelos, presets, configurações, jobs e compartilhamentos, mas não
-substitui autenticação institucional. Um link compartilhado leva ID e chave no
+Modelos, presets, configurações e histórico pertencem ao espaço privado criado no
+primeiro acesso e persistem em SQLite. O navegador guarda a chave desse espaço em um
+cookie HttpOnly; seu hash fica no banco. O token salvo por versões anteriores em
+`localStorage` é migrado automaticamente. Esse token/cookie delimita modelos, presets,
+configurações, jobs e compartilhamentos, mas não substitui autenticação institucional.
+Preserve esse cookie: esta versão não integra login institucional nem recuperação de
+acesso. Um link compartilhado leva ID e chave no
 fragmento, que não chega ao proxy e é removido da barra após a leitura. Quem possuir o
 link acessa o resultado até revogação ou expiração. O catálogo é administrado por
 arquivos locais, nunca por caminhos recebidos da API.
@@ -136,10 +281,9 @@ IP é uma cota básica: NAT institucional compartilha limite e clientes distribu
 podem contorná-lo. Nginx também limita requisições e conexões; grandes exposições
 públicas podem exigir proteção adicional aprovada na borda.
 
-Os arquivos públicos são marcados visualmente e contêm `synthetic=true` e aviso nos
-JSONs. A sobreposição visual pode afetar reconhecimento em suas regiões: os valores
-do ground truth representam o texto gerado antes da marcação. A geometria original
-é preservada; não use os PDFs públicos como baseline sem considerar a marca.
+Os arquivos gerados contêm `synthetic=true` e um aviso textual (`notice`) nos JSONs
+de ground truth e no manifesto, mas o PDF não recebe mais uma marca visual sobreposta.
+A geometria original é preservada.
 Determinismo significa mesmos valores e pixels para versões, assets e opções iguais;
 PDF/ZIP podem ter metadados temporais diferentes. Atualizações de bibliotecas ou
 pesos podem mudar resultados. Os testes reais usam fonte local, sem inferência neural.
@@ -411,7 +555,7 @@ curl --fail "https://$OCRSD_DOMAIN/api/v1/document-types"
 ```
 
 Importe `postman/servidor.postman_environment.json`, substitua o domínio e execute
-a coleção. Verifique `worker_ready`, criação/conclusão, aviso no PDF, download ZIP e
+a coleção. Verifique `worker_ready`, criação/conclusão, download ZIP e
 cancelamento. Certificados válidos devem funcionar sem desabilitar verificação TLS.
 
 ## Operação, atualização e recuperação
