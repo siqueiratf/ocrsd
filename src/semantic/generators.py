@@ -1544,10 +1544,107 @@ def certificate(record, rng: random.Random) -> dict[str, Any]:
     }
 
 
+MARITAL_WORDS = {"SOLTEIRO(A)": ("solteiro", "solteira"), "DIVORCIADO(A)": ("divorciado", "divorciada"),
+                 "VIÚVO(A)": ("viúvo", "viúva")}
+PACT_REGIMES = ("COMUNHÃO UNIVERSAL DE BENS", "SEPARAÇÃO TOTAL DE BENS", "PARTICIPAÇÃO FINAL NOS AQUESTOS")
+ORDINALS = ("primeiro", "segundo")
+
+
+def couple(record, rng: random.Random) -> dict[str, Any]:
+    names = [record.value(f"spouse{number}.name") for number in (1, 2)]
+    after = [record.value(f"spouse{number}.name_after") for number in (1, 2)]
+    parts, documents, births = [], [], []
+    for number, name, sex in zip((1, 2), names, couple_sexes(record)):
+        female = sex == "F"
+        status, age = record.value(f"spouse{number}.marital_status_before"), record.value(f"spouse{number}.age")
+        born = record.value(f"spouse{number}.birth_date")
+        pool = tuple(o for o in OCCUPATIONS if age >= OCCUPATION_MIN_AGE.get(o, 0) and (o != "Estudante" or age < 30))
+        occupation = inflect_occupation(rng.choice(pool), sex).lower()
+        city, uf = record.value(f"spouse{number}.naturalidade.municipality"), record.value(f"spouse{number}.naturalidade.uf")
+        ending = "a" if female else "o"
+        parts.append(f"{name}, brasileir{ending}, {MARITAL_WORDS[status][female]}, {occupation}, nascid{ending} em "
+                     f"{born:%d/%m/%Y} em {city}/{uf}, filh{ending} de {record.value(f'spouse{number}.parents_names')}")
+        ordinal = ORDINALS[number - 1]
+        if status == "SOLTEIRO(A)":
+            births.append(ordinal)
+        elif status == "DIVORCIADO(A)":
+            documents.append(f"certidão de casamento com averbação do divórcio do {ordinal} contraente")
+        else:
+            documents.append(f"certidão de óbito do cônjuge anterior do {ordinal} contraente")
+        if age < 18:
+            documents.append(f"autorização dos pais do {ordinal} contraente")
+    if len(births) == 2:
+        documents.insert(0, "Certidões de nascimento dos contraentes")
+    elif births:
+        documents.insert(0, f"Certidão de nascimento do {births[0]} contraente")
+    documents += ["declaração de duas testemunhas", "declaração do estado civil e da residência dos contraentes"]
+    if record.value("marriage.property_regime") in PACT_REGIMES:
+        documents.append("escritura de pacto antenupcial")
+    text = "; ".join(documents)
+    return {"couple.names": f"{names[0]} e {names[1]}", "couple.qualification": "; ".join(parts) + ".",
+            "couple.documents": text[0].upper() + text[1:] + ".",
+            "couple.names_after": None if after == names else f"{after[0]} e {after[1]}"}
+
+
+BLOOD_GROUPS = ("O positivo", "O negativo", "A positivo", "A negativo", "B positivo", "AB positivo")
+
+
+def _between_dates(rng: random.Random, start: date, end: date) -> date:
+    return start + timedelta(days=rng.randint(0, max(0, (end - start).days)))
+
+
+def _voluntary_annotation(rng: random.Random, uf: str, age: int) -> str:
+    options = [f"RG {rng.randint(1000000, 99999999)} SSP/{uf}", f"Grupo sanguíneo {rng.choice(BLOOD_GROUPS)}"]
+    if age >= 16:
+        options += [f"Título de eleitor {digits(rng, 12)}", f"PIS {digits(rng, 11)}"]
+    return "; ".join(rng.sample(options, rng.choice((1, 1, 2)))) + "."
+
+
+def certificate_annotations(record, rng: random.Random) -> dict[str, Any]:
+    """Averbações and anotações voluntárias of a certidão: mostly blank, else text that agrees with the
+    registration and the issue date."""
+    context, issued = record.context, record.value("certificate.issue_date")
+    averbacao = voluntary = None
+    if context == "certidao_casamento":
+        registered, married = record.value("marriage_registration.date"), record.value("marriage.date")
+        uf = record.value("office.city_uf").rsplit(" - ", 1)[-1]
+        years = (issued - registered).days / 365.25
+        if years >= 1 and rng.random() < min(0.3, years * 0.015):
+            day = _between_dates(rng, registered + timedelta(days=366), issued)
+            averbacao = rng.choice((f"Averbação de divórcio consensual por escritura pública lavrada em {day:%d/%m/%Y}.",
+                                    f"Averbação de divórcio por sentença judicial de {day:%d/%m/%Y}."))
+        elif record.value("marriage.property_regime") in PACT_REGIMES and rng.random() < 0.4:
+            day = married - timedelta(days=rng.randint(10, 120))
+            averbacao = f"Regime de bens conforme escritura de pacto antenupcial lavrada em {day:%d/%m/%Y}."
+        if rng.random() < 0.15:
+            voluntary = _voluntary_annotation(rng, uf, 18)
+    elif context in ("certidao_nascimento", "declaracao_obito"):
+        birth_key, registered_key = (("birth.date", "registration.date") if context == "certidao_nascimento"
+                                     else ("deceased.birth_date", "death_registration.date"))
+        born, registered = record.value(birth_key), record.value(registered_key)
+        uf = record.value("office.city_uf").rsplit(" - ", 1)[-1]
+        age = completed_years(born, min(issued, record.value("death.date")) if context == "declaracao_obito" else issued)
+        stillbirth = context == "declaracao_obito" and record.value("death.age_group") == "fetal"
+        if context == "certidao_nascimento" and age >= 18 and rng.random() < 0.2:
+            day = _between_dates(rng, shift_years(born, -18), issued)
+            body = f"{stable_digits(6, 'cns', 'casamento', str(day))}0155{day.year:04d}2{rng.randint(1, 400):05d}" \
+                   f"{rng.randint(1, 300):03d}{rng.randint(1, 250000):07d}"
+            spouse = person_name(record, rng, rng.choices(("M", "F"), (95, 5) if record.value("newborn.sex") == "F" else (5, 95))[0])
+            averbacao = (f"Casou-se em {day:%d/%m/%Y} com {spouse}, matrícula "
+                         f"{format_matricula(body + matricula_check_digits(body))}.")
+        elif not stillbirth and rng.random() < 0.03:
+            day = _between_dates(rng, registered, issued)
+            averbacao = f"Averbação de retificação administrativa do registro, art. 110 da Lei 6.015/73, em {day:%d/%m/%Y}."
+        if not stillbirth and rng.random() < (0.25 if age >= 16 else 0.1):
+            voluntary = _voluntary_annotation(rng, uf, age)
+    return {"annotations.averbacoes": averbacao, "annotations.voluntary": voluntary}
+
+
 GENERATORS: dict[str, Callable[[Any, random.Random], dict[str, Any]]] = {
     "newborn": newborn, "mother": mother, "father": father, "guardian": guardian, "parents": parents,
     "grandparents": grandparents, "birth": birth, "pregnancy": pregnancy, "filling": filling, "registration": registration,
     "deceased": deceased, "death": death, "certifier": certifier, "twin": twin, "death_registration": death_registration,
     "burial": burial, "parent1": parent1, "parent2": parent2, "spouse1": spouse1, "spouse2": spouse2,
     "marriage": marriage, "marriage_registration": marriage_registration, "office": office, "certificate": certificate,
+    "couple": couple, "annotations": certificate_annotations,
 }

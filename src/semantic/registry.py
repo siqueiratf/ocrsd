@@ -605,6 +605,26 @@ FIELDS.extend([
     _field("newborn.naturalidade.uf", "UF da naturalidade do recém-nascido", "uf", "Recém-nascido",
            "UF da naturalidade do recém-nascido, do mesmo município de newborn.naturalidade", CERT,
            ("uf da naturalidade", "uf naturalidade"), ("newborn.naturalidade",)),
+    _field("couple.names", "Nomes dos cônjuges", "text", "Casamento",
+           "Nomes dos dois cônjuges no momento da habilitação, no formato “A e B”", CASAMENTO,
+           ("nomes dos conjuges", "nomes"), ("spouse1.name", "spouse2.name")),
+    _field("couple.qualification", "Qualificação e filiação dos cônjuges", "text", "Casamento",
+           "Nome, nacionalidade, estado civil, profissão, data e local de nascimento e genitores de cada cônjuge", CASAMENTO,
+           ("filiacao e qualificacao dos conjuges",), ("spouse1.name", "spouse2.name", "spouse1.parents_names",
+                                                       "spouse2.parents_names")),
+    _field("couple.documents", "Documentos apresentados", "text", "Casamento",
+           "Documentos apresentados na habilitação (Código Civil, art. 1.525), coerentes com o estado civil, a "
+           "idade e o regime de bens", CASAMENTO, ("relacao dos documentos apresentados", "documentos apresentados"),
+           ("spouse1.marital_status_before", "spouse2.marital_status_before", "marriage.property_regime")),
+    _field("couple.names_after", "Nomes adotados após o casamento", "text", "Casamento",
+           "Nomes que os cônjuges passaram a utilizar, no formato “A e B”; vazio quando nenhum nome mudou", CASAMENTO,
+           ("nome que cada um dos conjuges passou a utilizar",), ("spouse1.name_after", "spouse2.name_after"), True),
+    _field("annotations.averbacoes", "Anotações e averbações", "text", "Certidão",
+           "Averbações ou anotações coerentes com o registro (casamento, divórcio, pacto antenupcial, retificação); "
+           "quase sempre vazio", ALL_CERTS, ("anotacoes averbacoes", "observacoes averbacoes"), (), True),
+    _field("annotations.voluntary", "Anotações voluntárias de cadastro", "text", "Certidão",
+           "Números de documentos da pessoa registrada (RG, título de eleitor, PIS) ou grupo sanguíneo; "
+           "geralmente vazio", ALL_CERTS, ("anotacoes voluntarias de cadastro",), (), True),
 ])
 # death.external.place.* is only filled for "Não natural" scenarios; mark optional after
 # construction since the _address() helper does not take an optional flag.

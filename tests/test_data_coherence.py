@@ -81,5 +81,39 @@ class CoupleTests(unittest.TestCase):
         self.assertTrue(20 <= same <= 100, same)
 
 
+class MarriageTextTests(unittest.TestCase):
+    def test_old_model_fields_come_from_the_couple(self):
+        for values, _ in records("certidao_casamento"):
+            names = [values["spouse1.name"], values["spouse2.name"]]
+            self.assertEqual(values["couple.names"], " e ".join(names))
+            for number, name in zip((1, 2), names):
+                self.assertIn(name, values["couple.qualification"])
+                self.assertIn(values[f"spouse{number}.parents_names"], values["couple.qualification"])
+            divorced = "DIVORCIADO(A)" in (values["spouse1.marital_status_before"], values["spouse2.marital_status_before"])
+            self.assertEqual(divorced, "divórcio" in values["couple.documents"])
+            unchanged = [values["spouse1.name_after"], values["spouse2.name_after"]] == names
+            self.assertEqual(unchanged, values["couple.names_after"] is None)
+            self.assertLessEqual(len(values["couple.documents"]), 300)
+            self.assertLessEqual(len(values["couple.qualification"]), 600)
+
+    def test_annotations_are_blank_or_dated_before_the_issue(self):
+        import re
+        for document in CERTIDOES:
+            filled = 0
+            for values, _ in records(document):
+                for key in ("annotations.averbacoes", "annotations.voluntary"):
+                    text = values.get(key)
+                    if text is None:
+                        continue
+                    filled += 1
+                    self.assertNotIn("Hospital", text)
+                    self.assertLessEqual(len(text), 200)
+                    for day in re.findall(r"\d{2}/\d{2}/\d{4}", text):
+                        d, m, y = map(int, day.split("/"))
+                        if "certificate.issue_date" in values and "pacto" not in text:
+                            self.assertLessEqual(date(y, m, d), values["certificate.issue_date"], (document, text))
+            self.assertGreater(filled, 0, document)
+
+
 if __name__ == "__main__":
     unittest.main()
