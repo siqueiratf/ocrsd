@@ -75,6 +75,25 @@ class CoupleTests(unittest.TestCase):
                 if sexes[0] == sexes[1]:
                     self.assertGreaterEqual(values["marriage.date"], date(2013, 5, 16))
 
+    def test_spouse_age_gap_is_realistic(self):
+        for document in ("certidao_casamento", "certidao_casamento_cnj"):
+            gaps, husband_older, different = [], 0, 0
+            for values, record in records(document):
+                ages = values["spouse1.age"], values["spouse2.age"]
+                self.assertGreaterEqual(min(ages), 16)
+                gaps.append(abs(ages[0] - ages[1]))
+                sexes = record._links["marriage.couple"]
+                if sexes[0] != sexes[1]:
+                    different += 1
+                    husband, wife = ages if sexes[0] == "M" else ages[::-1]
+                    husband_older += husband > wife
+                if "couple.documents" in values:
+                    for number, age in zip(("primeiro", "segundo"), ages):
+                        self.assertEqual(age < 18, f"autorização dos pais do {number} contraente" in values["couple.documents"])
+            self.assertGreater(sum(gap <= 6 for gap in gaps) / len(gaps), 0.65, document)
+            self.assertLess(sum(gap > 15 for gap in gaps) / len(gaps), 0.05, document)
+            self.assertTrue(0.5 < husband_older / different < 0.8, document)
+
     def test_same_sex_share_is_small(self):
         from src.semantic.generators import couple_sexes
         same = sum(len(set(couple_sexes(SemanticRecord(seed, "certidao_casamento")))) == 1 for seed in range(20000))

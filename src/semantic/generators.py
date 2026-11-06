@@ -1569,11 +1569,24 @@ def _spouse_marital_status(rng: random.Random, record, prefix: str, age: int) ->
     return record.pick(rng, f"{prefix}.marital_status_before", MARITAL_STATUS_BEFORE, weights)
 
 
+def spouse_gap_weight(gap: int) -> float:
+    """Weight of an age gap in years (husband minus wife; the absolute gap for a same-sex couple). Close
+    to the IBGE Registro Civil figures: most gaps are 0-6 years, the husband is older in about two thirds
+    of the marriages, gaps of more than 15 years are rare."""
+    size = abs(gap)
+    weight = 10 if size <= 3 else 7 if size <= 6 else 3 if size <= 10 else 1 if size <= 15 else 0.15 if size <= 25 else 0.02
+    return weight if gap >= 0 else weight * 0.45
+
+
 def marriage(record, rng: random.Random) -> dict[str, Any]:
     same_sex = len(set(couple_sexes(record))) == 1
     day = record.pick(rng, "marriage.date", DateSpan(SAME_SEX_MARRIAGE_START if same_sex else EVENT_START, EVENT_END))
     age1, born1 = age_and_birth_date(record, rng, "spouse1", day, SPOUSE_AGES, SPOUSE_AGE_WEIGHTS)
-    age2, born2 = age_and_birth_date(record, rng, "spouse2", day, SPOUSE_AGES, SPOUSE_AGE_WEIGHTS)
+    sexes = couple_sexes(record)
+    # The second age follows the first with the gap distribution (husband minus wife for a different-sex couple).
+    sign = 0 if same_sex else 1 if sexes[0] == "M" else -1
+    weights = tuple(spouse_gap_weight((age1 - age) * sign if sign else abs(age1 - age)) for age in SPOUSE_AGES)
+    age2, born2 = age_and_birth_date(record, rng, "spouse2", day, SPOUSE_AGES, weights)
     if max(age1, age2) >= MANDATORY_SEPARATION_AGE:
         regime = "SEPARAÇÃO OBRIGATÓRIA DE BENS"
     else:
