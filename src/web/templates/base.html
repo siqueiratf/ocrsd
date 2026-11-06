@@ -23,7 +23,7 @@
   <a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="{% block home %}/modelos{% endblock %}" title="Galeria de Modelos">
+      <a class="brand" href="{% block home %}/modelos{% endblock %}" title="Galeria de Modelos"{% block home_attrs %}{% endblock %}>
         <img class="brand-logo brand-labrec" src="{{ asset('labrec-logo.svg') }}" alt="LabREC" width="367" height="106">
         <span class="brand-divider" aria-hidden="true"></span>
         <img class="brand-logo brand-ocrsd" src="{{ asset('ocrsd-logo.svg') }}" alt="OCRSD · Open Civil Registry Synthetic Dataset" width="1678" height="431">

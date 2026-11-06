@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from urllib.parse import unquote
 
 try:
@@ -275,7 +276,17 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(len(pdfs), 3)
         first = self.client.get(f"/compartilhado/{share_id}", headers=share_cookie)
         self.assertIn("1 de 3", first.text)
-        self.assertEqual(len(re.findall(r'<option value="\d+"', first.text)), 3)
+        self.assertIn('class="result-tree"', first.text)
+        self.assertEqual(len(re.findall(r'class="result-tree-row', first.text)), 3)
+        self.assertIn('href="/modelos" title="Galeria de Modelos" target="_blank" rel="noopener"', first.text)
+        with mock.patch("src.web.ui.SHARED_PAGE_SIZE", 2):
+            paged = self.client.get(f"/compartilhado/{share_id}", headers=share_cookie)
+            self.assertIn("Página 1 de 2", paged.text)
+            self.assertEqual(re.findall(r'class="result-tree-row[^"]*"><a href="[^"]*documento=(\d+)"', paged.text), ["1", "2"])
+            second = self.client.get(f"/compartilhado/{share_id}?documento=1&pagina=2", headers=share_cookie)
+            self.assertIn("Página 2 de 2", second.text)
+            self.assertEqual(re.findall(r'class="result-tree-row[^"]*"><a href="[^"]*documento=(\d+)"', second.text), ["3"])
+            self.assertIn("Página 2 de 2", self.client.get(f"/compartilhado/{share_id}?documento=3", headers=share_cookie).text)
         shown = set()
         for number in (1, 2, 3):
             page = self.client.get(f"/compartilhado/{share_id}?documento={number}", headers=share_cookie)

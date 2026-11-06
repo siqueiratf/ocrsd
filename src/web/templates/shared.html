@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% from "macros.html" import icon, page_header %}
 {% block title %}Resultado compartilhado{% endblock %}
-{% block home %}#conteudo{% endblock %}
+{% block home %}/modelos{% endblock %}
+{% block home_attrs %} target="_blank" rel="noopener"{% endblock %}
 {% block nav %}<span class="nav nav-static">Acesso compartilhado</span>{% endblock %}
 {% block content %}
 {% if pending %}
@@ -19,15 +20,25 @@
 {% endcall %}
 <p class="notice notice-warning">{{ icon('alert') }}<span><b>Material exclusivamente sintético e sem validade legal.</b> O proprietário pode revogar este link a qualquer momento.</span></p>
 {% if document %}
-<section class="card viewer-card shared-viewer">
-  {% if documents|length > 1 %}<nav class="shared-documents" aria-label="Documentos do dataset">
-    <a class="tool {{ 'is-disabled' if document.number == 1 }}" href="/compartilhado/{{ share_id }}?documento={{ document.number - 1 }}" aria-label="Documento anterior" data-tooltip="Documento anterior" {% if document.number == 1 %}aria-disabled="true" tabindex="-1"{% endif %}>{{ icon('back') }}</a>
-    <form method="get" action="/compartilhado/{{ share_id }}"><select name="documento" aria-label="Escolher documento" data-enviar-ao-mudar>{% for item in documents %}<option value="{{ item.number }}" {{ 'selected' if item.number == document.number }}>{{ item.label }}</option>{% endfor %}</select><noscript><button class="btn btn-sm" type="submit">Abrir</button></noscript></form>
-    <span class="reader-counter">{{ document.number }} de {{ documents|length }}</span>
-    <a class="tool {{ 'is-disabled' if document.number == documents|length }}" href="/compartilhado/{{ share_id }}?documento={{ document.number + 1 }}" aria-label="Próximo documento" data-tooltip="Próximo documento" {% if document.number == documents|length %}aria-disabled="true" tabindex="-1"{% endif %}>{{ icon('chevron') }}</a>
-  </nav>{% endif %}
-  <div class="viewer-stage"><iframe title="{{ document.label }}" src="/compartilhado/{{ share_id }}/arquivos/{{ document.pdf.id }}?download=false#toolbar=1&view=FitH"></iframe></div>
-</section>
+<div class="result-workspace shared-workspace" aria-label="Documentos do dataset">
+  <aside class="result-tree" aria-label="Lista de documentos">
+    <div class="result-tree-head"><b>Documentos</b><span>{{ documents|length }}</span></div>
+    <nav class="result-tree-list" aria-label="Escolher documento">{% for item in page_documents %}<div class="result-tree-row {{ 'is-active' if item.number == document.number }}"><a href="/compartilhado/{{ share_id }}?documento={{ item.number }}" {% if item.number == document.number %}aria-current="page"{% endif %}>{{ icon('file') }}<span>{{ item.label }}</span></a></div>{% endfor %}</nav>
+    {% if pages > 1 %}<div class="result-tree-pager">
+      <a class="tool {{ 'is-disabled' if page == 1 }}" href="/compartilhado/{{ share_id }}?documento={{ document.number }}&amp;pagina={{ page - 1 }}" aria-label="Página anterior" data-tooltip="Página anterior" {% if page == 1 %}aria-disabled="true" tabindex="-1"{% endif %}>{{ icon('back') }}</a>
+      <span>Página {{ page }} de {{ pages }}</span>
+      <a class="tool {{ 'is-disabled' if page == pages }}" href="/compartilhado/{{ share_id }}?documento={{ document.number }}&amp;pagina={{ page + 1 }}" aria-label="Próxima página" data-tooltip="Próxima página" {% if page == pages %}aria-disabled="true" tabindex="-1"{% endif %}>{{ icon('next') }}</a>
+    </div>{% endif %}
+  </aside>
+  <section class="result-reader" aria-label="Visualizador de documentos">
+    <div class="reader-toolbar">
+      <div class="tool-group reader-navigation"><a class="tool {{ 'is-disabled' if document.number == 1 }}" href="/compartilhado/{{ share_id }}?documento={{ document.number - 1 }}" aria-label="Documento anterior" data-tooltip="Documento anterior" {% if document.number == 1 %}aria-disabled="true" tabindex="-1"{% endif %}>{{ icon('back') }}</a><span class="reader-counter">{{ document.number }} de {{ documents|length }}</span><a class="tool {{ 'is-disabled' if document.number == documents|length }}" href="/compartilhado/{{ share_id }}?documento={{ document.number + 1 }}" aria-label="Próximo documento" data-tooltip="Próximo documento" {% if document.number == documents|length %}aria-disabled="true" tabindex="-1"{% endif %}>{{ icon('next') }}</a></div>
+      <span class="toolbar-spacer"></span>
+      {% if share.allow_download %}<div class="tool-group"><a class="tool" href="/compartilhado/{{ share_id }}/arquivos/{{ document.pdf.id }}?download=true" download aria-label="Baixar PDF de {{ document.label }}" data-tooltip="Baixar PDF">{{ icon('download') }}</a></div>{% endif %}
+    </div>
+    <iframe class="shared-frame" title="{{ document.label }}" src="/compartilhado/{{ share_id }}/arquivos/{{ document.pdf.id }}?download=false#toolbar=1&view=FitH"></iframe>
+  </section>
+</div>
 {% endif %}
 {% endif %}
 {% endblock %}

@@ -41,6 +41,7 @@ from src.web.writing import MODEL_INFO, NEURAL_CHARACTERS, adapt_to_model, model
 ROOT = Path(__file__).resolve().parent
 WORKSPACE_COOKIE = "ocrsd_workspace"
 SHARE_COOKIE = "ocrsd_share"
+SHARED_PAGE_SIZE = 50
 FILTERS = {"none": "Sem realismo", "light": "Leve", "medium": "Médio", "strong": "Forte"}
 STATUS = {"queued": "Em fila", "running": "Gerando", "succeeded": "Concluído", "failed": "Falhou",
           "cancelled": "Cancelado", "expired": "Expirado"}
@@ -1707,7 +1708,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         return render(request, "partials/realism.html", preset=preset_name, original=original, filtered=filtered)
 
     @router.get("/compartilhado/{share_id}")
-    async def shared_page(request: Request, share_id: Identifier, documento: int = 1):
+    async def shared_page(request: Request, share_id: Identifier, documento: int = 1, pagina: int | None = None):
         token = request.cookies.get(SHARE_COOKIE)
         if not token:
             return render(request, "shared.html", share_id=share_id, pending=True)
@@ -1721,8 +1722,11 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         selected = next((item for item in documents if item["number"] == documento), None)
         if documents and selected is None:
             raise ServiceError(404, "not_found", "Documento não encontrado")
+        pages = max(1, -(-len(documents) // SHARED_PAGE_SIZE))
+        page = min(max(1, pagina), pages) if pagina else (documento - 1) // SHARED_PAGE_SIZE + 1 if selected else 1
         return render(request, "shared.html", share_id=share_id, pending=False, share=share, job=store.detail(row),
-                      documents=documents, document=selected,
+                      documents=documents, document=selected, page=page, pages=pages,
+                      page_documents=documents[(page - 1) * SHARED_PAGE_SIZE:page * SHARED_PAGE_SIZE],
                       archive=next((item for item in artifacts if item["media_type"] == "application/zip"), None))
 
     @router.post("/compartilhado/{share_id}/acesso")
