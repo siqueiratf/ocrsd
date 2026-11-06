@@ -132,5 +132,55 @@ class SecondParentTests(unittest.TestCase):
         self.assertGreater(kinds["empty"], 0)
 
 
+class DnvTests(unittest.TestCase):
+    def test_birth_scenario_fields_vary_and_agree(self):
+        values_list = [values for values, _ in records("dnv", 800)]
+        for key in ("birth.occurrence_type", "birth.presentation", "birth.labor_induced", "birth.cesarean_before_labor",
+                    "birth.attendant_role", "filling.responsible.role", "filling.responsible.document_type"):
+            self.assertGreater(len({values[key] for values in values_list}), 1, key)
+        cesareans = sum(values["birth.delivery_type"] == "Cesáreo" for values in values_list) / len(values_list)
+        self.assertTrue(0.45 < cesareans < 0.68, cesareans)
+        for values in values_list:
+            place, delivery = values["birth.occurrence_type"], values["birth.delivery_type"]
+            health = place in ("Hospital", "Outros estabelecimentos de saúde")
+            self.assertEqual(health, values["birth.establishment.name"] is not None, place)
+            if place != "Hospital":
+                self.assertEqual(delivery, "Vaginal")
+            if values["birth.presentation"] == "Transversa":
+                self.assertEqual(delivery, "Cesáreo")
+            if delivery == "Vaginal":
+                self.assertEqual(values["birth.cesarean_before_labor"], "Não se aplica")
+            else:
+                self.assertEqual(values["birth.attendant_role"], "Médico")
+                if values["birth.cesarean_before_labor"] == "Sim":
+                    self.assertNotEqual(values["birth.labor_induced"], "Sim")
+            if values["birth.attendant_role"] == "Parteira":
+                self.assertFalse(health)
+            self.assertEqual(values["filling.responsible.document_type"],
+                             {"Médico": "CRM", "Enfermagem": "COREN"}.get(values["filling.responsible.role"], "RG"))
+            if place == "Domicílio" and values["birth.place.street"] is None:
+                self.assertEqual(values["mother.residence.municipality"], values["birth.place.municipality"])
+
+    def test_dates_start_in_2011_and_stay_ordered(self):
+        for values, _ in records("dnv", 800):
+            born = values["birth.date"]
+            self.assertTrue(date(2011, 1, 1) <= born <= date(2025, 12, 31))
+            self.assertTrue(born <= values["filling.date"] <= values["registration.date"])
+            if values["pregnancy.last_menstrual_period"]:
+                self.assertLess(values["pregnancy.last_menstrual_period"], born)
+
+    def test_small_fixes(self):
+        for values, _ in records("dnv", 800):
+            age, schooling = values["mother.age"], values["mother.schooling"]
+            self.assertFalse(schooling == "Superior completo" and age < 22, age)
+            self.assertFalse(schooling == "Médio (antigo 2º grau)" and age < 17, age)
+            start, visits = values["pregnancy.prenatal_start_month"], values["pregnancy.prenatal_visits"]
+            self.assertEqual(visits == 0, start is None)
+            if start:
+                self.assertLess((start - 1) * 4.3, values["pregnancy.weeks"])
+            if values.get("father.age") is not None:
+                self.assertGreaterEqual(values["father.age"], 16)
+
+
 if __name__ == "__main__":
     unittest.main()

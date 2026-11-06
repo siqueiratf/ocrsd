@@ -120,7 +120,8 @@ FIELDS = [
     _field("birth.time", "Hora do nascimento", "time", "Nascimento", "Hora em que ocorreu o nascimento", BIRTH_DOCS,
            ("hora do nascimento", "hora de nascimento", "hora")),
     _field("birth.occurrence_type", "Local da ocorrência", "text", "Local do nascimento",
-           "Hospital no cenário sintético com estabelecimento e CNES", DNV, ("local da ocorrencia",)),
+           "Hospital (cerca de 98%), outro estabelecimento de saúde, domicílio, outros, aldeia indígena ou ignorado; "
+           "estabelecimento e CNES só em estabelecimento de saúde", DNV, ("local da ocorrencia",)),
     _field("birth.twins", "Gêmeos", "boolean", "Nascimento", "Indica nascimento gemelar (cerca de 2% dos registros)", CERT,
            ("gemeos", "nascimento gemelar")),
     _field("twin.name_matricula", "Nome e matrícula do gêmeo", "text", "Nascimento",
@@ -405,20 +406,20 @@ FIELDS.extend([
     _field("mother.race", "Raça/cor da parturiente", "text", "Mãe",
            "Categoria sintética da raça/cor declarada pela parturiente", DNV, ("raca cor da parturiente",)),
     _field("birth.presentation", "Apresentação do recém-nascido", "text", "Nascimento",
-           "Apresentação cefálica no cenário sintético", DNV, ("apresentacao do recem nascido",)),
+           "Cefálica (cerca de 95%), pélvica ou podálica, transversa (sempre cesárea) ou ignorado", DNV, ("apresentacao do recem nascido",)),
     _field("birth.labor_induced", "Trabalho de parto induzido", "text", "Nascimento",
-           "Trabalho de parto não induzido no cenário sintético", DNV, ("trabalho de parto induzido",)),
+           "Induzido numa minoria dos partos; “Não” quando a cesárea ocorreu antes do trabalho de parto", DNV, ("trabalho de parto induzido",)),
     _field("birth.attendant_role", "Profissional que assistiu ao nascimento", "text", "Nascimento",
-           "Médico no cenário hospitalar sintético", DNV, ("nascimento assistido por",)),
+           "Médico na maioria (sempre na cesárea); enfermagem ou obstetriz; parteira principalmente no domicílio", DNV, ("nascimento assistido por",)),
     _field("filling.responsible.role", "Função do responsável", "text", "Preenchimento",
-           "Médico responsável pelo preenchimento", DNV, ("funcao do responsavel pelo preenchimento",)),
+           "Enfermagem, médico ou outro no estabelecimento; funcionário do cartório, enfermagem ou parteira fora dele", DNV, ("funcao do responsavel pelo preenchimento",)),
     _field("filling.responsible.document_type", "Tipo de documento do responsável", "text", "Preenchimento",
-           "CRM de seis algarismos no cenário sintético", DNV, ("tipo de documento do responsavel",)),
+           "CRM para médico, COREN para enfermagem, RG para os demais", DNV, ("tipo de documento do responsavel",)),
     _field("birth.pregnancy_type", "Tipo de gravidez", "text", "Nascimento", "Única ou dupla, coerente com a gemelaridade", DNV,
            ("tipo de gravidez",), ("birth.twins",)),
     _field("birth.delivery_type", "Tipo de parto", "text", "Nascimento", "Via de parto sintética", DNV, ("tipo de parto",)),
     _field("birth.cesarean_before_labor", "Cesárea antes do trabalho de parto", "text", "Nascimento",
-           "Não se aplica no parto vaginal; ignorado quando o início do trabalho de parto não é informado", DNV,
+           "Não se aplica no parto vaginal; sim, não ou ignorado na cesárea", DNV,
            ("cesarea ocorreu antes do trabalho de parto iniciar",), ("birth.delivery_type",)),
     _field("newborn.anomaly_status", "Anomalia congênita", "text", "Recém-nascido",
            "“Não” na maioria dos casos, “Sim” numa pequena fração (prevalência SINASC) e “Ignorado” residual", DNV,
@@ -628,7 +629,9 @@ FIELDS.extend([
 ])
 # death.external.place.* is only filled for "Não natural" scenarios; mark optional after
 # construction since the _address() helper does not take an optional flag.
-_OPTIONAL_WHEN_SCENARIO_DEPENDENT = {"death.external.place.municipality", "death.external.place.uf"}
+_OPTIONAL_WHEN_SCENARIO_DEPENDENT = {"death.external.place.municipality", "death.external.place.uf", "birth.establishment.name",
+                                     "birth.establishment.cnes", "birth.place.street", "birth.place.number",
+                                     "birth.place.neighborhood", "birth.place.cep", "pregnancy.prenatal_start_month"}
 FIELDS = [dataclasses.replace(field, optional=True) if field.key in _OPTIONAL_WHEN_SCENARIO_DEPENDENT else field
          for field in FIELDS]
 REGISTRY: dict[str, SemanticField] = {field.key: field for field in FIELDS}

@@ -18,6 +18,7 @@ from src.semantic.cause_chains import CAUSE_CHAINS, CHILD_PART2_POOL, PART2_POOL
 
 EVENT_START, EVENT_END = date(1980, 1, 1), REFERENCE_END
 MATRICULA_START = date(2010, 1, 1)
+DNV_EVENT_START = date(2011, 1, 1)  # The DNV template is from 2011 or later, like the DO (M5).
 MINUTES = tuple(time(minute // 60, minute % 60) for minute in range(24 * 60))
 
 RACES = ("Branca", "Preta", "Amarela", "Parda", "Indígena")
@@ -228,8 +229,8 @@ def _weights(low: int, high: int, bands: tuple[tuple[int, float], ...]) -> tuple
 MOTHER_AGES = range(13, 50)
 MOTHER_AGE_WEIGHTS = _weights(13, 49, ((14, 0.3), (17, 3), (19, 5), (24, 9), (29, 10), (34, 9), (39, 5),
                                        (44, 1.5), (49, 0.2)))
-FATHER_AGES = range(12, 91)
-FATHER_AGE_WEIGHTS = _weights(12, 90, ((15, 0.05), (19, 1.5), (24, 6), (29, 9), (34, 9), (39, 7), (44, 4), (49, 2),
+FATHER_AGES = range(16, 81)
+FATHER_AGE_WEIGHTS = _weights(16, 80, ((17, 0.3), (19, 1.5), (24, 6), (29, 9), (34, 9), (39, 7), (44, 4), (49, 2),
                                        (59, 0.6), (69, 0.1), (90, 0.01)))
 DECEASED_AGES = range(0, 111)
 DECEASED_AGE_WEIGHTS = _weights(0, 110, ((0, 3), (14, 0.15), (29, 0.4), (49, 0.8), (64, 1.6), (79, 3), (94, 2.2), (110, 0.15)))
@@ -624,25 +625,73 @@ def deceased_birth_block(record, rng: random.Random, age_group: str, chain) -> d
     }
 
 
+OCCURRENCE_TYPES = ("Hospital", "Outros estabelecimentos de saúde", "Domicílio", "Outros", "Aldeia indígena", "Ignorado")
+OCCURRENCE_WEIGHTS = (980, 6, 9, 3, 1.5, 0.5)  # SINASC: about 98% of the births in a hospital
+HEALTH_PLACES = ("Hospital", "Outros estabelecimentos de saúde")
+PRESENTATIONS = ("Cefálica", "Pélvica ou podálica", "Transversa", "Ignorado")
+CESAREAN_SHARE = {"Cefálica": 0.565, "Pélvica ou podálica": 0.9, "Transversa": 1.0, "Ignorado": 0.565}
+ATTENDANTS = ("Médico", "Enfermagem ou obstetriz", "Parteira", "Outros", "Ignorado")
+ATTENDANT_WEIGHTS = {
+    "Hospital": (80, 19, 0, 0.5, 0.5), "Outros estabelecimentos de saúde": (40, 55, 0, 5, 0),
+    "Domicílio": (8, 12, 40, 30, 10), "Outros": (20, 20, 0, 45, 15), "Aldeia indígena": (5, 30, 55, 10, 0),
+    "Ignorado": (0, 0, 0, 30, 70),
+}
+
+
+def _own_home_birth(rng: random.Random) -> bool:
+    return rng.random() < 0.8
+
+
+def own_home_birth(record) -> bool:
+    """A home birth in the residence of the mother: field 9 (address of the occurrence) stays blank and
+    the residence of the mother is in the municipality of the birth."""
+    return record.value("birth.occurrence_type") == "Domicílio" and record.link("birth.own_residence", _own_home_birth)
+
+
 def birth(record, rng: random.Random) -> dict[str, Any]:
-    day = record.pick(rng, "birth.date", DateSpan(EVENT_START, EVENT_END))
+    dnv = record.context == "dnv"
+    day = record.pick(rng, "birth.date", DateSpan(DNV_EVENT_START if dnv else EVENT_START, EVENT_END))
     moment = record.pick(rng, "birth.time", MINUTES)
     profile = pick_profile(record, rng, "birth.place")
-    establishment = record.pick(rng, "birth.establishment.name", ESTABLISHMENT_NAMES)
+    occurrence = record.pick(rng, "birth.occurrence_type", OCCURRENCE_TYPES, OCCURRENCE_WEIGHTS) if dnv else "Hospital"
+    establishment = (record.pick(rng, "birth.establishment.name", ESTABLISHMENT_NAMES) if occurrence == "Hospital"
+                     else record.pick(rng, "birth.establishment.name", OTHER_HEALTH_ESTABLISHMENT_NAMES)
+                     if occurrence == "Outros estabelecimentos de saúde" else None)
     street, cep, neighborhood = pick_street(record, rng, "birth.place.street", profile)
     values = {
         "birth.date": day, "birth.time": moment, "birth.establishment.name": establishment,
-        "birth.occurrence_type": "Hospital",
-        "birth.establishment.cnes": stable_digits(7, "cnes", establishment, profile["ibge"]),
+        "birth.occurrence_type": occurrence,
+        "birth.establishment.cnes": stable_digits(7, "cnes", establishment, profile["ibge"]) if establishment else None,
         **address("birth.place", profile, house_number(record, rng, "birth.place.number"),
                   ("street", "number", "neighborhood", "cep", "municipality", "uf", "ibge"), street, cep, neighborhood),
-        "birth.place.summary": f"{establishment}, {profile['city']} - {profile['uf']}",
+        "birth.place.summary": f"{establishment or occurrence}, {profile['city']} - {profile['uf']}",
     }
+    if occurrence == "Domicílio" and record.link("birth.own_residence", _own_home_birth):
+        values.update({f"birth.place.{part}": None for part in ("street", "number", "neighborhood", "cep")})
     twins = record.pick(rng, "birth.twins", (False, True), (98, 2))
-    delivery = record.pick(rng, "birth.delivery_type", ("Vaginal", "Cesáreo"))
+    if not dnv:
+        delivery = record.pick(rng, "birth.delivery_type", ("Vaginal", "Cesáreo"))
+        return {**values, "birth.twins": twins, "birth.pregnancy_type": "Dupla" if twins else "Única",
+                "birth.delivery_type": delivery, "birth.cesarean_before_labor": "Não se aplica" if delivery == "Vaginal" else "Ignorado",
+                "birth.presentation": "Cefálica", "birth.labor_induced": "Não", "birth.attendant_role": "Médico"}
+    # Approximate SINASC shares: about 56% caesareans (almost only in a hospital), cephalic about 95%,
+    # breech about 4% (mostly caesarean), transverse always caesarean, induction in a minority.
+    hospital = occurrence == "Hospital"
+    presentation = record.pick(rng, "birth.presentation", PRESENTATIONS, (950, 40, 5, 5) if hospital else (960, 30, 0, 10))
+    share = max(CESAREAN_SHARE[presentation], 0.8 if twins else 0.0) if hospital else 0.0
+    delivery = record.pick(rng, "birth.delivery_type", ("Vaginal", "Cesáreo"), (1 - share, share))
+    if delivery == "Vaginal":
+        before = "Não se aplica"
+        induced = record.pick(rng, "birth.labor_induced", ("Sim", "Não", "Ignorado"), (15, 82, 3) if hospital else (2, 93, 5))
+    else:
+        before = record.pick(rng, "birth.cesarean_before_labor", ("Sim", "Não", "Ignorado"), (55, 38, 7))
+        induced = record.pick(rng, "birth.labor_induced", ("Sim", "Não", "Ignorado"),
+                              {"Sim": (0, 95, 5), "Não": (30, 65, 5), "Ignorado": (0, 50, 50)}[before])
+    attendant = ("Médico" if delivery == "Cesáreo" else
+                 record.pick(rng, "birth.attendant_role", ATTENDANTS, ATTENDANT_WEIGHTS[occurrence]))
     return {**values, "birth.twins": twins, "birth.pregnancy_type": "Dupla" if twins else "Única",
-            "birth.delivery_type": delivery, "birth.cesarean_before_labor": "Não se aplica" if delivery == "Vaginal" else "Ignorado",
-            "birth.presentation": "Cefálica", "birth.labor_induced": "Não", "birth.attendant_role": "Médico"}
+            "birth.delivery_type": delivery, "birth.cesarean_before_labor": before,
+            "birth.presentation": presentation, "birth.labor_induced": induced, "birth.attendant_role": attendant}
 
 
 def mother(record, rng: random.Random) -> dict[str, Any]:
@@ -653,7 +702,8 @@ def mother(record, rng: random.Random) -> dict[str, Any]:
     # (item 1) — an interstate birth (mother's residence in a different UF from the birth
     # place) is uncommon in practice, so the favored weight is high and any cross-state
     # alternative is biased to the same region (favoring()).
-    residence = pick_profile(record, rng, "mother.residence", favoring(profile_of(record, "birth.place"), 0.93))
+    residence = pick_profile(record, rng, "mother.residence",
+                             favoring(profile_of(record, "birth.place"), 1.0 if own_home_birth(record) else 0.93))
     cities = [profile["city"] for profile in LOCATION_PROFILES]
     naturalidade = record.pick(rng, "mother.naturalidade", cities,
                                [0.55 if city == residence["city"] else 0.45 / (len(cities) - 1) for city in cities])
@@ -664,12 +714,14 @@ def mother(record, rng: random.Random) -> dict[str, Any]:
     if age < MIN_WORKING_AGE:
         occupation_canonical = "Estudante"
     else:
-        occupation_pool = tuple(o for o in (*OCCUPATIONS, *OCCUPATION_CODES) if age >= OCCUPATION_MIN_AGE.get(o, 0))
+        cap = _max_schooling_level_for_age(age, 17)
+        occupation_pool = tuple(o for o in (*OCCUPATIONS, *OCCUPATION_CODES) if age >= OCCUPATION_MIN_AGE.get(o, 0)
+                                and SCHOOLING_LEVELS.index(OCCUPATION_MIN_SCHOOLING.get(o, SCHOOLING_LEVELS[0])) <= cap)
         occupation_canonical = record.pick(
             rng, lambda value: {"mother.occupation": value, "mother.occupation_cbo": OCCUPATION_CODES.get(value)},
             occupation_pool)
     occupation = inflect_occupation(occupation_canonical, "F")
-    schooling, _series = _schooling_for_age(rng, age, occupation_canonical)
+    schooling, _series = _schooling_for_age(rng, age, occupation_canonical, cap_by_age=True, medio_age=17)
     marital_status = "Solteira(o)" if age < 18 else record.pick(rng, "mother.marital_status", ("Solteira(o)", "Casada(o)", "União estável"))
     return {
         "mother.name": name, "mother.birth_date": born, "mother.age": age,
@@ -803,11 +855,13 @@ def pregnancy(record, rng: random.Random) -> dict[str, Any]:
     period = (record.pick(rng, "pregnancy.last_menstrual_period",
                           DateSpan(on - timedelta(days=weeks * 7 + 6), on - timedelta(days=weeks * 7))) if known else None)
     start = record.pick(rng, "pregnancy.prenatal_start_month", PRENATAL_MONTHS,
-                        [weight if (month - 1) * 4.3 < weeks else weight * 0.001
+                        [weight if (month - 1) * 4.3 < weeks else 0
                          for month, weight in zip(PRENATAL_MONTHS, PRENATAL_MONTH_WEIGHTS)])
     expected = max(0.0, (weeks - (start - 1) * 4.3) / 4.3) * 1.6
-    visits = record.pick(rng, "pregnancy.prenatal_visits", range(0, 21),
-                         [math.exp(-((count - expected) / 2.5) ** 2) + 0.002 for count in range(0, 21)])
+    weights = [math.exp(-((count - expected) / 2.5) ** 2) + 0.002 for count in range(1, 21)]
+    # About 2% of the mothers have no prenatal consultation; then field 34 (start month) is blank.
+    visits = record.pick(rng, "pregnancy.prenatal_visits", range(0, 21), [sum(weights) * 0.02, *weights])
+    start = start if visits else None
     return {"pregnancy.weeks": weeks, "pregnancy.dum_known": known,
             "pregnancy.reported_weeks": None if known else weeks,
             "pregnancy.estimation_method": None if known else record.pick(rng, "pregnancy.estimation_method", ("Exame físico", "Outro método")),
@@ -815,18 +869,37 @@ def pregnancy(record, rng: random.Random) -> dict[str, Any]:
             "pregnancy.prenatal_start_month": start, "pregnancy.prenatal_visits": visits}
 
 
+FILLING_ROLES = ("Médico", "Enfermagem", "Parteira", "Funcionário do cartório", "Outros")
+FILLING_DOCUMENTS = {"Médico": "CRM", "Enfermagem": "COREN", "Parteira": "RG", "Funcionário do cartório": "RG", "Outros": "RG"}
+
+
+def filling_issuer(document_type: str, uf: str) -> str:
+    return f"{'SSP' if document_type == 'RG' else document_type}/{uf}"
+
+
 def filling(record, rng: random.Random) -> dict[str, Any]:
     on = record.value("birth.date")
     span = DateSpan(on, min(on + timedelta(days=60), EVENT_END))
     day = record.pick(rng, "filling.date", span, [10 if index <= 1 else 3 if index <= 7 else 0.2 for index in range(len(span))])
     sex = rng.choice(("F", "M"))
+    if record.context == "dnv":
+        # In a health establishment the DNV is filled by the staff; for a birth out of it, mostly by the
+        # cartório at the registration, or by the health team or the midwife that assisted.
+        place, midwife = record.value("birth.occurrence_type"), record.value("birth.attendant_role") == "Parteira"
+        weights = ((30, 55, 0, 0, 15) if place in HEALTH_PLACES else (10, 70, 20 if midwife else 0, 0, 0)
+                   if place == "Aldeia indígena" else (10, 25, 10 if midwife else 0, 55, 0))
+        role = record.pick(rng, "filling.responsible.role", FILLING_ROLES, weights)
+    else:
+        role = "Médico"
+    document_type = FILLING_DOCUMENTS[role]
     return {
         "filling.date": day, "filling.responsible.name": record.draw("filling.responsible.name", rng,
                                                                      lambda: person_name(record, rng, sex)),
-        "filling.responsible.role": "Médico", "filling.responsible.document_type": "CRM",
+        "filling.responsible.role": role, "filling.responsible.document_type": document_type,
         "filling.responsible.document_number": record.draw("filling.responsible.document_number", rng,
                                                            lambda: f"{rng.randint(100000, 999999):06d}"),
-        "filling.responsible.issuer": "CRM",
+        "filling.responsible.issuer": filling_issuer(document_type, record.value("birth.place.uf"))
+                                      if record.context == "dnv" else "CRM",
     }
 
 

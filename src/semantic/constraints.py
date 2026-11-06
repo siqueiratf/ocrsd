@@ -75,7 +75,7 @@ def _mother_age(values: Mapping[str, Any]) -> str | None:
 
 def _between(key: str, low: int, high: int, title: str) -> Constraint:
     return Constraint(f"{title}_entre_{low}_e_{high}", (key,), (REGISTRY[key].entity,),
-                      lambda values: None if low <= values[key] <= high else f"{key} = {values[key]} fora do intervalo {low}–{high}")
+                      lambda values: None if values[key] is None or low <= values[key] <= high else f"{key} = {values[key]} fora do intervalo {low}–{high}")
 
 
 def _filling_window(values: Mapping[str, Any]) -> str | None:
@@ -114,13 +114,29 @@ def _birth_measurements(values: Mapping[str, Any]) -> str | None:
     return None
 
 
+FILLING_DOCUMENTS = {"Médico": "CRM", "Enfermagem": "COREN", "Parteira": "RG", "Funcionário do cartório": "RG", "Outros": "RG"}
+
+
 def _filling_professional(values: Mapping[str, Any]) -> str | None:
-    if values["filling.responsible.role"] != "Médico" or values["filling.responsible.document_type"] != "CRM":
-        return "função e tipo de documento diferem do cenário médico"
+    document_type = FILLING_DOCUMENTS.get(values["filling.responsible.role"])
+    if document_type is None or values["filling.responsible.document_type"] != document_type:
+        return "o tipo de documento não corresponde à função do responsável (médico CRM, enfermagem COREN, demais RG)"
     number = values["filling.responsible.document_number"]
-    if not isinstance(number, str) or len(number) != 6 or not number.isdigit() or values["filling.responsible.issuer"] != "CRM":
-        return "CRM precisa ter seis algarismos e emissor CRM no cenário sintético"
+    issuer = str(values["filling.responsible.issuer"])
+    if not isinstance(number, str) or len(number) != 6 or not number.isdigit():
+        return "o número do documento precisa ter seis algarismos no cenário sintético"
+    if issuer.split("/")[0] != ("SSP" if document_type == "RG" else document_type):
+        return "o órgão emissor não corresponde ao tipo de documento"
     return None
+
+
+CESAREAN_BEFORE_LABOR = {"Vaginal": ("Não se aplica",), "Cesáreo": ("Sim", "Não", "Ignorado"), "Ignorado": ("Ignorado",)}
+
+
+def _birth_summary(values: Mapping[str, Any]) -> str | None:
+    place = values["birth.establishment.name"] or values["birth.occurrence_type"]
+    expected = f"{place}, {values['birth.place.municipality']} - {values['birth.place.uf']}"
+    return None if values["birth.place.summary"] == expected else f"birth.place.summary deveria ser “{expected}”"
 
 
 def _obstetric(values: Mapping[str, Any]) -> str | None:
@@ -324,7 +340,12 @@ CONSTRAINTS: tuple[Constraint, ...] = (
     Constraint("gravidez_e_gemelaridade", ("birth.twins", "birth.pregnancy_type"), ("birth",),
                lambda v: None if v["birth.pregnancy_type"] == ("Dupla" if v["birth.twins"] else "Única") else "tipo de gravidez difere da gemelaridade"),
     Constraint("cesarea_e_via_de_parto", ("birth.delivery_type", "birth.cesarean_before_labor"), ("birth",),
-               lambda v: None if v["birth.cesarean_before_labor"] == ("Não se aplica" if v["birth.delivery_type"] == "Vaginal" else "Ignorado") else "indicação de cesárea incompatível com a via de parto"),
+               lambda v: None if v["birth.cesarean_before_labor"] in CESAREAN_BEFORE_LABOR.get(v["birth.delivery_type"], ())
+               else "indicação de cesárea incompatível com a via de parto"),
+    Constraint("estabelecimento_e_local_do_nascimento", ("birth.occurrence_type", "birth.establishment.name"), ("birth",),
+               lambda v: None if (v["birth.establishment.name"] is not None) == (v["birth.occurrence_type"] in
+                                                                                ("Hospital", "Outros estabelecimentos de saúde"))
+               else "só há estabelecimento quando o nascimento ocorre em estabelecimento de saúde"),
     Constraint("anomalia_congenita_coerente", ("newborn.anomaly_status", "newborn.anomaly_description"), ("newborn",),
                _anomaly_block_coherent),
     Constraint("ocupacao_e_cbo", ("mother.occupation", "mother.occupation_cbo"), ("mother",),
@@ -382,7 +403,8 @@ CONSTRAINTS: tuple[Constraint, ...] = (
                ("newborn",), _naturalidade),
     Constraint("matricula_coerente", ("registration.matricula", "registration.date", "registration.number"), ("registration",),
                _matricula),
-    _summary("birth.place.summary", ("birth.establishment.name", "birth.place.municipality", "birth.place.uf"), "{}, {} - {}"),
+    Constraint("resumo_coerente:birth.place.summary", ("birth.place.summary", "birth.establishment.name", "birth.occurrence_type",
+                                                       "birth.place.municipality", "birth.place.uf"), ("birth",), _birth_summary),
     _summary("registration.place.summary", ("registration.office.municipality", "registration.office.uf"), "{} - {}"),
     _summary("death_registration.place.summary", ("death_registration.office.municipality", "death_registration.office.uf"), "{} - {}"),
     _summary("deceased.naturalidade", ("deceased.naturalidade.municipality", "deceased.naturalidade.uf"), "{} - {}"),

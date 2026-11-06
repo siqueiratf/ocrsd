@@ -87,7 +87,9 @@ class SemanticGenerationTests(unittest.TestCase):
     def test_dnv_conditional_fields_follow_the_semantic_record(self):
         pregnancy = {"Única": "tipo_gravidez_0", "Dupla": "tipo_gravidez_1"}
         delivery = {"Vaginal": "tipo_parto_0", "Cesáreo": "tipo_parto_1"}
-        cesarean = {"Não se aplica": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_2",
+        cesarean = {"Sim": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_0",
+                    "Não": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_1",
+                    "Não se aplica": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_2",
                     "Ignorado": "cesarea_ocorreu_antes_do_trabalho_de_parto_iniciar_3"}
         for truth in self.dnv:
             record, by_id = truth["semantic_record"], fields(truth)
@@ -139,10 +141,13 @@ class SemanticGenerationTests(unittest.TestCase):
             self.assertTrue(350 <= int(by_id["b"]["value"]) <= 600)
             self.assertEqual(by_id["b"]["semantic"]["value"], record["newborn.length_tenths_cm"])
             self.assertEqual(by_id["b"]["measurement"], {"value": int(by_id["b"]["value"]) / 10, "unit": "cm"})
-            for field_id, expected in (("40", "Médico"), ("44", "Médico"), ("45", "CRM")):
-                self.assertEqual([item["label"] for item in by_id[field_id]["elements"] if item["checked"]], [expected])
+            for field_id, key in (("40", "birth.attendant_role"), ("44", "filling.responsible.role"),
+                                  ("45", "filling.responsible.document_type")):
+                self.assertEqual([item["label"] for item in by_id[field_id]["elements"] if item["checked"]], [record[key]])
+            document_type = record["filling.responsible.document_type"]
+            self.assertEqual(document_type, {"Médico": "CRM", "Enfermagem": "COREN"}.get(record["filling.responsible.role"], "RG"))
             self.assertRegex(by_id["46"]["value"], r"^[0-9]{6}$")
-            self.assertEqual(by_id["47"]["value"], "CRM")
+            self.assertEqual(by_id["47"]["value"], f"{'SSP' if document_type == 'RG' else document_type}/{record['birth.place.uf']}")
 
     def test_unsupported_perimeter_cannot_be_rendered_as_valid_measurement(self):
         with tempfile.TemporaryDirectory() as directory:

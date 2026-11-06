@@ -178,7 +178,7 @@ class SemanticRecordTests(unittest.TestCase):
             self.assertEqual(values["mother.age"], completed_years(born, birth_day))
             self.assertTrue(10 <= values["mother.age"] <= 60)
             self.assertEqual(values["father.age"], completed_years(values["father.birth_date"], birth_day))
-            self.assertTrue(12 <= values["father.age"] <= 90)
+            self.assertTrue(16 <= values["father.age"] <= 80)
             self.assertTrue(values["guardian.age"] is None or values["guardian.age"] >= 18)
             self.assertEqual(values["guardian.name"] is None, values["guardian.age"] is None)
             self.assertNotEqual(values["guardian.name"], values["mother.name"])
@@ -198,7 +198,11 @@ class SemanticRecordTests(unittest.TestCase):
                 self.assertIsNone(values["pregnancy.last_menstrual_period"])
                 self.assertEqual(values["pregnancy.reported_weeks"], weeks)
                 self.assertIn(values["pregnancy.estimation_method"], {"Exame físico", "Outro método"})
-            self.assertTrue(1 <= values["pregnancy.prenatal_start_month"] <= 9)
+            if values["pregnancy.prenatal_visits"]:
+                self.assertTrue(1 <= values["pregnancy.prenatal_start_month"] <= 9)
+                self.assertLess((values["pregnancy.prenatal_start_month"] - 1) * 4.3, weeks)
+            else:
+                self.assertIsNone(values["pregnancy.prenatal_start_month"])
             self.assertTrue(0 <= values["pregnancy.prenatal_visits"] <= 20)
             history = {key.rsplit(".", 1)[1]: value for key, value in values.items() if key.startswith("mother.obstetric.")}
             self.assertTrue(all(value >= 0 for value in history.values()))
