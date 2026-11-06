@@ -1342,3 +1342,5 @@ body.is-result-detail .page { max-width: none; padding: 0; min-height: 0; height
 .wizard-field.is-blocked { cursor: not-allowed; color: #94a3b8; }
 .wizard-field.is-blocked:hover { background: none; }
 .wizard-field .wizard-field-blocked { color: #8a5a00; }
+.shared-documents { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.shared-documents form { margin: 0; }

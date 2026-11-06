@@ -264,6 +264,28 @@ class InterfaceTests(unittest.TestCase):
         self.assertIn("Revogado", revoked.text)
         self.assertEqual(self.client.get(f"/compartilhado/{share_id}", headers=share_cookie).status_code, 410)
 
+    def test_shared_result_shows_every_document(self):
+        queued = self.hx("POST", "/geracao/jobs", data=self.generation_form(count="3"))
+        job_id = re.search(r'hx-get="/geracao/jobs/([0-9a-f]{32})"', queued.text).group(1)
+        self.run_worker()
+        created = self.hx("POST", f"/resultados/{job_id}/compartilhamentos", data={"expires_in_hours": "2"})
+        share_id, token = re.search(r"/compartilhado/([0-9a-f]{32})#token=([^\"]+)", created.text).groups()
+        share_cookie = {"Cookie": f"ocrsd_share={unquote(token)}"}
+        pdfs = [item for item in self.app.state.store.artifacts(self.app.state.store.get(job_id)) if item["media_type"] == "application/pdf"]
+        self.assertEqual(len(pdfs), 3)
+        first = self.client.get(f"/compartilhado/{share_id}", headers=share_cookie)
+        self.assertIn("1 de 3", first.text)
+        self.assertEqual(len(re.findall(r'<option value="\d+"', first.text)), 3)
+        shown = set()
+        for number in (1, 2, 3):
+            page = self.client.get(f"/compartilhado/{share_id}?documento={number}", headers=share_cookie)
+            self.assertEqual(page.status_code, 200)
+            artifact = re.search(rf"/compartilhado/{share_id}/arquivos/([^?\"]+)\?download=false", page.text).group(1)
+            self.assertTrue(self.client.get(f"/compartilhado/{share_id}/arquivos/{artifact}", headers=share_cookie).content.startswith(b"%PDF"))
+            shown.add(artifact)
+        self.assertEqual(shown, {item["id"] for item in pdfs})
+        self.assertEqual(self.client.get(f"/compartilhado/{share_id}?documento=4", headers=share_cookie).status_code, 404)
+
     def editor_data(self, model_id):
         editor = self.page(f"/modelos/{model_id}/editor")
         self.assertEqual(editor.status_code, 200, editor.text)

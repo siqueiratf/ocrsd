@@ -207,6 +207,10 @@
     if (range) document.getElementById(range.dataset.saida).textContent = `${Math.round(range.value * 100)}%`
   })
 
+  document.addEventListener('change', event => {
+    if (event.target.matches('[data-enviar-ao-mudar]')) event.target.form?.requestSubmit()
+  })
+
   document.addEventListener('DOMContentLoaded', () => {
     modal()?.addEventListener('close', () => modal().replaceChildren())
     adoptWorkspace()

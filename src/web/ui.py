@@ -525,17 +525,9 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             return "Os parâmetros foram rejeitados pelo motor de geração"
         return "A geração foi interrompida por uma falha interna"
 
-    def result_context(owner_id: str, job_id: str, document_number: int = 1) -> dict:
-        row = owned_job(owner_id, job_id)
-        artifacts, problem = [], None
-        if row["status"] in {"succeeded", "running", "failed", "cancelled"}:
-            try:
-                artifacts = store.artifacts(row)
-            except ServiceError as exc:
-                problem = exc.message
+    def job_documents(row: dict, artifacts: list[dict]) -> tuple[list[dict], dict | None, dict | None, str | None]:
         by_name = {item["name"]: item for item in artifacts}
-        documents = []
-        generation = None
+        documents, generation, problem = [], None, None
         manifest_artifact = by_name.get("dataset.json")
         if manifest_artifact:
             path, _ = store.artifact(row, manifest_artifact["id"])
@@ -560,6 +552,18 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 if pdf and ground_truth:
                     documents.append({"id": str(number), "number": number, "label": f"Documento {number:03d}",
                                       "pdf": pdf, "json": ground_truth})
+        return documents, generation, manifest_artifact, problem
+
+    def result_context(owner_id: str, job_id: str, document_number: int = 1) -> dict:
+        row = owned_job(owner_id, job_id)
+        artifacts, problem = [], None
+        if row["status"] in {"succeeded", "running", "failed", "cancelled"}:
+            try:
+                artifacts = store.artifacts(row)
+            except ServiceError as exc:
+                problem = exc.message
+        documents, generation, manifest_artifact, listing_problem = job_documents(row, artifacts)
+        problem = problem or listing_problem
         selected = next((item for item in documents if item["number"] == document_number), None)
         if documents and selected is None:
             raise ServiceError(404, "not_found", "Documento não encontrado")
@@ -1703,15 +1707,22 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         return render(request, "partials/realism.html", preset=preset_name, original=original, filtered=filtered)
 
     @router.get("/compartilhado/{share_id}")
-    async def shared_page(request: Request, share_id: Identifier):
+    async def shared_page(request: Request, share_id: Identifier, documento: int = 1):
         token = request.cookies.get(SHARE_COOKIE)
         if not token:
             return render(request, "shared.html", share_id=share_id, pending=True)
         share = store.share(share_id, token)
         row = store.get(share["job_id"])
         artifacts = store.artifacts(row)
+        documents = job_documents(row, artifacts)[0]
+        if not documents:
+            documents = [{"id": str(number), "number": number, "label": f"Documento {number:03d}", "pdf": item}
+                         for number, item in enumerate((item for item in artifacts if item["media_type"] == "application/pdf"), 1)]
+        selected = next((item for item in documents if item["number"] == documento), None)
+        if documents and selected is None:
+            raise ServiceError(404, "not_found", "Documento não encontrado")
         return render(request, "shared.html", share_id=share_id, pending=False, share=share, job=store.detail(row),
-                      pdf=next((item for item in artifacts if item["media_type"] == "application/pdf"), None),
+                      documents=documents, document=selected,
                       archive=next((item for item in artifacts if item["media_type"] == "application/zip"), None))
 
     @router.post("/compartilhado/{share_id}/acesso")
