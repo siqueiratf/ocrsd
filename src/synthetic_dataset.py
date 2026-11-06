@@ -1293,28 +1293,29 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             and active_pen is not None
             and neural_enabled
         ):
-            rendered = prepare_text(text, active_pen.text_policy)
             model = handwriting_models[active_pen.model]
+            rendered, failure = text, None
             try:
-                image, rendering = render_neural_text(rendered, x2-x1, y2-y1, active_pen, model, render_rng)
+                rendered = prepare_text(text, active_pen.text_policy)
+                if len(rendered) > 1:
+                    image, rendering = render_neural_text(rendered, x2-x1, y2-y1, active_pen, model, render_rng)
             except ValueError as exc:
-                # The neural model failed on this value after retries: fall back to a
-                # clean font handwriting render for this FIELD only (not the whole
-                # document), using the same ink colour as the neural pen.
-                fallback_style = random_handwriting_style(rng, handwriting_intensity, medium="pen")
-                fallback_style = replace(fallback_style, ink=tuple(
-                    int(active_pen.color[i:i+2], 16) for i in (1, 3, 5)
-                ))
+                failure = exc
+            if failure is not None or len(rendered) == 1:
+                # The neural model cannot write this value, or it is one character (a box cell): the
+                # models draw one character wrongly or with stray marks frequently. Write this FIELD
+                # with font handwriting in the ink colour of the neural pen. A single character uses
+                # render_rng, thus the values that come after it do not change.
+                font_rng = rng if failure is not None else render_rng
+                fallback_style = replace(random_handwriting_style(font_rng, handwriting_intensity, medium="pen"),
+                                         ink=_hex_to_rgb(active_pen.color))
                 image = render_handwritten_text(
-                    rendered, max(1, x2-x1), max(1, y2-y1), rng,
-                    style=fallback_style, intensity=handwriting_intensity, medium="pen", font_family=font_family,
+                    rendered, max(1, x2-x1), max(1, y2-y1), font_rng,
+                    style=fallback_style, intensity=handwriting_intensity, medium="pen",
+                    font_family=DEFAULT_FONT_FAMILY if is_typed(font_family) else font_family,
                 )
-                stream = io.BytesIO()
-                image.save(stream, format="PNG")
-                page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
-                return rendered, {"requested_value": text, "rendering": {
-                    "backend": "font", "fallback": {"from_backend": active_pen.model, "reason": str(exc)},
-                }}
+                rendering = ({"backend": "font", "fallback": {"from_backend": active_pen.model, "reason": str(failure)}}
+                             if failure is not None else {"backend": "font", "reason": "single_character", "from_backend": active_pen.model})
             stream = io.BytesIO()
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)

@@ -155,7 +155,8 @@ class NeuralDatasetTests(unittest.TestCase):
 
             truth = json.loads(result[0].json_path.read_text())
             by_id = {field["field_id"]: field for field in truth["fields"]}
-            self.assertEqual(by_id["digits"]["elements"][0]["rendering"]["backend"], "sjvasquez")
+            self.assertEqual(by_id["digits"]["elements"][0]["rendering"],
+                             {"backend": "font", "reason": "single_character", "from_backend": "sjvasquez"})
             self.assertEqual(by_id["name"]["rendering"]["backend"], "aaron1259")
             self.assertEqual(truth["handwriting"]["numbers"]["model"], "sjvasquez")
             self.assertEqual(truth["handwriting"]["text"]["model"], "aaron1259")
@@ -416,6 +417,54 @@ class PerFieldFallbackTests(unittest.TestCase):
             # failure despite every neural sample attempt raising.
             self.assertEqual(by_id["name"]["value"], "Ana Maria da Silva Pereira")
             self.assertEqual(by_id["city"]["value"], "Sao Paulo")
+
+    def test_strict_policy_falls_back_to_font_for_an_unsupported_character(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            template, mapping = root / "template.pdf", root / "mapping.json"
+            with fitz.open() as document:
+                document.new_page()
+                document.save(template)
+            mapping.write_text(json.dumps({"dpi": 300, "template_id": "test", "fields": [
+                {"field_id": "city", "label": "Cidade", "bbox": [100, 100, 600, 200], "validation": {"allowed_values": ["São Paulo"]}},
+                {"field_id": "name", "label": "Nome", "bbox": [100, 220, 600, 280], "validation": {"allowed_values": ["Ana Silva"]}},
+            ]}))
+            model = Mock()
+            model.sample.return_value = np.array([[0, 0, 0], [10, 1, 0], [20, 0, 1]], dtype=float)
+            with patch("src.synthetic_dataset.load_model", return_value=model):
+                result = generate_dataset(template, mapping, {"city", "name"}, root / "out", 1, seed=42,
+                                          neural_pen=NeuralPen(model="sjvasquez", text_policy="strict"))
+            by_id = {field["field_id"]: field for field in json.loads(result[0].json_path.read_text())["fields"]}
+            self.assertEqual(by_id["city"]["value"], "São Paulo")
+            self.assertEqual(by_id["city"]["rendering"]["backend"], "font")
+            self.assertEqual(by_id["city"]["rendering"]["fallback"]["from_backend"], "sjvasquez")
+            self.assertEqual(by_id["name"]["rendering"]["backend"], "sjvasquez")
+
+    def test_single_character_cells_use_font_and_keep_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            template, mapping = root / "template.pdf", root / "mapping.json"
+            with fitz.open() as document:
+                document.new_page()
+                document.save(template)
+            mapping.write_text(json.dumps({"dpi": 300, "template_id": "test", "fields": [
+                {"field_id": "digits", "label": "Digits", "data_type": "digit_sequence", "bbox": [100, 100, 250, 160],
+                 "elements": [{"index": i, "bbox": [100 + 50 * i, 100, 150 + 50 * i, 160]} for i in range(3)]},
+                {"field_id": "after", "label": "Nome", "bbox": [100, 200, 600, 260]},
+            ]}))
+            truths = []
+            for backend in ("sjvasquez", "aaron1259"):
+                model = Mock()
+                model.sample.return_value = np.array([[0, 0, 0], [10, 1, 0], [20, 0, 1]], dtype=float)
+                with patch("src.synthetic_dataset.load_model", return_value=model):
+                    result = generate_dataset(template, mapping, {"digits", "after"}, root / backend, 1, seed=42,
+                                              neural_pen=NeuralPen(model=backend, writer=1))
+                truths.append({field["field_id"]: field for field in json.loads(result[0].json_path.read_text())["fields"]})
+                for element in truths[-1]["digits"]["elements"]:
+                    self.assertEqual(element["rendering"], {"backend": "font", "reason": "single_character", "from_backend": backend})
+                self.assertTrue(all(len(call.args[0]) > 1 for call in model.sample.call_args_list))
+            self.assertEqual({truth["digits"]["value"] for truth in truths}, {truths[0]["digits"]["value"]})
+            self.assertEqual({truth["after"]["value"] for truth in truths}, {truths[0]["after"]["value"]})
 
 
 if __name__ == "__main__":

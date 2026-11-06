@@ -147,7 +147,7 @@ class RecordReplayTests(unittest.TestCase):
             actual = self._document(batch, second, seed)
         self.assertEqual(expected[0], actual[0])
         self.assertEqual(expected[1], actual[1])
-        self.assertGreater(single.calls, 100)
+        self.assertGreater(single.calls, 25)
         return batch
 
     def test_replay_gives_the_same_document_and_hits_every_request(self):
@@ -160,8 +160,8 @@ class RecordReplayTests(unittest.TestCase):
             first = _BatchSeedModel()
             self._document(first, directory)
         seeds = [request[3] for request in first.batches[0]]
-        batch = self._assert_same_document(fail_seeds=(seeds[20], seeds[100]))
-        self.assertEqual(len(batch.batches), 3)
+        batch = self._assert_same_document(fail_seeds=(seeds[5], seeds[20]))
+        self.assertEqual(len(batch.batches), 2)
         self.assertEqual(batch.calls, 0)
 
     def test_text_that_always_fails_falls_back_to_the_font(self):
