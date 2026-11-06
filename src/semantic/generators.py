@@ -1159,6 +1159,10 @@ MARITAL_TO_DO = {
 }
 
 
+# The certidão de óbito names the last spouse or partner: also for a divorced or separated person.
+MARITAL_WITH_SPOUSE = frozenset({"CASADO(A)", "VIÚVO(A)", "UNIÃO ESTÁVEL", "DIVORCIADO(A)", "SEPARADO(A) JUDICIALMENTE"})
+
+
 def _DECEASED_MARITAL_WEIGHTS(age: int) -> tuple[tuple[str, ...], tuple[float, ...]]:
     if age < 18:
         return ("SOLTEIRO(A)",), (1,)
@@ -1253,7 +1257,7 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     # aged 18-20 with "Superior completo": the schooling cap alone cannot catch it, because the
     # occupation-driven fast path in _schooling_for_age is unconditional once the occupation
     # itself is drawn. Outside the DO this filter is skipped (byte-identical to before phase 2).
-    occupation_pool = tuple(o for o in OCCUPATIONS if o != "Estudante") if (is_do and age >= 65) else OCCUPATIONS
+    occupation_pool = tuple(o for o in OCCUPATIONS if o != "Estudante") if (is_do and age >= 40) else OCCUPATIONS
     if is_do:
         occupation_pool = tuple(o for o in occupation_pool if age >= OCCUPATION_MIN_AGE.get(o, 0))
     if is_do and age < 6:
@@ -1334,7 +1338,7 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     marital_options, marital_weights = _DECEASED_MARITAL_WEIGHTS(age)
     marital = record.pick(rng, "deceased.marital_status", marital_options, marital_weights)
     values["deceased.marital_status_do"] = MARITAL_TO_DO.get(marital, "Ignorada")
-    married_like = marital in {"CASADO(A)", "VIÚVO(A)", "UNIÃO ESTÁVEL"}
+    married_like = marital in MARITAL_WITH_SPOUSE
     spouse_sex = "F" if sex == "M" else "M"
     values["deceased.marital_status"] = marital
     values["deceased.spouse_name"] = (record.draw("deceased.spouse_name", rng, lambda: person_name(record, rng, spouse_sex))
@@ -1342,6 +1346,9 @@ def deceased(record, rng: random.Random) -> dict[str, Any]:
     values["deceased.children_summary"] = record.draw("deceased.children_summary", rng,
                                                       lambda: _children_summary(record, rng, age, name))
     if is_do and age_group == "fetal":
+        # A stillbirth (Livro C Auxiliar) also has no CPF and no children of its own.
+        values["deceased.cpf"] = None
+        values["deceased.children_summary"] = None
         # M1: a stillbirth has no CNS (field 3), marital status (12), schooling (13) or
         # occupation (14) of its own — the DO instructions describe these as fields of the
         # DECEASED, and a fetus never acquired any of them; left entirely BLANK (None), not
@@ -1388,7 +1395,9 @@ def death_registration(record, rng: random.Random) -> dict[str, Any]:
     sex = rng.choice(("F", "M"))
     values["death_registration.declarant_name"] = record.draw("death_registration.declarant_name", rng,
                                                                lambda: person_name(record, rng, sex))
-    values["death_registration.matricula"] = build_matricula(rng, office_cns(record, office_name, office["ibge"]), day.year, "4")
+    # A stillbirth is registered in the Livro C Auxiliar (code 5), other deaths in the Livro C (code 4).
+    livro = "5" if record.value("death.age_group") == "fetal" else "4"
+    values["death_registration.matricula"] = build_matricula(rng, office_cns(record, office_name, office["ibge"]), day.year, livro)
     values["death_registration.witness1_name"] = record.draw("death_registration.witness1_name", rng,
                                                               lambda: person_name(record, rng, rng.choice(("F", "M"))))
     values["death_registration.witness2_name"] = record.draw("death_registration.witness2_name", rng,
@@ -1439,10 +1448,14 @@ def build_matricula(rng: random.Random, cns: str, year: int, livro: str) -> str:
     return matricula(cns, year, livro, rng.randint(1, 400), rng.randint(1, 300), rng.randint(1, 250000))
 
 
+CITY_PREPOSITIONS = {"Rio de Janeiro": "do", "Recife": "do", "Rio Branco": "de", "Crato": "do"}
+
+
 def burial(record, rng: random.Random) -> dict[str, Any]:
     profile = pick_profile(record, rng, "burial", favoring(profile_of(record, "death.place"), 0.75), ("municipality", "uf"))
     values = address("burial", profile, "", ("municipality", "uf"))
-    return {**values, "burial.place": f"Cemitério Municipal de {values['burial.municipality']}"}
+    city = values["burial.municipality"]
+    return {**values, "burial.place": f"Cemitério Municipal {CITY_PREPOSITIONS.get(city, 'de')} {city}"}
 
 
 FATHER_ABSENT_SHARE = 0.08
@@ -1735,11 +1748,27 @@ def certificate_annotations(record, rng: random.Random) -> dict[str, Any]:
     return {"annotations.averbacoes": averbacao, "annotations.voluntary": voluntary}
 
 
+def estate(record, rng: random.Random) -> dict[str, Any]:
+    """Field "Existência de bens" of the certidão de óbito: blank for a stillbirth, "NÃO" for a minor,
+    and for an adult "SIM" more often with age."""
+    if record.value("death.age_group") == "fetal":
+        return {"estate.declared": None}
+    age = record.value("deceased.age") or 0
+    share = 0.0 if age < 18 else 0.15 if age < 25 else 0.45 if age < 60 else 0.55
+    return {"estate.declared": record.pick(rng, "estate.declared", ("SIM", "NÃO"), (share, 1 - share) if share else (0, 1))}
+
+
+def external_address(record, rng: random.Random) -> dict[str, Any]:
+    """DO field 52 (block of the external causes): the street only for a non-natural death on a public road."""
+    external = record.value("death.cause.manner") == "Não natural" and record.value("death.place.category") == "4"
+    return {"external_address.street": record.value("deceased.occurrence.address") if external else None}
+
+
 GENERATORS: dict[str, Callable[[Any, random.Random], dict[str, Any]]] = {
     "newborn": newborn, "mother": mother, "father": father, "guardian": guardian, "parents": parents,
     "grandparents": grandparents, "birth": birth, "pregnancy": pregnancy, "filling": filling, "registration": registration,
     "deceased": deceased, "death": death, "certifier": certifier, "twin": twin, "death_registration": death_registration,
     "burial": burial, "parent1": parent1, "parent2": parent2, "spouse1": spouse1, "spouse2": spouse2,
     "marriage": marriage, "marriage_registration": marriage_registration, "office": office, "certificate": certificate,
-    "couple": couple, "annotations": certificate_annotations,
+    "couple": couple, "annotations": certificate_annotations, "estate": estate, "external_address": external_address,
 }

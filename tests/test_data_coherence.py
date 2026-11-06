@@ -182,5 +182,45 @@ class DnvTests(unittest.TestCase):
                 self.assertGreaterEqual(values["father.age"], 16)
 
 
+class DeathCertificateTests(unittest.TestCase):
+    def test_stillbirth_has_its_own_rules(self):
+        stillbirths = 0
+        for values, _ in records("certidao_obito", 600):
+            fetal = values["death.age_group"] == "fetal"
+            self.assertEqual(values["death_registration.matricula"][14], "5" if fetal else "4")
+            if fetal:
+                stillbirths += 1
+                self.assertEqual(values["deceased.name"], "Natimorto")
+                for key in ("deceased.cpf", "estate.declared", "deceased.children_summary", "deceased.marital_status",
+                            "deceased.spouse_name"):
+                    self.assertIsNone(values[key], key)
+            else:
+                self.assertIsNotNone(values["deceased.cpf"])
+                self.assertIn(values["estate.declared"], ("SIM", "NÃO"))
+                if (values["deceased.age"] or 0) < 18:
+                    self.assertEqual(values["estate.declared"], "NÃO")
+        self.assertGreater(stillbirths, 0)
+
+    def test_last_spouse_is_named_unless_single(self):
+        mapping = {field["field_id"]: field for field in _mapping("certidao_obito")["fields"]}
+        self.assertNotIn("blank_probability", mapping["nome_ultimo_conjuge"].get("validation") or {})
+        for values, _ in records("certidao_obito", 600):
+            status = values["deceased.marital_status"]
+            self.assertEqual(status not in (None, "SOLTEIRO(A)"), values["deceased.spouse_name"] is not None, status)
+
+    def test_burial_place_uses_the_right_preposition(self):
+        places = {values["burial.place"] for values, _ in records("certidao_obito", 600)}
+        self.assertNotIn("Cemitério Municipal de Rio de Janeiro", places)
+        self.assertNotIn("Cemitério Municipal de Recife", places)
+
+    def test_do_field_52_only_for_external_deaths_on_a_public_road(self):
+        for values, _ in records("do", 600):
+            street = values["external_address.street"]
+            external = values["death.cause.manner"] == "Não natural" and values["death.place.category"] == "4"
+            self.assertEqual(street is not None, external)
+            if (values["deceased.age"] or 0) >= 40:
+                self.assertNotEqual(values["deceased.occupation"], "Estudante")
+
+
 if __name__ == "__main__":
     unittest.main()

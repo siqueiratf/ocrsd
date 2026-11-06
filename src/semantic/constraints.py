@@ -254,12 +254,13 @@ def _summary(key: str, parts: tuple[str, ...], template: str) -> Constraint:
 def _matricula_livro(key: str, date_key: str, livro: str, title: str) -> Constraint:
     def check(values: Mapping[str, Any]) -> str | None:
         matricula = values[key]
+        expected = "5" if key == "death_registration.matricula" and values.get("death.age_group") == "fetal" else livro
         if len(matricula) != 32 or not matricula.isdigit():
             return "a matrícula precisa ter 32 algarismos"
         if matricula[10:14] != f"{values[date_key].year:04d}":
             return f"o ano da matrícula ({matricula[10:14]}) difere do ano do registro ({values[date_key].year})"
-        if matricula[14] != livro:
-            return f"a matrícula de {title} usa o livro código {livro}"
+        if matricula[14] != expected:
+            return f"a matrícula de {title} usa o livro código {expected}"
         if matricula[30:] != matricula_check_digits(matricula[:30]):
             return "os dígitos verificadores da matrícula não conferem (módulo 11)"
         return None
@@ -324,9 +325,10 @@ def _anomaly_block_coherent(values: Mapping[str, Any]) -> str | None:
 
 
 def _deceased_spouse_name(values: Mapping[str, Any]) -> str | None:
-    married_like = values["deceased.marital_status"] in {"CASADO(A)", "VIÚVO(A)", "UNIÃO ESTÁVEL"}
+    married_like = values["deceased.marital_status"] in {"CASADO(A)", "VIÚVO(A)", "UNIÃO ESTÁVEL", "DIVORCIADO(A)",
+                                                        "SEPARADO(A) JUDICIALMENTE"}
     if married_like != (values["deceased.spouse_name"] is not None):
-        return "o nome do cônjuge só existe quando o falecido era casado, em união estável ou viúvo"
+        return "o nome do último cônjuge só existe quando o falecido foi casado ou viveu em união estável"
     return None
 
 

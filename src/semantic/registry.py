@@ -183,7 +183,8 @@ FIELDS = [
     _field("registration.place.summary", "Município e UF de registro", "text", "Registro civil", "Texto “município - UF”",
            CERT, ("municipio de registro e unidade da federacao", "municipio de registro", "local de registro"),
            ("registration.office.municipality", "registration.office.uf")),
-    _field("deceased.name", "Nome do falecido", "name", "Falecido", "Nome completo do falecido", DO,
+    _field("deceased.name", "Nome do falecido", "name", "Falecido",
+           "Nome completo do falecido; “Natimorto” no óbito fetal (Livro C Auxiliar), sem CPF, filhos ou bens", DO,
            ("nome do falecido", "falecido", "nome do obito")),
     _field("deceased.sex", "Sexo do falecido", "sex", "Falecido", "Sexo do falecido (M ou F)", DO, ("sexo", "sexo do falecido")),
     _field("deceased.birth_date", "Data de nascimento do falecido", "date", "Falecido",
@@ -550,7 +551,7 @@ FIELDS.extend([
            ALL_CERTS, ("local e data de emissao", "municipio uf e data de emissao"),
            ("office.city_uf", "certificate.issue_date")),
     _field("deceased.spouse_name", "Nome do cônjuge do falecido", "name", "Falecido",
-           "Nome do último cônjuge ou convivente; vazio quando o falecido não era casado nem viúvo", DO,
+           "Nome do último cônjuge ou convivente; vazio só para solteiro ou natimorto", DO,
            ("nome do ultimo conjuge", "nome do conjuge ou convivente"), ("deceased.marital_status",), True),
     _field("deceased.children_summary", "Existência de filhos", "text", "Falecido",
            "“Não” ou a relação de nomes e idades dos filhos; sempre “Não” para menores de 16 anos", DO,
@@ -626,12 +627,19 @@ FIELDS.extend([
     _field("annotations.voluntary", "Anotações voluntárias de cadastro", "text", "Certidão",
            "Números de documentos da pessoa registrada (RG, título de eleitor, PIS) ou grupo sanguíneo; "
            "geralmente vazio", ALL_CERTS, ("anotacoes voluntarias de cadastro",), (), True),
+    _field("estate.declared", "Existência de bens", "text", "Falecido",
+           "“SIM” ou “NÃO” para a existência de bens deixados pelo falecido; “NÃO” para menores; vazio para natimorto",
+           DO, ("existencia de bens",), ("deceased.age", "death.age_group"), True),
+    _field("external_address.street", "Logradouro do evento em via pública", "street", "Causas externas",
+           "Logradouro da ocorrência só para morte não natural em via pública (campo 52 da DO); vazio nos demais casos",
+           DO, ("se a ocorrencia for em via publica anotar o endereco",), ("deceased.occurrence.address",), True),
 ])
 # death.external.place.* is only filled for "Não natural" scenarios; mark optional after
 # construction since the _address() helper does not take an optional flag.
 _OPTIONAL_WHEN_SCENARIO_DEPENDENT = {"death.external.place.municipality", "death.external.place.uf", "birth.establishment.name",
                                      "birth.establishment.cnes", "birth.place.street", "birth.place.number",
-                                     "birth.place.neighborhood", "birth.place.cep", "pregnancy.prenatal_start_month"}
+                                     "birth.place.neighborhood", "birth.place.cep", "pregnancy.prenatal_start_month",
+                                     "deceased.cpf", "deceased.children_summary"}
 FIELDS = [dataclasses.replace(field, optional=True) if field.key in _OPTIONAL_WHEN_SCENARIO_DEPENDENT else field
          for field in FIELDS]
 REGISTRY: dict[str, SemanticField] = {field.key: field for field in FIELDS}

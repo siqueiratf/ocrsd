@@ -296,8 +296,7 @@
         "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
         "allow_digits": false,
         "portuguese_rules": true,
-        "language": "pt-BR",
-        "blank_probability": 0.35
+        "language": "pt-BR"
       },
       "semantic": "deceased.spouse_name"
     },
@@ -716,7 +715,7 @@
           "NÃO"
         ]
       },
-      "semantic": false
+      "semantic": "estate.declared"
     },
     {
       "field_id": "existencia_filhos",

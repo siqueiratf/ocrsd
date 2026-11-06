@@ -59,6 +59,7 @@ death.place.establishment.cnes certifier.iml_svo_municipality certifier.iml_svo_
 death_registration.witness1_name death_registration.witness2_name
 deceased.age_minutes deceased.age_hours deceased.age_days deceased.age_months
 couple.names couple.qualification couple.documents couple.names_after annotations.averbacoes annotations.voluntary
+estate.declared external_address.street
 deceased.mother_age deceased.mother_schooling deceased.mother_schooling_series deceased.mother_occupation
 deceased.mother_occupation_cbo deceased.mother_live_births deceased.mother_fetal_losses
 deceased.gestation_weeks deceased.gestation_weeks_unknown deceased.pregnancy_type deceased.delivery_type

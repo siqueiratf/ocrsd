@@ -122,12 +122,12 @@ class DeterministicCoherenceTests(unittest.TestCase):
             self.assertEqual(matricula[14], "2")
             self.assertEqual(matricula[10:14], f"{values['marriage_registration.date'].year:04d}")
 
-    def test_death_registration_matricula_uses_livro_4(self):
+    def test_death_registration_matricula_uses_livro_c_or_c_auxiliar(self):
         for seed in range(50):
             values = SemanticRecord(seed, "declaracao_obito").resolve(
                 ENTITY_KEYS["death_registration"] + ENTITY_KEYS["burial"] + ENTITY_KEYS["death"])
             matricula = values["death_registration.matricula"]
-            self.assertEqual(matricula[14], "4")
+            self.assertEqual(matricula[14], "5" if values["death.age_group"] == "fetal" else "4")
             self.assertEqual(matricula[10:14], f"{values['death_registration.date'].year:04d}")
 
     def test_burial_municipality_and_uf_match_a_catalog_profile(self):
