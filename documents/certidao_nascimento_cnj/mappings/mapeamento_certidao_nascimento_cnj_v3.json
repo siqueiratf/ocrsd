@@ -435,8 +435,7 @@
         "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
         "allow_digits": false,
         "portuguese_rules": true,
-        "language": "pt-BR",
-        "blank_probability": 0.2
+        "language": "pt-BR"
       },
       "semantic": "parent2.name"
     },
@@ -454,8 +453,7 @@
       "validation": {
         "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$",
         "portuguese_rules": true,
-        "language": "pt-BR",
-        "blank_probability": 0.2
+        "language": "pt-BR"
       },
       "semantic": "parent2.naturalidade.municipality"
     },
@@ -499,8 +497,7 @@
           "SP",
           "SE",
           "TO"
-        ],
-        "blank_probability": 0.2
+        ]
       },
       "semantic": "parent2.naturalidade.uf"
     },
@@ -519,8 +516,7 @@
         "pattern": "^[A-Za-zÀ-ÖØ-öø-ÿ' ;-]+$",
         "portuguese_rules": true,
         "language": "pt-BR",
-        "max_length": 200,
-        "blank_probability": 0.3
+        "max_length": 200
       },
       "semantic": "parent2.grandparents_names"
     },

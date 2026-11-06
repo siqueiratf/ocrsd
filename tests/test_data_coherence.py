@@ -115,5 +115,22 @@ class MarriageTextTests(unittest.TestCase):
             self.assertGreater(filled, 0, document)
 
 
+class SecondParentTests(unittest.TestCase):
+    def test_second_parent_block_is_blank_or_full(self):
+        mapping = {field["field_id"]: field for field in _mapping("certidao_nascimento_cnj")["fields"]}
+        for field_id in ("genitor2_nome", "genitor2_municipio", "genitor2_uf", "avos2"):
+            self.assertNotIn("blank_probability", mapping[field_id].get("validation") or {})
+        kinds = Counter()
+        for values, _ in records("certidao_nascimento_cnj"):
+            block = [values[f"parent2.{key}"] for key in ("name", "naturalidade.municipality", "naturalidade.uf",
+                                                          "grandparents_names")]
+            kinds["full" if all(block) else "empty" if not any(block) else "partial"] += 1
+            if not any(block):
+                mother = values["parent1.name"]
+                self.assertTrue(set(values["newborn.name"].split()[1:]) <= set(mother.split()[1:]), values["newborn.name"])
+        self.assertEqual(kinds["partial"], 0)
+        self.assertGreater(kinds["empty"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -136,7 +136,9 @@ def _address(prefix: str) -> Constraint:
     keys = tuple(f"{prefix}.{part}" for part in ADDRESS_PARTS if f"{prefix}.{part}" in REGISTRY)
 
     def check(values: Mapping[str, Any]) -> str | None:
-        present = {key: values[key] for key in keys if key in values}
+        present = {key: values[key] for key in keys if values.get(key) is not None}
+        if not present:
+            return None
 
         def matches(profile: Mapping[str, Any]) -> bool:
             for key, value in present.items():
@@ -163,13 +165,13 @@ def _sex(key: str) -> Constraint:
 
 def _parents(values: Mapping[str, Any]) -> str | None:
     expected = f"{values['mother.name']} e {values['father.name']}"
-    return None if values["parents.names"] == expected else f"a filiação deveria ser “{expected}”"
+    return None if values["parents.names"] in (expected, values["mother.name"]) else f"a filiação deveria ser “{expected}”"
 
 
 def _grandparents(values: Mapping[str, Any]) -> str | None:
     pairs = [pair.split(" e ") for pair in values["grandparents.names"].split("; ")]
     names = [name for pair in pairs for name in pair]
-    if len(pairs) != 2 or any(len(pair) != 2 for pair in pairs) or not all(name.strip() for name in names):
+    if len(pairs) not in (1, 2) or any(len(pair) != 2 for pair in pairs) or not all(name.strip() for name in names):
         return "os avós precisam seguir o formato “avó e avô maternos; avó e avô paternos”"
     if {values["mother.name"], values["father.name"]} & set(names):
         return "a mãe ou o pai aparecem entre os próprios avós do registrado"

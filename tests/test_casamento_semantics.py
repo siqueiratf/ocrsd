@@ -157,7 +157,7 @@ class DeterministicCoherenceTests(unittest.TestCase):
             values = SemanticRecord(seed, "certidao_nascimento").resolve(keys)
             self.assertNotEqual(values["parent1.name"], values["parent2.name"])
             self.assertIn(values["parent1.name"], {values["mother.name"], values["father.name"]})
-            self.assertIn(values["parent2.name"], {values["mother.name"], values["father.name"]})
+            self.assertIn(values["parent2.name"], {values["mother.name"], values["father.name"], None})
             aliases_mother += values["parent1.name"] == values["mother.name"]
         self.assertTrue(50 < aliases_mother < 150)
 

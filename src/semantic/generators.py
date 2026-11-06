@@ -724,6 +724,8 @@ def newborn(record, rng: random.Random) -> dict[str, Any]:
     maternal, paternal = family_names(record.value("mother.name"))[-1], family_names(record.value("father.name"))[-1]
     sex = record.pick(rng, "newborn.sex", ("M", "F"), (51, 49))
     family = rng.choices(([maternal, paternal], [maternal]), (85, 15))[0]
+    if father_absent(record):
+        family = family_names(record.value("mother.name"))
     cities = (record.value("birth.place.municipality"), record.value("mother.residence.municipality"))
     weeks = record.value("pregnancy.weeks")
     weight = max(300, min(6000, int(rng.gauss(3150 + (weeks - 39) * 170, 360))))
@@ -783,11 +785,14 @@ def twin(record, rng: random.Random) -> dict[str, Any]:
 
 
 def parents(record, rng: random.Random) -> dict[str, Any]:
+    if father_absent(record):
+        return {"parents.names": record.value("mother.name")}
     return {"parents.names": f"{record.value('mother.name')} e {record.value('father.name')}"}
 
 
 def grandparents(record, rng: random.Random) -> dict[str, Any]:
-    pairs = [parent_names(record, rng, record.value(key)) for key in ("mother.name", "father.name")]
+    keys = ("mother.name",) if father_absent(record) else ("mother.name", "father.name")
+    pairs = [parent_names(record, rng, record.value(key)) for key in keys]
     return {"grandparents.names": "; ".join(f"{grandmother} e {grandfather}" for grandmother, grandfather in pairs)}
 
 
@@ -1367,12 +1372,29 @@ def burial(record, rng: random.Random) -> dict[str, Any]:
     return {**values, "burial.place": f"Cemitério Municipal de {values['burial.municipality']}"}
 
 
+FATHER_ABSENT_SHARE = 0.08
+
+
+def father_absent(record) -> bool:
+    """A birth registered without the father (only the mother as genitora) in the certidão de
+    nascimento; the newborn then carries the surnames of the mother only."""
+    return record.context == "certidao_nascimento" and record.link(
+        "father.absent", lambda rng: rng.random() < FATHER_ABSENT_SHARE)
+
+
 def _parent_order(rng: random.Random) -> tuple[str, str]:
     order = ("mother", "father")
     return order if rng.random() < 0.5 else order[::-1]
 
 
+def parent_order(record) -> tuple[str, str]:
+    return ("mother", "father") if father_absent(record) else record.link("parent_order", _parent_order)
+
+
 def _parent_view(record, rng: random.Random, prefix: str, role: str) -> dict[str, Any]:
+    if role == "father" and father_absent(record):
+        return {f"{prefix}.name": None, f"{prefix}.grandparents_names": None,
+                f"{prefix}.naturalidade.municipality": None, f"{prefix}.naturalidade.uf": None}
     name = record.value(f"{role}.name")
     profile = pick_profile(record, rng, f"{prefix}.naturalidade", parts=("municipality", "uf"))
     naturalidade = address(f"{prefix}.naturalidade", profile, "", ("municipality", "uf"))
@@ -1381,12 +1403,12 @@ def _parent_view(record, rng: random.Random, prefix: str, role: str) -> dict[str
 
 
 def parent1(record, rng: random.Random) -> dict[str, Any]:
-    first, _ = record.link("parent_order", _parent_order)
+    first, _ = parent_order(record)
     return _parent_view(record, rng, "parent1", first)
 
 
 def parent2(record, rng: random.Random) -> dict[str, Any]:
-    _, second = record.link("parent_order", _parent_order)
+    _, second = parent_order(record)
     return _parent_view(record, rng, "parent2", second)
 
 
