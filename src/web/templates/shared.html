@@ -17,6 +17,7 @@
 {% else %}
 {% call page_header("OCRSD · Resultado sintético", job.name, "Dataset com " ~ job.total ~ " documentos. Acesso até " ~ (share.expires_at|data) ~ ".") %}
   {% if share.allow_download and archive %}<a class="btn btn-primary" href="/compartilhado/{{ share_id }}/arquivos/{{ archive.id }}?download=true" download>{{ icon('download') }}Baixar dataset <small>{{ archive.size|tamanho }}</small></a>{% endif %}
+  {% if clean_available %}<details class="menu"><summary class="btn">{{ icon('download') }}Sem tarja</summary><div class="menu-list"><form hx-post="/compartilhado/{{ share_id }}/dataset-sem-tarja" hx-target="#avisos" hx-swap="beforeend" class="form-stack"><label class="field">Senha de download<input type="password" name="password" required maxlength="200" placeholder="Senha"></label><button class="btn btn-primary" type="submit">{{ icon('download') }}Baixar sem tarja</button></form></div></details>{% endif %}
 {% endcall %}
 <p class="notice notice-warning">{{ icon('alert') }}<span><b>Material exclusivamente sintético e sem validade legal.</b> O proprietário pode revogar este link a qualquer momento.</span></p>
 {% if document %}

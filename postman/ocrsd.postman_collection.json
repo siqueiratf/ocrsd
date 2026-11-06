@@ -94,6 +94,11 @@
       "key": "poll_count",
       "value": "0",
       "type": "string"
+    },
+    {
+      "key": "cleanDownloadPassword",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -3881,6 +3886,124 @@
                 {
                   "key": "Content-Type",
                   "value": "application/pdf"
+                }
+              ],
+              "body": ""
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta HTTP válida', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Baixar artefatos sem tarja",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              },
+              {
+                "key": "X-Workspace-Token",
+                "value": "{{workspace_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/clean",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "jobs",
+                "{{job_id}}",
+                "artifacts",
+                "clean"
+              ],
+              "query": []
+            },
+            "description": "Contrato implementado: POST /api/v1/jobs/{job_id}/artifacts/clean.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{cleanDownloadPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "Arquivo binário",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "*/*"
+                  },
+                  {
+                    "key": "X-Workspace-Token",
+                    "value": "{{workspace_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/jobs/{{job_id}}/artifacts/clean",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "jobs",
+                    "{{job_id}}",
+                    "artifacts",
+                    "clean"
+                  ],
+                  "query": []
+                },
+                "description": "Contrato implementado: POST /api/v1/jobs/{job_id}/artifacts/clean.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"password\": \"{{cleanDownloadPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/zip"
                 }
               ],
               "body": ""

@@ -279,6 +279,10 @@ class GenerationConfigResponse(GenerationConfigCreate):
     updated_at: float
 
 
+class CleanDownloadRequest(StrictModel):
+    password: Annotated[str, Field(min_length=1, max_length=200)]
+
+
 class ShareCreate(StrictModel):
     allow_download: bool = True
     expires_in_hours: int = Field(default=24, ge=1, le=720, strict=True)

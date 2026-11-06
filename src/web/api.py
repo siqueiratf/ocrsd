@@ -2,17 +2,19 @@ import base64
 import logging
 from dataclasses import asdict
 from typing import Annotated, Any
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException
 
 from src.web.jobs import JobStore
-from src.web.models import AnalysisApply, AnalysisCreate, AnalysisResponse, Artifact, AssistantStatus, Capabilities, DocumentModelResponse, DocumentTypeResponse, ErrorResponse, GenerationConfigCreate, GenerationConfigResponse, GenerationOptions, HandwritingPreviewRequest, HandwritingPreviewResponse, Health, Identifier, JobDetail, JobResponse, MappingResponse, MappingUpdate, ModelCreate, ModelPromote, ModelUpdate, PresetResponse, RealismPreviewRequest, RealismPreviewResponse, Results, SemanticDefinitionCreate, ShareCreate, ShareCreated, ShareResponse, SharedResult, SubmittedJob, WorkspaceResponse, WritingPresetCreate, WritingPresetStored
-from src.web.services import BUILTIN_PROTECTED, AssistantProbe, Catalog, ServiceError, apply_proposal, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, mapping_issues, promote_model as promote_document_model, realism_previews, render_preview, save_mapping
+from src.web.models import AnalysisApply, AnalysisCreate, AnalysisResponse, Artifact, AssistantStatus, Capabilities, CleanDownloadRequest, DocumentModelResponse, DocumentTypeResponse, ErrorResponse, GenerationConfigCreate, GenerationConfigResponse, GenerationOptions, HandwritingPreviewRequest, HandwritingPreviewResponse, Health, Identifier, JobDetail, JobResponse, MappingResponse, MappingUpdate, ModelCreate, ModelPromote, ModelUpdate, PresetResponse, RealismPreviewRequest, RealismPreviewResponse, Results, SemanticDefinitionCreate, ShareCreate, ShareCreated, ShareResponse, SharedResult, SubmittedJob, WorkspaceResponse, WritingPresetCreate, WritingPresetStored
+from src.web.services import BUILTIN_PROTECTED, AssistantProbe, Catalog, ServiceError, apply_proposal, check_clean_password, clean_dataset_archive, create_model as create_document_model, custom_model, duplicate_model as duplicate_document_model, handwriting_previews, mapping_issues, promote_model as promote_document_model, realism_previews, render_preview, save_mapping
 from src.web.settings import Settings
 from src.web.ui import file_response, mount_ui
 from src.web.version import commit as version_commit
@@ -402,6 +404,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def artifact(artifact_id: str, row: Annotated[dict, Depends(authorized)], download: bool = True):
         path, item = store.artifact(row, artifact_id)
         return file_response(path, item["media_type"], item["name"], download)
+
+    @app.post("/api/v1/jobs/{job_id}/artifacts/clean", response_class=Response, tags=["Resultados"],
+             responses={200: {"content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}}}})
+    async def clean_artifact(payload: CleanDownloadRequest, row: Annotated[dict, Depends(authorized)], request: Request):
+        check_clean_password(settings, request.client.host if request.client else "unknown", payload.password)
+        archive_path = await run_in_threadpool(clean_dataset_archive, store.directory(row["id"]))
+        options = store.detail(row).options
+        fallback = f"{options.document_type}-{options.count}-documentos-sem-tarja" if options else "dataset-sintetico-sem-tarja"
+        async def content():
+            with archive_path.open("rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    yield chunk
+        return StreamingResponse(content(), media_type="application/zip", background=BackgroundTask(archive_path.unlink, missing_ok=True),
+                                 headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(fallback + '.zip')}"})
 
     @app.get("/api/v1/jobs/{job_id}/shares", response_model=list[ShareResponse], tags=["Compartilhamento"])
     async def shares(job_id: Identifier, owner_id: Annotated[str, Depends(workspace_required)]):

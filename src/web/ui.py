@@ -30,7 +30,8 @@ from src.web.palette import (CUSTOM_BASES, EDITOR_OPTIONS, GENERATION_RULES, ICO
                              custom_field_config, custom_palette)
 from src.web.services import (BUILTIN_PROTECTED, GENERATION_MODES, ORIENTATIONS, PAGE_SIZES, PREVIEW_SAMPLES, PREVIEW_SAMPLE_CONTENT_CLASSES,
                               STANDARD_EDITS_DISABLED, Catalog, ServiceError,
-                              ai_slots, create_blank_model, create_model, duplicate_model, fit_mapping, mapping_issues, preview_generation, preview_key,
+                              ai_slots, check_clean_password, clean_dataset_archive, clean_ready, consume_clean_token, create_blank_model, create_model,
+                              duplicate_model, fit_mapping, issue_clean_token, mapping_issues, preview_generation, preview_key,
                               preview_strip, promote_model, render_writing_samples, realism_previews, render_layout_pdf, render_pdf_page, pdf_page_count,
                               render_preview, revision, save_mapping, validate_layout, semantic_inferred, unavailable_custom_fields, validate_mapping,
                               with_approved_semantics, writing_issues, writing_message, count_limit, count_limit_message, warm_writing_samples)
@@ -583,7 +584,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
                 "safe_error": safe_job_error(row.get("error")),
                 "problem": problem, "preset": json.loads(row["preset"]) if row.get("preset") else None,
                 "archive": next((item for item in artifacts if item["media_type"] == "application/zip"), None),
-                "manifest": manifest_artifact, "generation": generation_info(row, detail, generation)}
+                "manifest": manifest_artifact, "generation": generation_info(row, detail, generation),
+                "clean_available": bool(settings.clean_download_password) and clean_ready(store.directory(row["id"]))}
 
     def generation_info(row: dict, detail, generation: dict | None) -> dict:
         mode = (generation or {}).get("mode") or ("ai_replay" if row.get("replay_of") else
@@ -1413,6 +1415,34 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         return StreamingResponse(content(), media_type="application/zip", background=BackgroundTask(archive_path.unlink, missing_ok=True),
                                  headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(cleaned + '.zip')}"})
 
+    def clean_zip_response(directory: Path, fallback: str) -> StreamingResponse:
+        async def content():
+            with archive_path.open("rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    yield chunk
+        archive_path = clean_dataset_archive(directory)
+        return StreamingResponse(content(), media_type="application/zip", background=BackgroundTask(archive_path.unlink, missing_ok=True),
+                                 headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(fallback + '.zip')}"})
+
+    @router.post("/resultados/{job_id}/dataset-sem-tarja")
+    async def result_clean_request(request: Request, job_id: Identifier, owner_id: Owner):
+        row = owned_job(owner_id, job_id)
+        password = text(await request.form(), "password")
+        check_clean_password(settings, request.client.host if request.client else "unknown", password)
+        if not clean_ready(store.directory(row["id"])):
+            raise ServiceError(404, "not_found", "Este dataset não possui versão sem tarja")
+        token = issue_clean_token(row["id"])
+        return Response(headers={"HX-Redirect": f"/resultados/{row['id']}/dataset-sem-tarja/arquivo?token={quote(token)}"})
+
+    @router.get("/resultados/{job_id}/dataset-sem-tarja/arquivo")
+    async def result_clean_file(job_id: Identifier, owner_id: Owner, token: str):
+        row = owned_job(owner_id, job_id)
+        consume_clean_token(row["id"], token)
+        options = store.detail(row).options
+        fallback = (f"{options.document_type}-{options.count}-documentos-sem-tarja-{datetime.fromtimestamp(row['created_at']).strftime('%Y%m%d')}"
+                    if options else "dataset-sintetico-sem-tarja")
+        return await run_in_threadpool(clean_zip_response, store.directory(row["id"]), fallback)
+
     @router.get("/resultados/{job_id}/estado")
     async def result_state(request: Request, job_id: Identifier, owner_id: Owner):
         result = result_context(owner_id, job_id)
@@ -1733,10 +1763,12 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             raise ServiceError(404, "not_found", "Documento não encontrado")
         pages = max(1, -(-len(documents) // SHARED_PAGE_SIZE))
         page = min(max(1, pagina), pages) if pagina else (documento - 1) // SHARED_PAGE_SIZE + 1 if selected else 1
+        clean_available = bool(share["allow_download"] and settings.clean_download_password and clean_ready(store.directory(row["id"])))
         return render(request, "shared.html", share_id=share_id, pending=False, share=share, job=store.detail(row),
                       documents=documents, document=selected, page=page, pages=pages,
                       page_documents=documents[(page - 1) * SHARED_PAGE_SIZE:page * SHARED_PAGE_SIZE],
-                      archive=next((item for item in artifacts if item["media_type"] == "application/zip"), None))
+                      archive=next((item for item in artifacts if item["media_type"] == "application/zip"), None),
+                      clean_available=clean_available)
 
     @router.post("/compartilhado/{share_id}/acesso")
     async def shared_access(request: Request, share_id: Identifier):
@@ -1754,6 +1786,29 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             raise ServiceError(401, "download_forbidden", "Este link permite somente visualização")
         path, item = store.artifact(store.get(share["job_id"]), artifact_id)
         return file_response(path, item["media_type"], item["name"], download)
+
+    @router.post("/compartilhado/{share_id}/dataset-sem-tarja")
+    async def shared_clean_request(request: Request, share_id: Identifier):
+        share = store.share(share_id, request.cookies.get(SHARE_COOKIE) or "")
+        if not share["allow_download"]:
+            raise ServiceError(401, "download_forbidden", "Este link permite somente visualização")
+        password = text(await request.form(), "password")
+        check_clean_password(settings, request.client.host if request.client else "unknown", password)
+        row = store.get(share["job_id"])
+        if not clean_ready(store.directory(row["id"])):
+            raise ServiceError(404, "not_found", "Este dataset não possui versão sem tarja")
+        token = issue_clean_token(row["id"])
+        return Response(headers={"HX-Redirect": f"/compartilhado/{share_id}/dataset-sem-tarja/arquivo?token={quote(token)}"})
+
+    @router.get("/compartilhado/{share_id}/dataset-sem-tarja/arquivo")
+    async def shared_clean_file(request: Request, share_id: Identifier, token: str):
+        share = store.share(share_id, request.cookies.get(SHARE_COOKIE) or "")
+        if not share["allow_download"]:
+            raise ServiceError(401, "download_forbidden", "Este link permite somente visualização")
+        row = store.get(share["job_id"])
+        consume_clean_token(row["id"], token)
+        fallback = f"dataset-sintetico-sem-tarja-{share_id}"
+        return await run_in_threadpool(clean_zip_response, store.directory(row["id"]), fallback)
 
     app.include_router(router)
     return interface_error

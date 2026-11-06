@@ -4,6 +4,7 @@ import base64
 from datetime import datetime, timezone
 import functools
 import hashlib
+import hmac
 import io
 import json
 import math
@@ -11,6 +12,7 @@ import os
 from pathlib import Path
 import random
 import re
+import secrets
 import shutil
 import sqlite3
 import tempfile
@@ -718,6 +720,111 @@ def with_approved_semantics(store, owner_id: str, definition: dict) -> dict:
     return {**definition, "semantic_definitions": specs}
 
 
+def mark_pdf(path: Path) -> None:
+    import fitz
+    import math
+
+    font = fitz.Font("hebo")
+    text = NOTICE if font.has_glyph(ord("—")) else NOTICE.replace("—", "-")
+    angle = math.radians(32)
+    rotation = fitz.Matrix(math.cos(angle), -math.sin(angle), math.sin(angle), math.cos(angle), 0, 0)
+    fontsize = 13
+    step_x = max(220, fitz.get_text_length(text, fontname="hebo", fontsize=fontsize) * 0.72)
+    step_y = fontsize * 7
+    with fitz.open(path) as document:
+        for page in document:
+            row = 0
+            y = -step_y
+            while y < page.rect.height + step_y:
+                offset = step_x / 2 if row % 2 else 0
+                x = -step_x + offset
+                while x < page.rect.width + step_x:
+                    pivot = fitz.Point(x, y)
+                    page.insert_text(pivot, text, fontsize=fontsize, fontname="hebo", color=(0.75, 0.1, 0.1),
+                                      fill_opacity=0.18, morph=(pivot, rotation), overlay=True)
+                    x += step_x
+                y += step_y
+                row += 1
+        document.set_metadata({"title": NOTICE, "subject": "Uso educacional e de pesquisa"})
+        with tempfile.NamedTemporaryFile(suffix=".pdf", dir=path.parent, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+        try:
+            document.save(temporary_path, garbage=4, deflate=True, deflate_images=True, deflate_fonts=True, use_objstms=1)
+            temporary_path.replace(path)
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
+
+
+CLEAN_ATTEMPT_LIMIT = 5
+CLEAN_ATTEMPT_WINDOW = 60.0
+_clean_attempts: dict[str, list[float]] = {}
+_clean_attempts_lock = threading.Lock()
+
+
+def check_clean_password(settings: Settings, client_ip: str, password: str) -> None:
+    if not settings.clean_download_password:
+        raise ServiceError(404, "not_found", "Recurso não encontrado")
+    now = time.time()
+    with _clean_attempts_lock:
+        attempts = [moment for moment in _clean_attempts.get(client_ip, []) if moment > now - CLEAN_ATTEMPT_WINDOW]
+        if len(attempts) >= CLEAN_ATTEMPT_LIMIT:
+            _clean_attempts[client_ip] = attempts
+            raise ServiceError(429, "too_many_attempts", "Muitas tentativas. Aguarde um minuto.")
+        valid = hmac.compare_digest(password.encode("utf-8"), settings.clean_download_password.encode("utf-8"))
+        if not valid:
+            attempts.append(now)
+        _clean_attempts[client_ip] = attempts
+    if not valid:
+        raise ServiceError(401, "invalid_password", "Senha incorreta")
+
+
+def clean_ready(directory: Path) -> bool:
+    return (directory / "clean").is_dir() and (directory / "dataset.zip").is_file()
+
+
+def clean_dataset_archive(directory: Path) -> Path:
+    clean_directory = directory / "clean"
+    if not clean_ready(directory):
+        raise ServiceError(404, "clean_unavailable", "Este dataset não possui versão sem tarja")
+    descriptor, temporary_name = tempfile.mkstemp(prefix="ocrsd-clean-", suffix=".zip", dir=directory.parent)
+    os.close(descriptor)
+    archive_path = Path(temporary_name)
+    try:
+        with ZipFile(archive_path, "w", ZIP_DEFLATED) as archive:
+            for path in sorted(clean_directory.glob("*.pdf")):
+                archive.write(path, path.name)
+            for path in sorted(directory.glob("*.json")):
+                archive.write(path, path.name)
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
+    return archive_path
+
+
+CLEAN_TOKEN_TTL = 60.0
+_clean_tokens: dict[str, tuple[str, float]] = {}
+_clean_tokens_lock = threading.Lock()
+
+
+def issue_clean_token(job_id: str) -> str:
+    token = secrets.token_urlsafe(24)
+    now = time.time()
+    with _clean_tokens_lock:
+        for key, (_, expiry) in list(_clean_tokens.items()):
+            if expiry < now:
+                _clean_tokens.pop(key, None)
+        _clean_tokens[token] = (job_id, now + CLEAN_TOKEN_TTL)
+    return token
+
+
+def consume_clean_token(job_id: str, token: str) -> None:
+    with _clean_tokens_lock:
+        entry = _clean_tokens.pop(token, None)
+    if not entry or not hmac.compare_digest(entry[0], job_id) or entry[1] < time.time():
+        raise ServiceError(404, "not_found", "Link de download expirado; solicite novamente")
+
+
 def validate_mapping(definition: dict, page_size: tuple[int, int] | None = None) -> dict:
     if not isinstance(definition, dict) or not isinstance(definition.get("fields"), list):
         raise ServiceError(422, "invalid_mapping", "O mapeamento precisa conter uma lista de campos")
@@ -950,6 +1057,7 @@ def preview_generation(template: Path, definition: dict, seed: int) -> str:
                                          Path(directory) / "saida", 1, seed)
         except ValueError as exc:
             raise ServiceError(422, "preview_failed", str(exc)) from exc
+        mark_pdf(documents[0].pdf_path)
         with fitz.open(documents[0].pdf_path) as document:
             page = document[0]
             scale = min(1400 / page.rect.width, 2.2)
@@ -1241,6 +1349,8 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
     from src.synthetic_dataset import generate_dataset
 
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
+    clean_directory = output / "clean"
+    clean_directory.mkdir(mode=0o700)
     writing = options.writing
     pen = None if writing.model == "font" or not (writing.handwriting or writing.text_handwriting) else NeuralPen(**writing.model_dump(exclude={"handwriting", "text_handwriting", "intensity", "font_family", "content"}))
     content_pens: dict[str, NeuralPen | None] = {}
@@ -1265,6 +1375,8 @@ def generate_from(options: GenerationOptions, template: Path, mapping: Path, out
         temporary = document.json_path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(document.json_path)
+        shutil.copyfile(document.pdf_path, clean_directory / document.pdf_path.name)
+        mark_pdf(document.pdf_path)
         if document_ready:
             document_ready(index, document.pdf_path, document.json_path)
         progress(index)

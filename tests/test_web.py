@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import base64
+import io
 import json
 import os
 from pathlib import Path
@@ -193,7 +194,8 @@ class WebTests(unittest.TestCase):
             preview = self.client.get(base + f'/artifacts/{pdf["id"]}?download=false', headers=headers)
             self.assertIn("inline", preview.headers["content-disposition"])
             with fitz.open(stream=preview.content, filetype="pdf") as document:
-                self.assertTrue(all("SEM VALIDADE LEGAL" not in page.get_text() for page in document))
+                self.assertTrue(any("SEM VALIDADE LEGAL" in page.get_text() for page in document))
+                self.assertEqual(document.metadata["title"], "DOCUMENTO SINTÉTICO — SEM VALIDADE LEGAL")
                 raster = document[0].get_pixmap().samples
             directory = self.store.directory(job["id"])
             ground_truth = json.loads((directory / "synthetic_0001.json").read_text())
@@ -202,8 +204,62 @@ class WebTests(unittest.TestCase):
             with ZipFile(directory / "dataset.zip") as archive:
                 self.assertEqual(set(archive.namelist()), {"synthetic_0001.pdf", "synthetic_0001.json", "dataset.json"})
                 self.assertTrue(json.loads(archive.read("dataset.json"))["synthetic"])
+                marked_pdf = archive.read("synthetic_0001.pdf")
+            with fitz.open(stream=marked_pdf, filetype="pdf") as document:
+                self.assertIn("SEM VALIDADE LEGAL", document[0].get_text())
+            clean_directory = directory / "clean"
+            self.assertTrue(clean_directory.is_dir())
+            with fitz.open(clean_directory / "synthetic_0001.pdf") as document:
+                self.assertNotIn("SEM VALIDADE LEGAL", document[0].get_text())
             outputs.append((ground_truth, raster))
         self.assertEqual(outputs[0], outputs[1])
+
+    def test_clean_dataset_download_api(self):
+        import fitz
+        from src.web import services as web_services
+        web_services._clean_attempts.clear()
+        web_services._clean_tokens.clear()
+        job, headers = self.submit()
+        self.run_worker()
+        base = f'/api/v1/jobs/{job["id"]}'
+        # Feature disabled by default
+        disabled = self.client.post(base + "/artifacts/clean", headers=headers, json={"password": "whatever"})
+        self.assertEqual(disabled.status_code, 404, disabled.text)
+
+        self.settings.clean_download_password = "senha-super-secreta"
+        wrong = self.client.post(base + "/artifacts/clean", headers=headers, json={"password": "errada"})
+        self.assertEqual(wrong.status_code, 401, wrong.text)
+        self.assertEqual(wrong.json()["error"]["code"], "invalid_password")
+
+        for _ in range(4):
+            self.client.post(base + "/artifacts/clean", headers=headers, json={"password": "errada"})
+        limited = self.client.post(base + "/artifacts/clean", headers=headers, json={"password": "errada"})
+        self.assertEqual(limited.status_code, 429, limited.text)
+        self.assertIn("Aguarde um minuto", limited.json()["error"]["message"])
+        web_services._clean_attempts.clear()
+
+        correct = self.client.post(base + "/artifacts/clean", headers=headers, json={"password": "senha-super-secreta"})
+        self.assertEqual(correct.status_code, 200, correct.text)
+        self.assertEqual(correct.headers["content-type"], "application/zip")
+        self.assertIn("sem-tarja", correct.headers["content-disposition"])
+        with ZipFile(io.BytesIO(correct.content)) as archive:
+            names = set(archive.namelist())
+            self.assertIn("synthetic_0001.pdf", names)
+            self.assertIn("synthetic_0001.json", names)
+            self.assertNotIn("dataset.zip", names)
+            with fitz.open(stream=archive.read("synthetic_0001.pdf"), filetype="pdf") as document:
+                self.assertNotIn("SEM VALIDADE LEGAL", document[0].get_text())
+
+        # No "clean" artifact id is ever listed or fetchable through the normal artifact routes
+        results = self.client.get(base + "/results", headers=headers).json()["artifacts"]
+        self.assertTrue(all("clean" not in item["name"] for item in results))
+        self.assertEqual(self.client.get(base + "/artifacts/clean", headers=headers).status_code, 404)
+
+        # Older job without a "clean" folder
+        shutil.rmtree(self.store.directory(job["id"]) / "clean")
+        missing = self.client.post(base + "/artifacts/clean", headers=headers, json={"password": "senha-super-secreta"})
+        self.assertEqual(missing.status_code, 404, missing.text)
+        self.assertEqual(missing.json()["error"]["code"], "clean_unavailable")
 
     def test_generated_seed_is_preserved_for_web_reproduction(self):
         options = self.options.model_copy(update={"seed": None})

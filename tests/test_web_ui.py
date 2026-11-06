@@ -1,5 +1,7 @@
+import io
 import json
 import os
+import shutil
 from pathlib import Path
 import re
 import subprocess
@@ -8,6 +10,7 @@ import tempfile
 import unittest
 from unittest import mock
 from urllib.parse import unquote
+from zipfile import ZipFile
 
 try:
     import httpx2  # noqa: F401
@@ -662,6 +665,88 @@ class InterfaceTests(unittest.TestCase):
         self.assertIn('name="seed" min="0" max="4294967295" value="99"', loaded.text)
         self.assertEqual(self.app.state.store.config(config_id, self.app.state.store.workspace(self.cookie))["options"]["seed"], 99)
         self.assertIn("Documento base", self.page(f"/geracao?configuracao={config_id}").text)
+
+
+    def test_clean_download_owner_and_shared_flow(self):
+        import fitz
+        from src.web import services as web_services
+        web_services._clean_attempts.clear()
+        web_services._clean_tokens.clear()
+
+        queued = self.hx("POST", "/geracao/jobs", data=self.generation_form())
+        job_id = re.search(r'hx-get="/geracao/jobs/([0-9a-f]{32})"', queued.text).group(1)
+        self.run_worker()
+
+        # Feature disabled: the dialog does not offer the "sem tarja" option, and
+        # posting directly to the route fails with 404.
+        dialog = self.hx("GET", f"/resultados/{job_id}/exportar")
+        self.assertNotIn("dataset-sem-tarja", dialog.text)
+        disabled = self.hx("POST", f"/resultados/{job_id}/dataset-sem-tarja", data={"password": "x"})
+        self.assertEqual(disabled.status_code, 404, disabled.text)
+
+        self.settings.clean_download_password = "senha-ui-secreta"
+        dialog = self.hx("GET", f"/resultados/{job_id}/exportar")
+        self.assertIn("dataset-sem-tarja", dialog.text)
+
+        wrong = self.hx("POST", f"/resultados/{job_id}/dataset-sem-tarja", data={"password": "errada"})
+        self.assertEqual(wrong.status_code, 401, wrong.text)
+        self.assertIn("Senha incorreta", wrong.text)
+        self.assertNotIn("hx-redirect", {key.lower() for key in wrong.headers})
+
+        ok = self.hx("POST", f"/resultados/{job_id}/dataset-sem-tarja", data={"password": "senha-ui-secreta"})
+        self.assertEqual(ok.status_code, 200, ok.text)
+        download_url = ok.headers["hx-redirect"]
+        self.assertIn(f"/resultados/{job_id}/dataset-sem-tarja/arquivo", download_url)
+        download = self.page(download_url)
+        self.assertEqual(download.headers["content-type"], "application/zip")
+        with ZipFile(io.BytesIO(download.content)) as archive:
+            with fitz.open(stream=archive.read("synthetic_0001.pdf"), filetype="pdf") as document:
+                self.assertNotIn("SEM VALIDADE LEGAL", document[0].get_text())
+        # The one-time token cannot be reused.
+        self.assertEqual(self.page(download_url).status_code, 404)
+
+        # Older job without a "clean" folder: cleanly reports unavailability.
+        shutil.rmtree(self.app.state.store.directory(job_id) / "clean")
+        missing = self.hx("POST", f"/resultados/{job_id}/dataset-sem-tarja", data={"password": "senha-ui-secreta"})
+        self.assertEqual(missing.status_code, 404, missing.text)
+        self.assertIn("não possui versão sem tarja", missing.text)
+
+        # Re-run with a fresh job to exercise the shared page.
+        queued = self.hx("POST", "/geracao/jobs", data=self.generation_form())
+        job_id = re.search(r'hx-get="/geracao/jobs/([0-9a-f]{32})"', queued.text).group(1)
+        self.run_worker()
+        created = self.hx("POST", f"/resultados/{job_id}/compartilhamentos", data={"allow_download": "on", "expires_in_hours": "2"})
+        share_id, token = re.search(r"/compartilhado/([0-9a-f]{32})#token=([^\"]+)", created.text).groups()
+        token = unquote(token)
+        access = self.client.post(f"/compartilhado/{share_id}/acesso", headers={"HX-Request": "true"}, data={"token": token})
+        self.assertEqual(access.status_code, 204)
+        share_cookie = {"Cookie": f"ocrsd_share={token}"}
+
+        shared = self.client.get(f"/compartilhado/{share_id}", headers=share_cookie)
+        self.assertIn("dataset-sem-tarja", shared.text)
+
+        wrong_shared = self.client.post(f"/compartilhado/{share_id}/dataset-sem-tarja", headers={**share_cookie, "HX-Request": "true"}, data={"password": "errada"})
+        self.assertEqual(wrong_shared.status_code, 401, wrong_shared.text)
+
+        correct_shared = self.client.post(f"/compartilhado/{share_id}/dataset-sem-tarja", headers={**share_cookie, "HX-Request": "true"}, data={"password": "senha-ui-secreta"})
+        self.assertEqual(correct_shared.status_code, 200, correct_shared.text)
+        shared_url = correct_shared.headers["hx-redirect"]
+        shared_download = self.client.get(shared_url, headers=share_cookie)
+        self.assertEqual(shared_download.headers["content-type"], "application/zip")
+        with ZipFile(io.BytesIO(shared_download.content)) as archive:
+            with fitz.open(stream=archive.read("synthetic_0001.pdf"), filetype="pdf") as document:
+                self.assertNotIn("SEM VALIDADE LEGAL", document[0].get_text())
+
+        # A link without download permission never offers the option.
+        created_view_only = self.hx("POST", f"/resultados/{job_id}/compartilhamentos", data={"expires_in_hours": "2"})
+        view_share_id, view_token = re.search(r"/compartilhado/([0-9a-f]{32})#token=([^\"]+)", created_view_only.text).groups()
+        view_token = unquote(view_token)
+        self.client.post(f"/compartilhado/{view_share_id}/acesso", headers={"HX-Request": "true"}, data={"token": view_token})
+        view_cookie = {"Cookie": f"ocrsd_share={view_token}"}
+        view_page = self.client.get(f"/compartilhado/{view_share_id}", headers=view_cookie)
+        self.assertNotIn("dataset-sem-tarja", view_page.text)
+        forbidden = self.client.post(f"/compartilhado/{view_share_id}/dataset-sem-tarja", headers={**view_cookie, "HX-Request": "true"}, data={"password": "senha-ui-secreta"})
+        self.assertEqual(forbidden.status_code, 401, forbidden.text)
 
 
 if __name__ == "__main__":

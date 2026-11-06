@@ -121,7 +121,7 @@ def build_collection() -> dict:
         "configurations": "Listar configurações", "create_configuration": "Salvar configuração",
         "delete_configuration": "Excluir configuração", "validate": "Validar geração", "submit": "Criar dataset",
         "jobs": "Histórico de gerações", "job": "Aguardar conclusão", "cancel": "Cancelar job", "delete_job": "Excluir job", "results": "Listar artefatos",
-        "artifact": "Baixar artefato", "shares": "Listar links", "create_share": "Criar link controlado",
+        "artifact": "Baixar artefato", "clean_artifact": "Baixar artefatos sem tarja", "shares": "Listar links", "create_share": "Criar link controlado",
         "revoke_share": "Revogar link", "shared": "Abrir resultado compartilhado", "shared_artifact": "Abrir artefato compartilhado",
     }
     bodies = {
@@ -142,6 +142,7 @@ def build_collection() -> dict:
         "create_configuration": {"name": "Configuração DNV", "options": options.model_dump()},
         "validate": options.model_dump(), "submit": options.model_dump(), "cancel": {},
         "create_share": {"allow_download": True, "expires_in_hours": 24},
+        "clean_artifact": {"password": "{{cleanDownloadPassword}}"},
     }
     groups: dict[str, list] = {}
     for path, methods in schema["paths"].items():
@@ -189,8 +190,8 @@ def build_collection() -> dict:
                 response_items.append({"name": "Resposta de exemplo", "originalRequest": copy.deepcopy(request), "status": "OK", "code": code,
                                        "header": [{"key": "Content-Type", "value": mime}],
                                        "body": json.dumps(body, ensure_ascii=False, indent=2) if mime == "application/json" else ""})
-            elif function in {"template", "model_preview", "artifact", "shared_artifact"}:
-                mime = "application/pdf" if function in {"template", "artifact", "shared_artifact"} else "image/png"
+            elif function in {"template", "model_preview", "artifact", "shared_artifact", "clean_artifact"}:
+                mime = "image/png" if function == "model_preview" else "application/zip" if function == "clean_artifact" else "application/pdf"
                 response_items.append({"name": "Arquivo binário", "originalRequest": copy.deepcopy(request), "status": "OK", "code": 200,
                                        "header": [{"key": "Content-Type", "value": mime}], "body": ""})
             groups.setdefault(operation["tags"][0], []).append({"name": names[function], "request": request, "response": response_items, "event": event(tests)})
@@ -199,6 +200,7 @@ def build_collection() -> dict:
         "model_id": document["id"], "preset_id": "", "configuration_id": "", "key": "custom.referencia_local", "fields": json.dumps(options.fields),
         "mappingDefinition": json.dumps(mapping["definition"], ensure_ascii=False), "pdfBase64": "COLE_BASE64_DO_PDF",
         "analysis_id": "", "job_id": "", "job_token": "", "artifact_id": "", "share_id": "", "share_token": "", "poll_count": "0",
+        "cleanDownloadPassword": "",
     }
     order = ["Operação", "Espaço de trabalho", "Catálogo", "Modelos", "Mapeamento assistido", "Presets", "Configurações", "Geração", "Jobs", "Resultados", "Compartilhamento"]
     items = [{"name": name, "item": groups.get(name, [])} for name in order]

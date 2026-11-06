@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     mapping_min_score: float = Field(default=0.5, ge=0, le=1)
     mapping_min_margin: float = Field(default=0.2, ge=0, le=1)
     standard_edits: bool = False
+    clean_download_password: str = ""
 
     @model_validator(mode="after")
     def check_budget(self) -> "Settings":

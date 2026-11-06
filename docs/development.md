@@ -271,6 +271,7 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 | `OCRSD_AI_SSH_OPTIONS` | vazio | Opções extras do `ssh` do túnel, separadas por espaço |
 | `OCRSD_MAPPING_MIN_SCORE` / `OCRSD_MAPPING_MIN_MARGIN` | 0.5 / 0.2 | Similaridade mínima e margem para associar um rótulo a uma chave semântica |
 | `OCRSD_STANDARD_EDITS` | false (true em `make web`) | Habilita promover um modelo personalizado a padrão e substituir o mapeamento de um modelo padrão pelo editor; grava em `documents/`. Mantenha `false` em implantações. |
+| `OCRSD_CLEAN_DOWNLOAD_PASSWORD` | vazio | Senha para baixar o dataset sem a tarja “DOCUMENTO SINTÉTICO”; vazio desabilita o recurso (padrão). Limite de 5 tentativas erradas por IP a cada 60 s. |
 
 O worker verifica tempo/disco a cada 0,5 s e limita CPU, memória virtual e tamanho
 individual de arquivo. A medição de volume pode ultrapassar brevemente o teto entre
