@@ -92,6 +92,14 @@ TYPED_RIGHT_PAD_PT = 1.0
 HANDWRITING_LEFT_PAD_HEIGHT_FRAC = 0.12
 HANDWRITING_MIN_LEFT_PAD_PX = 2
 HANDWRITING_MAX_SQUASH = 1.25  # maximum horizontal compression of a font handwriting line
+# Boxes that hold more than one line (see field_layout). The line pitch is the median box height
+# of the document. A box of two pitches or more gets lines from the top; a box of MULTILINE_MIN_LINES
+# pitches gets them only for text that does not fit on one line.
+MULTILINE_MIN_LINES = 1.5
+MULTILINE_TOP_PAD = 0.25  # space above the first line, as a part of the pitch (printed labels on the top edge)
+MULTILINE_LEADING = 0.85  # glyph height / line pitch
+MULTILINE_MIN_SCALE = 0.4  # smallest line pitch for long text, as a part of the document pitch
+MULTILINE_SCALE_STEP = 0.9
 
 
 @functools.lru_cache(maxsize=16)
@@ -158,6 +166,10 @@ def random_handwriting_style(rng: random.Random, intensity: float = 0.65,
         stroke_bias=rng.choice((-1, 0, 0, 0, 1)) if intensity else 0,
         baseline_bias=rng.uniform(-0.035, 0.035) * intensity,
     )
+
+
+NEUTRAL_STYLE = HandwritingStyle(ink=(0, 0, 0), rotation=0.0, width_scale=1.0, size_scale=1.0, spacing_scale=1.0,
+                                 stroke_bias=0, baseline_bias=0.0)
 
 
 def is_numeric_text(text: str) -> bool:
@@ -487,6 +499,149 @@ def render_handwritten_numeric(text: str, width: int, height: int, rng: random.R
     )
 
 
+@dataclass(frozen=True)
+class LineLayout:
+    """Layout of a box that holds more than one line. `target` is the line pitch of the document
+    in px; `rules` are the y values of printed ruled lines in the box (the baselines). A box lower
+    than two pitches is `optional`: it gets lines only for text that does not fit on one line."""
+    target: float
+    rules: tuple[int, ...] = ()
+    optional: bool = False
+
+    def applies(self, text: str, width: int) -> bool:
+        if len(text.strip()) <= 1:
+            return False
+        if not self.optional:
+            return True
+        widths, space = _handwriting_measure(text, NEUTRAL_STYLE, DEFAULT_FONT_FAMILY)(self.target * MULTILINE_LEADING)
+        return sum(widths) + space * (len(widths) - 1) > width * HANDWRITING_MAX_SQUASH
+
+
+def _line_target(field_map: dict) -> float:
+    """Median height of the single text boxes of the mapping: the line pitch of the document."""
+    heights = [field["bbox"][3] - field["bbox"][1] for field in field_map.get("fields", [])
+               if not field.get("elements") and field.get("data_type") != "checkbox"]
+    return float(np.median(heights)) if heights else 0.0
+
+
+@functools.lru_cache(maxsize=256)
+def _ruled_lines(template: str, stamp: int, dpi: float, bbox: tuple[int, ...], target: float) -> tuple[int, ...]:
+    """Find the printed ruled lines in the box of the template: rows with dark ink across most of
+    the width, below the top border. Two or more lines are necessary, else return no lines."""
+    x1, y1, x2, y2 = bbox
+    scale = 72.0 / dpi
+    with fitz.open(template) as document:
+        pixmap = document[0].get_pixmap(dpi=round(dpi), colorspace=fitz.csGRAY,
+                                        clip=fitz.Rect(x1 * scale, y1 * scale, x2 * scale, y2 * scale))
+    gray = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(pixmap.height, pixmap.width)
+    inner = gray[:, round(pixmap.width * 0.05):max(1, round(pixmap.width * 0.95))] < min(200, int(np.median(gray)) - 40)
+    # Join the rows of a line that a scan turned a little.
+    padded = np.pad(inner, ((2, 2), (0, 0)))
+    inner = np.maximum.reduce([padded[shift:shift + inner.shape[0]] for shift in range(5)])
+    dark = np.flatnonzero(inner.mean(axis=1) > 0.6)
+    groups = np.split(dark, np.flatnonzero(np.diff(dark) > 1) + 1) if dark.size else []
+    rules = [round(float(group.mean()) * (y2 - y1) / max(1, pixmap.height)) for group in groups]
+    rules = [y for y in rules if y > MULTILINE_TOP_PAD * target]
+    if len(rules) < 2 or min(np.diff(rules)) < target * 0.5:
+        return ()
+    return tuple(rules)
+
+
+def field_layout(field: dict, field_map: dict, template_path: Path | None, target: float) -> LineLayout | None:
+    """Return the layout of a box that holds more than one line, or None. The optional mapping
+    attribute `line_height` (px at the mapping dpi) replaces the line pitch of the document."""
+    if field.get("elements") or field.get("data_type") in {"checkbox", "signature"}:
+        return None
+    target = float(field.get("line_height") or target)
+    x1, y1, x2, y2 = field["bbox"]
+    if target <= 0 or y2 - y1 < MULTILINE_MIN_LINES * target:
+        return None
+    rules = ()
+    if template_path is not None and template_path.is_file():
+        rules = _ruled_lines(str(template_path), template_path.stat().st_mtime_ns, float(field_map.get("dpi", 300)),
+                             (x1, y1, x2, y2), target)
+    return LineLayout(target, rules, optional=y2 - y1 < 2 * target)
+
+
+def _greedy_lines(widths: list[float], space: float, capacity: float) -> list[list[int]]:
+    lines, used = [], 0.0
+    for index, width in enumerate(widths):
+        if lines and used + space + width <= capacity:
+            lines[-1].append(index)
+            used += space + width
+        else:
+            lines.append([index])
+            used = width
+    return lines
+
+
+def plan_lines(count: int, measure: Callable[[float], tuple[list[float], float]], width: int, height: int,
+               layout: LineLayout) -> tuple[list[list[int]], list[tuple[int, int]]]:
+    """Wrap `count` words at word boundaries into the lines of the box. `measure(glyph_height)` gives
+    the word widths and the space width in px. Write at the line pitch of the document and make the
+    lines smaller as one unit until the words fit. Return the word groups and the (top, bottom) box
+    of each line."""
+    top, pitch = round(MULTILINE_TOP_PAD * layout.target), layout.target
+    # On ruled lines the glyphs are as high as the document pitch, if the space between the lines permits.
+    base = min(pitch, float(min(np.diff(layout.rules))) * MULTILINE_LEADING) if layout.rules else pitch * MULTILINE_LEADING
+    scale = 1.0
+    while True:
+        glyph = max(4.0, base * scale)
+        slots = len(layout.rules) or max(1, int((height - top) // (pitch * scale)))
+        widths, space = measure(glyph)
+        capacity = width - max(HANDWRITING_MIN_LEFT_PAD_PX, HANDWRITING_LEFT_PAD_HEIGHT_FRAC * glyph) - 0.04 * width
+        groups = _greedy_lines(widths, space, capacity)
+        if len(groups) <= slots or scale <= MULTILINE_MIN_SCALE:
+            break
+        scale = max(MULTILINE_MIN_SCALE, scale * MULTILINE_SCALE_STEP)
+    if len(groups) > slots:
+        # The words do not fit at the smallest size: fill the lines equally. The renderer then
+        # makes each line narrower.
+        capacity = (sum(widths) + space * (count - 1)) / slots
+        while len(groups := _greedy_lines(widths, space, capacity)) > slots:
+            capacity *= 1.04
+    size = round(glyph)
+    if layout.rules:
+        bottoms = [min(height, rule + round(0.2 * size)) for rule in layout.rules[:len(groups)]]
+    else:
+        bottoms = [min(height, top + round(index * pitch * scale) + size) for index in range(len(groups))]
+    return groups, [(max(0, bottom - size), bottom) for bottom in bottoms]
+
+
+def _handwriting_measure(text: str, style: HandwritingStyle, font_family: str) -> Callable[[float], tuple[list[float], float]]:
+    """Width of the words of `text` in font handwriting, from the glyph outlines (no random values).
+    The widths change in proportion to the glyph height."""
+    reference = 64
+    font_size = max(12, round(reference * 4 * 1.08 * style.size_scale))
+    stroke, fontfile = max(0, 1 + style.stroke_bias), str(font_path(font_family))
+    gap = reference * 0.025 * style.spacing_scale
+    outlines = {character: _glyph_outline(character, reference, font_size, stroke, fontfile) for character in set(text) - {" "}}
+    advance = {character: (outline[0].width / 4 * style.width_scale if outline else reference * 0.3) + gap
+               for character, outline in outlines.items()}
+    spans = [(centre / 4 - image.height / 8, centre / 4 + image.height / 8) for image, centre in filter(None, outlines.values())]
+    content = max(bottom for _, bottom in spans) - min(top for top, _ in spans) if spans else reference
+    shrink = min(1.0, reference / max(content, 1.0))
+    widths = [sum(advance[character] for character in word) * shrink for word in text.split()]
+    space = (reference * 0.3 + gap) * shrink
+    return lambda glyph: ([width * glyph / reference for width in widths], space * glyph / reference)
+
+
+def render_handwritten_lines(text: str, width: int, height: int, rng: random.Random, layout: LineLayout,
+                             style: HandwritingStyle | None = None, intensity: float = 0.65, medium: str = "pencil",
+                             font_family: str = DEFAULT_FONT_FAMILY) -> tuple[Image.Image, list[str]]:
+    """Write the text in font handwriting over the lines of a tall box, from the top or on the ruled lines."""
+    width, height = max(1, int(width)), max(1, int(height))
+    style = style or random_handwriting_style(rng, intensity, medium=medium)
+    words = text.split()
+    groups, boxes = plan_lines(len(words), _handwriting_measure(text, style, font_family), width, height, layout)
+    lines = [" ".join(words[index] for index in group) for group in groups]
+    canvas = Image.new("RGBA", (width, height), (*style.ink, 0))
+    for line, (top, bottom) in zip(lines, boxes):
+        canvas.alpha_composite(render_handwritten_text(line, width, bottom - top, rng, style=style, intensity=intensity,
+                                                       medium=medium, font_family=font_family), (0, top))
+    return canvas, lines
+
+
 def render_typed_text(text: str, width: int, height: int, font_family: str = DEFAULT_FONT_FAMILY) -> Image.Image:
     """GUI font-preview renderer. Kept in step with `insert_printed`'s placement rules
     (size from the digit-fill target, left padding proportional to height) so the
@@ -660,10 +815,10 @@ class _SampleReplay:
 
 
 def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
-                       model, rng: random.Random) -> tuple[Image.Image, dict]:
-    rendered = prepare_text(text, pen.text_policy)
+                       model, rng: random.Random, layout: LineLayout | None = None) -> tuple[Image.Image, dict]:
+    rendered = prepare_text(text, pen.text_policy, limit=None if layout else 160)
     chunks = [rendered]
-    if pen.model == "sjvasquez" and len(rendered) > 12:
+    if layout is not None or (pen.model == "sjvasquez" and len(rendered) > 12):
         chunks = _split_into_word_chunks(rendered, max_chunk_chars=12)
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     margin = max(1, round(height * 0.08))
@@ -697,6 +852,9 @@ def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
         total_points += len(points)
     above = max(baseline - top for *_, top, _, baseline in frames)
     below = max(bottom - baseline for *_, bottom, baseline in frames)
+    if layout is not None:
+        return _lay_neural_lines(chunks, chunk_points, frames, above, below, width, height, pen, layout,
+                                 {"backend": pen.model, "seeds": seeds, "stroke_points": total_points})
     natural_scale = max((height - 2 * padding) / max(above + below, 1), 1e-6)
     natural_widths = [natural_scale * max(right - left, 1) + 2 * padding for left, right, *_ in frames]
     word_gap = max(1, round(height * 0.28))
@@ -717,6 +875,33 @@ def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
         canvas.alpha_composite(image, (round(cursor), 0))
         cursor += final_width + word_gap * overall_scale
     return canvas, {"backend": pen.model, "seeds": seeds, "stroke_points": total_points, "chunk_scale": overall_scale}
+
+
+def _lay_neural_lines(chunks, chunk_points, frames, above, below, width, height, pen, layout, rendering):
+    """Put the chunks of a tall box into lines. All chunks keep one scale and one baseline."""
+    padding = pen.width / 2 + 2
+
+    def measure(glyph):
+        scale = max((glyph - 2 * padding) / max(above + below, 1), 1e-6)
+        return [scale * max(right - left, 1) + 2 * padding for left, right, *_ in frames], max(1, round(glyph * 0.28))
+
+    groups, boxes = plan_lines(len(chunks), measure, width, height, layout)
+    glyph = boxes[0][1] - boxes[0][0]
+    widths, gap = measure(glyph)
+    margin = max(1, round(glyph * 0.08))
+    totals = [sum(widths[index] for index in group) + gap * (len(group) - 1) for group in groups]
+    overall_scale = float(min(1.0, max(4, width - margin) / max(totals)))
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    for group, (top, bottom) in zip(groups, boxes):
+        cursor = margin
+        for index in group:
+            (points, seed), (*_, baseline) = chunk_points[index], frames[index]
+            final_width = max(4, round(widths[index] * overall_scale), round(2 * padding) + 4)
+            image = render_strokes(points, final_width, bottom - top, pen, seed, (baseline - above, baseline + below))
+            canvas.alpha_composite(image, (round(cursor), top))
+            cursor += final_width + gap * overall_scale
+    lines = [" ".join(chunks[index] for index in group) for group in groups]
+    return canvas, {**rendering, "chunk_scale": overall_scale, "lines": lines}
 
 
 # Candidate "slash_set": draw the mark as the "/" and/or "\" glyph of a handwriting font
@@ -1261,21 +1446,65 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
         page.insert_text((x0, baseline_y), text, fontsize=size, fontname=fontname, color=color, **kwargs)
         return True
 
+    def insert_printed_lines(rect_values: list[int], text: str, layout: LineLayout, fontname: str,
+                             color: tuple[float, float, float], fontfile: str | None = None) -> list[str] | None:
+        """Place typed/printed text over the lines of a tall box with one font size. Return the
+        lines, or None, without drawing anything, if a line cannot fit at the hard floor."""
+        x1, y1, x2, y2 = rect_values
+        face = _typed_font_face(fontfile, fontname)
+        digit_ratio = _typed_digit_height_ratio(fontfile) if fontfile else 0.62
+        words = text.split()
+
+        def size_for(glyph: float) -> float:
+            return max(TYPED_MIN_FONT_SIZE, min(TYPED_GENERIC_MAX_SIZE, TYPED_TARGET_DIGIT_HEIGHT_FRAC * glyph * point_scale / digit_ratio))
+
+        def measure(glyph: float) -> tuple[list[float], float]:
+            size = size_for(glyph)
+            return [face.text_length(word, fontsize=size) / point_scale for word in words], face.text_length(" ", fontsize=size) / point_scale
+
+        groups, boxes = plan_lines(len(words), measure, x2 - x1, y2 - y1, layout)
+        lines = [" ".join(words[index] for index in group) for group in groups]
+        rects = [fitz.Rect(x1 * point_scale, (y1 + top) * point_scale, x2 * point_scale, (y1 + bottom) * point_scale) for top, bottom in boxes]
+        left_pad = max(TYPED_MIN_LEFT_PAD_PT, min(rects[0].height * TYPED_LEFT_PAD_HEIGHT_FRAC, rects[0].width * TYPED_LEFT_PAD_MAX_WIDTH_FRAC))
+        available = max(1.0, rects[0].width - left_pad - TYPED_RIGHT_PAD_PT)
+        size = size_for(boxes[0][1] - boxes[0][0])
+        while max(face.text_length(line, fontsize=size) for line in lines) > available and size > TYPED_HARD_FLOOR:
+            size = max(TYPED_HARD_FLOOR, size * TYPED_SHRINK_STEP)
+        if max(face.text_length(line, fontsize=size) for line in lines) > available:
+            return None
+        for line, rect in zip(lines, rects):
+            insert_printed(rect, line, size, fontname, color, fontfile=fontfile)
+        return lines
+
+    def printed(rect: fitz.Rect, rect_values: list[int], text: str, font_size: float | None, layout: LineLayout | None,
+                fontname: str, color: tuple[float, float, float], fontfile: str | None = None) -> tuple[str, dict]:
+        if layout is None:
+            if insert_printed(rect, text, font_size, fontname, color, fontfile=fontfile):
+                return text, {}
+        elif (lines := insert_printed_lines(rect_values, text, layout, fontname, color, fontfile=fontfile)) is not None:
+            return text, {"rendering": {"lines": lines}}
+        return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
+                    "requested_value": text}
+
+    def handwritten(text: str, width: int, height: int, rng_: random.Random, layout: LineLayout | None,
+                    numeric: bool = False, **options) -> tuple[Image.Image, list[str] | None]:
+        if layout is None:
+            return (render_handwritten_numeric if numeric else render_handwritten_text)(text, width, height, rng_, **options), None
+        return render_handwritten_lines(text, width, height, rng_, layout, **({"medium": "pen"} if numeric else {}), **options)
+
     def insert_value(rect_values: list[int], text: str, font_size: float | None = None,
                      pencil: bool = False, force_printed: bool = False,
-                     content_class: str | None = None) -> tuple[str, dict]:
+                     content_class: str | None = None, layout: LineLayout | None = None) -> tuple[str, dict]:
         x1, y1, x2, y2 = rect_values
         rect = fitz.Rect(x1 * point_scale, y1 * point_scale, x2 * point_scale, y2 * point_scale)
         if not text.strip():
             return text, {}
+        if layout is not None and not layout.applies(text, x2 - x1):
+            layout = None
         has_class_override = content_class is not None and (content_class in content_pens or content_class in content_fonts)
         if not has_class_override:
             if typed_font:
-                fits = insert_printed(rect, text, font_size, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path)
-                if fits:
-                    return text, {}
-                return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
-                            "requested_value": text}
+                return printed(rect, rect_values, text, font_size, layout, typed_alias, (0.05, 0.05, 0.05), fontfile=typed_path)
             active_pen = numeric_neural_pen if is_numeric_text(text) else text_neural_pen
             neural_enabled = handwriting if is_numeric_text(text) else text_handwriting
             local_font_family = font_family
@@ -1284,11 +1513,8 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             neural_enabled = active_pen is not None
             local_font_family, local_typed, local_typed_alias, local_typed_path = _resolve_font(content_class)
             if local_typed and active_pen is None:
-                fits = insert_printed(rect, text, font_size, local_typed_alias, (0.05, 0.05, 0.05), fontfile=local_typed_path)
-                if fits:
-                    return text, {}
-                return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
-                            "requested_value": text}
+                return printed(rect, rect_values, text, font_size, layout, local_typed_alias, (0.05, 0.05, 0.05),
+                               fontfile=local_typed_path)
         if (
             not force_printed
             and active_pen is not None
@@ -1297,9 +1523,9 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             model = handwriting_models[active_pen.model]
             rendered, failure = text, None
             try:
-                rendered = prepare_text(text, active_pen.text_policy)
+                rendered = prepare_text(text, active_pen.text_policy, limit=None if layout else 160)
                 if len(rendered) > 1:
-                    image, rendering = render_neural_text(rendered, x2-x1, y2-y1, active_pen, model, render_rng)
+                    image, rendering = render_neural_text(rendered, x2-x1, y2-y1, active_pen, model, render_rng, layout)
             except ValueError as exc:
                 failure = exc
             if failure is not None or len(rendered) == 1:
@@ -1310,13 +1536,15 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                 font_rng = rng if failure is not None else render_rng
                 fallback_style = replace(random_handwriting_style(font_rng, handwriting_intensity, medium="pen"),
                                          ink=_hex_to_rgb(active_pen.color))
-                image = render_handwritten_text(
-                    rendered, max(1, x2-x1), max(1, y2-y1), font_rng,
+                image, lines = handwritten(
+                    rendered, max(1, x2-x1), max(1, y2-y1), font_rng, layout if len(rendered) > 1 else None,
                     style=fallback_style, intensity=handwriting_intensity, medium="pen",
                     font_family=DEFAULT_FONT_FAMILY if is_typed(font_family) else font_family,
                 )
                 rendering = ({"backend": "font", "fallback": {"from_backend": active_pen.model, "reason": str(failure)}}
                              if failure is not None else {"backend": "font", "reason": "single_character", "from_backend": active_pen.model})
+                if lines is not None:
+                    rendering["lines"] = lines
             stream = io.BytesIO()
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
@@ -1332,42 +1560,42 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
             if not force_printed and not local_typed and content_handwriting.get(content_class, True):
                 local_intensity = content_intensity.get(content_class, handwriting_intensity)
                 if is_numeric_text(text):
-                    image = render_handwritten_numeric(
-                        text, max(1, x2-x1), max(1, y2-y1), rng,
+                    image, lines = handwritten(
+                        text, max(1, x2-x1), max(1, y2-y1), rng, layout, numeric=True,
                         style=handwriting_style, intensity=local_intensity, font_family=local_font_family,
                     )
                 else:
-                    image = render_handwritten_text(
-                        text, max(1, x2-x1), max(1, y2-y1), rng,
+                    image, lines = handwritten(
+                        text, max(1, x2-x1), max(1, y2-y1), rng, layout,
                         style=pencil_style, intensity=local_intensity, medium="pencil", font_family=local_font_family,
                     )
                 stream = io.BytesIO()
                 image.save(stream, format="PNG")
                 page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
-                return text, {}
+                return text, {} if lines is None else {"rendering": {"lines": lines}}
         elif not force_printed and handwriting and is_numeric_text(text):
-            image = render_handwritten_numeric(
-                text, max(1, x2-x1), max(1, y2-y1), rng,
+            image, lines = handwritten(
+                text, max(1, x2-x1), max(1, y2-y1), rng, layout, numeric=True,
                 style=handwriting_style, intensity=handwriting_intensity, font_family=font_family,
             )
             stream = io.BytesIO()
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
-            return text, {}
+            return text, {} if lines is None else {"rendering": {"lines": lines}}
         elif not force_printed and text_handwriting and pencil:
-            image = render_handwritten_text(
-                text, max(1, x2-x1), max(1, y2-y1), rng,
+            image, lines = handwritten(
+                text, max(1, x2-x1), max(1, y2-y1), rng, layout,
                 style=pencil_style, intensity=handwriting_intensity, medium="pencil", font_family=font_family,
             )
             stream = io.BytesIO()
             image.save(stream, format="PNG")
             page.insert_image(rect, stream=stream.getvalue(), overlay=True, keep_proportion=False)
-            return text, {}
-        fits = insert_printed(rect, text, font_size, "helv", (0.05, 0.15, 0.55))
-        if fits:
-            return text, {}
-        return "", {"blank": True, "blank_reason": "Valor não coube no campo em nenhum tamanho legível",
-                    "requested_value": text}
+            return text, {} if lines is None else {"rendering": {"lines": lines}}
+        return printed(rect, rect_values, text, font_size, layout, "helv", (0.05, 0.15, 0.55))
+
+    line_target = _line_target(field_map)
+    layouts = {str(field["field_id"]): layout for field in selected
+               if (layout := field_layout(field, field_map, template_path, line_target)) is not None}
 
     def fill_fields():
         for field in field_map.get("fields", []):
@@ -1461,6 +1689,7 @@ def generate_document(template_path: Path, field_map: dict, selected_ids: set[st
                 pencil=field.get("data_type", "text") in TEXT_TYPES and not is_numeric_text(value),
                 force_printed=bool(field.get("render_as_printed", False)),
                 content_class=classify_content(field.get("data_type", "text"), binding.key if binding else None, value),
+                layout=layouts.get(field_id),
             )
             values[field_id] = value
             entries.append({"field_id": field_id, "label": field.get("label", ""), "value": value, "bbox": field["bbox"], **semantic, **meaning,

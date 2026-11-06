@@ -99,13 +99,14 @@ def unsupported_characters(text: str) -> list[str]:
     return sorted(set(text) - set(ALPHABET[1:]))
 
 
-def prepare_text(text: str, policy: str = "strict") -> str:
+def prepare_text(text: str, policy: str = "strict", limit: int | None = 160) -> str:
+    """Apply the policy and check the text. A field with several lines sets no `limit`: its chunks are short."""
     text = apply_text_policy(text, policy)
     unsupported = unsupported_characters(text)
     if unsupported:
         raise ValueError(f"Model cannot write {unsupported!r}; use --text-policy normalize or the font backend")
-    if not text.strip() or len(text) > 160:
-        raise ValueError("Neural handwriting requires 1 to 160 characters with nonblank text")
+    if not text.strip() or (limit is not None and len(text) > limit):
+        raise ValueError(f"Neural handwriting requires 1 to {limit or 'more'} characters with nonblank text")
     return text
 
 

@@ -14,12 +14,12 @@ import numpy as np
 from PIL import Image
 
 from src.synthetic_dataset import (
-    _apply_ballpoint_texture, _FastImagePage, _uniform_array, apply_shared_rules, element_values, generate_dataset, is_numeric_text,
-    random_handwriting_style, random_value, render_checkbox_mark,
-    render_handwritten_numeric, render_handwritten_text, render_neural_text, typed_value,
+    _apply_ballpoint_texture, _FastImagePage, _line_target, _uniform_array, apply_shared_rules, element_values, field_layout,
+    generate_dataset, is_numeric_text, LineLayout, plan_lines, random_handwriting_style, random_value, render_checkbox_mark,
+    render_handwritten_lines, render_handwritten_numeric, render_handwritten_text, render_neural_text, typed_value,
 )
 from src.field_rules import DNV_PATTERN, cpf, dnv_structure_errors, format_date, rule_errors
-from src.neural_handwriting import NeuralPen
+from src.neural_handwriting import NeuralPen, prepare_text
 
 
 class SyntheticValueTests(unittest.TestCase):
@@ -604,6 +604,119 @@ class SyntheticDatasetTests(unittest.TestCase):
 
         build.assert_called_once_with("dnv", 1)
         self.assertEqual(generated[0].pdf_path.parent, output)
+
+
+QUALIFICATION = ("Daniel Machado Souza, brasileiro, solteiro, pedreiro, nascido em 08/02/1976 em Brasília/DF, filho de "
+                 "Tatiane Moreira Machado e Samuel Araújo Souza; Davi Moreira Ribeiro, brasileira, divorciada, comerciante, "
+                 "nascida em 21/04/1978 em Recife/PE, filha de Tatiane Fernandes Moreira e Marcelo Almeida Ribeiro.")
+
+
+def _ink_rows(image):
+    return np.flatnonzero(np.asarray(image.getchannel("A")).max(axis=1) > 40)
+
+
+class MultiLineLayoutTests(unittest.TestCase):
+    def test_plans_lines_at_word_boundaries_from_the_top(self):
+        words = "um dois tres quatro cinco seis sete oito nove dez onze doze".split()
+        groups, boxes = plan_lines(len(words), lambda glyph: ([len(word) * glyph * 0.5 for word in words], glyph * 0.3),
+                                   400, 300, LineLayout(50))
+        self.assertEqual([index for group in groups for index in group], list(range(len(words))))
+        self.assertGreater(len(groups), 1)
+        self.assertEqual(boxes[0], (12, 54))
+        self.assertTrue(all(b[0] >= a[1] for a, b in zip(boxes, boxes[1:])))
+        self.assertLessEqual(boxes[-1][1], 300)
+
+    def test_makes_lines_smaller_until_the_text_fits_the_box(self):
+        words = ["palavra"] * 60
+        groups, boxes = plan_lines(len(words), lambda glyph: ([7 * glyph * 0.5] * 60, glyph * 0.3), 600, 200, LineLayout(50))
+        self.assertEqual(sum(map(len, groups)), 60)
+        self.assertLess(boxes[0][1] - boxes[0][0], 42)
+        self.assertLessEqual(boxes[-1][1], 200)
+
+    def test_short_text_in_tall_box_keeps_the_document_line_height(self):
+        single = render_handwritten_text("Sem averbações", 1800, 316, random.Random(3))
+        image, lines = render_handwritten_lines("Sem averbações", 1800, 316, random.Random(3), LineLayout(92))
+        self.assertEqual(lines, ["Sem averbações"])
+        rows = _ink_rows(image)
+        self.assertLessEqual(rows[-1] - rows[0], 92)
+        self.assertGreater(np.ptp(_ink_rows(single)), 150)
+        self.assertLess(rows[0], 92)
+
+    def test_long_text_goes_over_several_lines(self):
+        image, lines = render_handwritten_lines(QUALIFICATION, 1807, 500, random.Random(5), LineLayout(92))
+        self.assertGreaterEqual(len(lines), 4)
+        self.assertEqual(" ".join(lines), QUALIFICATION)
+        self.assertGreater(np.ptp(_ink_rows(image)), 300)
+
+    def test_decides_which_boxes_hold_more_than_one_line(self):
+        field = lambda height, **extra: {"field_id": "x", "data_type": "text", "bbox": [0, 0, 900, height], **extra}
+        self.assertIsNone(field_layout(field(60), {}, None, 50))
+        self.assertTrue(field_layout(field(80), {}, None, 50).optional)
+        self.assertEqual(field_layout(field(100), {}, None, 50), LineLayout(50.0))
+        self.assertIsNone(field_layout(field(200, data_type="signature"), {}, None, 50))
+        self.assertIsNone(field_layout(field(200, line_height=150), {}, None, 50))
+        self.assertEqual(_line_target({"fields": [field(40), field(50), field(300), {"bbox": [0, 0, 9, 9], "elements": [{}]}]}), 50)
+
+    def test_box_lower_than_two_lines_wraps_only_long_text(self):
+        layout = LineLayout(92, optional=True)
+        self.assertFalse(layout.applies("Daniel Machado Souza e Davi Moreira Ribeiro", 1730))
+        self.assertTrue(layout.applies(QUALIFICATION, 1807))
+        self.assertFalse(LineLayout(92).applies("X", 1807))
+
+    def test_finds_printed_ruled_lines_in_the_box(self):
+        with tempfile.TemporaryDirectory() as directory:
+            template = Path(directory) / "template.pdf"
+            with fitz.open() as document:
+                page = document.new_page(width=300, height=300)
+                for y in (60, 90, 120):
+                    page.draw_line((20, y), (280, y), width=1)
+                document.save(template)
+            mapping = {"dpi": 72}
+            layout = field_layout({"field_id": "x", "bbox": [20, 40, 280, 124]}, mapping, template, 25)
+            self.assertEqual(len(layout.rules), 3)
+            self.assertTrue(all(abs(rule - y) <= 2 for rule, y in zip(layout.rules, (20, 50, 80))))
+            plain = field_layout({"field_id": "x", "bbox": [20, 130, 280, 214]}, mapping, template, 25)
+            self.assertEqual(plain.rules, ())
+
+    def test_neural_chunks_go_over_lines_with_one_scale(self):
+        model = unittest.mock.Mock()
+        model.sample.side_effect = lambda text, *_: np.array(
+            [[0, 0, 0], *[[4 * i + 2, (i % 2) * 6, 0] for i in range(len(text))], [4 * len(text) + 4, 0, 1]], dtype=float)
+        pen = NeuralPen(model="aaron1259", writer=1, text_policy="normalize")
+        image, metadata = render_neural_text(QUALIFICATION, 1807, 500, pen, model, random.Random(7), LineLayout(92))
+        self.assertEqual(image.size, (1807, 500))
+        self.assertGreater(len(metadata["lines"]), 1)
+        self.assertEqual(" ".join(metadata["lines"]), prepare_text(QUALIFICATION, "normalize", limit=None))
+        self.assertTrue(all(len(call.args[0]) <= 12 or " " not in call.args[0] for call in model.sample.call_args_list))
+        self.assertGreater(np.ptp(_ink_rows(image)), 150)
+
+    def test_ground_truth_keeps_full_text_and_records_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / "template.pdf"
+            with fitz.open() as document:
+                document.new_page(width=600, height=400)
+                document.save(template)
+            fields = [{"field_id": f"line{index}", "data_type": "text", "bbox": [40, 40 + 100 * index, 900, 132 + 100 * index],
+                       "validation": {"allowed_values": ["Sem alteração"]}} for index in range(3)]
+            fields.append({"field_id": "qualification", "data_type": "text", "bbox": [40, 400, 2400, 900],
+                           "validation": {"allowed_values": [QUALIFICATION]}})
+            mapping = root / "mapping.json"
+            mapping.write_text(json.dumps({"template_id": "tall", "dpi": 300, "page_size_px": [2500, 1667], "fields": fields}),
+                               encoding="utf-8")
+            for options in ({}, {"handwriting": False, "text_handwriting": False}):
+                generated = generate_dataset(template, mapping, {f["field_id"] for f in fields}, root / str(len(options)), 1,
+                                             seed=4, **options)
+                by_id = {f["field_id"]: f for f in json.loads(generated[0].json_path.read_text())["fields"]}
+                self.assertEqual(by_id["qualification"]["value"], QUALIFICATION)
+                lines = by_id["qualification"]["rendering"]["lines"]
+                self.assertGreater(len(lines), 1)
+                self.assertEqual(" ".join(lines), QUALIFICATION)
+                self.assertNotIn("rendering", by_id["line0"])
+                if options:
+                    with fitz.open(generated[0].pdf_path) as result:
+                        text = result[0].get_text()
+                    self.assertTrue(all(line in text for line in lines))
 
 
 class FastImagePageTests(unittest.TestCase):
