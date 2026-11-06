@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use OCRSD in your research, please cite it with the metadata in this file."
+type: software
+title: "OCRSD: Open Civil Registry Synthetic Dataset"
+abstract: >-
+  OCRSD generates synthetic Brazilian civil registry documents with ground
+  truth for OCR research. It maps the fields of PDF templates, fills them with
+  coherent fictitious data in handwritten, neural or typed styles, and adds
+  scan effects. It also compares OCR engines and redacts fields in PDFs.
+authors:
+  - family-names: "Siqueira"
+    given-names: "Tiago Faustino de"
+    affiliation: "Universidade Federal de Santa Catarina"
+repository-code: "https://github.com/siqueiratf/ocrsd"
+url: "https://ocrsd.onrcpn.org.br"
+license: MIT
+version: "1.2.0"
+date-released: "2026-11-06"
+keywords:
+  - OCR
+  - synthetic data
+  - civil registry
+  - document generation
+  - handwriting synthesis

@@ -294,3 +294,31 @@ O release [V1](https://github.com/siqueiratf/ocrsd/releases/tag/V1) corresponde 
 versão Python `1.0.0`. Seu changelog está em [CHANGELOG.md](CHANGELOG.md).
 O workflow de publicação valida os documentos e publica as notas, o arquivo do
 código-fonte e documentos sintéticos de validação quando uma tag `V*` é enviada.
+
+## How to cite
+
+If you use OCRSD in academic work, please cite the software. The
+[`CITATION.cff`](CITATION.cff) file holds the citation metadata, and GitHub
+shows it in the "Cite this repository" menu.
+
+> Siqueira, T. F. de. *OCRSD: Open Civil Registry Synthetic Dataset* (version 1.2.0) [Computer software]. Universidade Federal de Santa Catarina, 2026. https://github.com/siqueiratf/ocrsd
+
+```bibtex
+@software{siqueira_ocrsd_2026,
+  author    = {Siqueira, Tiago Faustino de},
+  title     = {{OCRSD: Open Civil Registry Synthetic Dataset}},
+  year      = {2026},
+  version   = {1.2.0},
+  publisher = {Universidade Federal de Santa Catarina},
+  url       = {https://github.com/siqueiratf/ocrsd}
+}
+```
+
+Each release on GitHub also gets a DOI on Zenodo. Cite the DOI of the version
+that you used. To cite OCRSD in general, use the concept DOI, which always
+points to the latest version.
+
+## License
+
+The OCRSD source code is available under the [MIT License](LICENSE). The fonts
+in `assets/fonts` keep their own licenses, which are in `assets/fonts/LICENSES`.
