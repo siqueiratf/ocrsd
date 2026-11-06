@@ -387,6 +387,30 @@ class RenderNeuralTextChunkingTests(unittest.TestCase):
         self.assertGreater(two_bbox[2] - two_bbox[0], single_bbox[2] - single_bbox[0])
 
 
+    def test_chunks_share_one_scale_and_baseline(self):
+        from src.synthetic_dataset import render_neural_text
+
+        class Model:
+            def sample(self, text, writer, bias, seed):
+                # Letters touch the baseline y=0; a "g" adds a descender to y=10.
+                points = [[0.0, -5.0, 0.0]]
+                for index, character in enumerate(text):
+                    x = index * 6.0
+                    points += [[x + 1, 0.0, 0.0], [x + 3, -5.0, 0.0]] + ([[x + 4, 10.0, 0.0], [x + 5, -5.0, 0.0]] if character == "g" else [])
+                points[-1][2] = 1.0
+                return np.array(points, dtype=np.float32)
+
+        pen = NeuralPen(model="sjvasquez", pressure=0, width=1)
+        canvas, _ = render_neural_text("aaaaaaaaaaa aagaaaagaaaa", 3000, 60, pen, Model(), random.Random(1))
+        alpha = np.asarray(canvas.getchannel("A"))
+        columns = np.flatnonzero(alpha.any(axis=0))
+        split = columns[np.argmax(np.diff(columns))] + 1
+        first, second = alpha[:, :split], alpha[:, split:]
+        rows = lambda part: np.flatnonzero(part.any(axis=1))
+        self.assertAlmostEqual(rows(first)[0], rows(second)[0], delta=2)
+        self.assertLess(rows(first)[-1], rows(second)[-1] - 10)
+
+
 class PerFieldFallbackTests(unittest.TestCase):
     def test_neural_failure_falls_back_to_font_for_that_field_only(self):
         with tempfile.TemporaryDirectory() as temporary:

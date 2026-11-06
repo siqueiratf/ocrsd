@@ -668,13 +668,10 @@ def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     margin = max(1, round(height * 0.08))
     padding = pen.width / 2 + 2
-    # Height-driven natural scale per chunk: how big the model would draw this
-    # chunk if it had unlimited horizontal room, scaled only so its ink fits the
-    # field HEIGHT (never stretched/squashed to fill a pre-assigned width share).
-    chunk_points = []
-    chunk_scales = []
-    chunk_ranges = []
-    seeds = []
+    # All chunks of the field get one scale and one baseline (the median of the lowest points of
+    # the letters), thus "Registro" with a "g" is not smaller than "Cartorio de". The frame of
+    # the chunks above and below the baseline fits the field HEIGHT; one chunk keeps its ink.
+    chunk_points, frames, seeds = [], [], []
     total_points = 0
     for chunk in chunks:
         last_error = None
@@ -691,28 +688,32 @@ def render_neural_text(text: str, width: int, height: int, pen: NeuralPen,
         points = trim_trailing_stray_mark(points, pen.width)
         visible = points[:, :2]
         low, high = visible.min(axis=0), visible.max(axis=0)
-        range_xy = np.maximum(high - low, 1)
-        natural_scale = max((height - 2 * padding) / range_xy[1], 1e-6)
+        y = visible[:, 1]
+        bottoms = y[1:-1][(y[1:-1] >= y[:-2]) & (y[1:-1] >= y[2:])]
+        baseline = float(np.median(bottoms)) if bottoms.size else float(high[1])
         chunk_points.append((points, seed))
-        chunk_scales.append(natural_scale)
-        chunk_ranges.append(range_xy)
+        frames.append((float(low[0]), float(high[0]), float(low[1]), float(high[1]), baseline))
         seeds.append(seed)
         total_points += len(points)
-    natural_widths = [scale * range_xy[0] + 2 * padding for scale, range_xy in zip(chunk_scales, chunk_ranges)]
+    above = max(baseline - top for *_, top, _, baseline in frames)
+    below = max(bottom - baseline for *_, bottom, baseline in frames)
+    natural_scale = max((height - 2 * padding) / max(above + below, 1), 1e-6)
+    natural_widths = [natural_scale * max(right - left, 1) + 2 * padding for left, right, *_ in frames]
     word_gap = max(1, round(height * 0.28))
     natural_total = sum(natural_widths) + word_gap * max(0, len(natural_widths) - 1)
     available = max(4, width - margin)
     overall_scale = float(min(1.0, available / natural_total)) if natural_total > 0 else 1.0
     cursor = margin
-    for (points, seed), natural_width, range_xy in zip(chunk_points, natural_widths, chunk_ranges):
+    for (points, seed), natural_width, (*_, baseline) in zip(chunk_points, natural_widths, frames):
         final_width = max(4, round(natural_width * overall_scale))
+        frame = None if len(chunks) == 1 else (baseline - above, baseline + below)
         try:
-            image = render_strokes(points, final_width, height, pen, seed)
+            image = render_strokes(points, final_width, height, pen, seed, frame)
         except ValueError:
             # The natural box was narrower than the pen padding allows; fall back
             # to a slightly wider box rather than losing the whole chunk.
             final_width = max(final_width, round(2 * padding) + 4)
-            image = render_strokes(points, final_width, height, pen, seed)
+            image = render_strokes(points, final_width, height, pen, seed, frame)
         canvas.alpha_composite(image, (round(cursor), 0))
         cursor += final_width + word_gap * overall_scale
     return canvas, {"backend": pen.model, "seeds": seeds, "stroke_points": total_points, "chunk_scale": overall_scale}

@@ -259,7 +259,9 @@ def trim_trailing_stray_mark(points: np.ndarray, pen_width: float) -> np.ndarray
 
 
 def render_strokes(points: np.ndarray, width: int, height: int, pen: NeuralPen,
-                   seed: int) -> Image.Image:
+                   seed: int, frame: tuple[float, float] | None = None) -> Image.Image:
+    """Draw the trajectory in the box. `frame` is the (top, bottom) model y range to fit
+    in the height; by default it is the y range of the ink."""
     if width < 4 or height < 4 or points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all():
         raise ValueError("Invalid image dimensions or pen trajectory")
     segments = [(a[:2], b[:2]) for a, b in zip(points[:-1], points[1:]) if not a[2]]
@@ -267,6 +269,8 @@ def render_strokes(points: np.ndarray, width: int, height: int, pen: NeuralPen,
         raise ValueError("Model generated no visible strokes")
     visible = np.asarray(segments)
     low, high = visible.min(axis=(0, 1)), visible.max(axis=(0, 1))
+    if frame is not None:
+        low, high = np.array([low[0], frame[0]]), np.array([high[0], frame[1]])
     padding = pen.width / 2 + 2
     available = np.array([width, height]) - 2 * padding
     if (available <= 0).any():
