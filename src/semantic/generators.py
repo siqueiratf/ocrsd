@@ -13,10 +13,11 @@ from src.semantic.data import (ADULT_ESTABLISHMENT_NAMES, ANOMALIES, COMPLEMENTS
                                ISSUERS, LOCATION_PROFILES, MALE_ASSOCIATED_FIRST_NAMES, OCCUPATIONS, OCCUPATION_CODES,
                                OCCUPATION_GENDER, OCCUPATION_OPPOSITE_FORM, OTHER_HEALTH_ESTABLISHMENT_NAMES,
                                PROFILES_BY_IBGE, REGION_BY_UF, REGISTRY_OFFICE_NAMES, SURNAMES)
-from src.semantic.present import format_matricula
+from src.semantic.present import format_matricula, matricula_check_digits
 from src.semantic.cause_chains import CAUSE_CHAINS, CHILD_PART2_POOL, PART2_POOL, format_interval
 
 EVENT_START, EVENT_END = date(1980, 1, 1), REFERENCE_END
+MATRICULA_START = date(2010, 1, 1)
 MINUTES = tuple(time(minute // 60, minute % 60) for minute in range(24 * 60))
 
 RACES = ("Branca", "Preta", "Amarela", "Parda", "Indígena")
@@ -280,6 +281,18 @@ def stable_digits(width: int, *parts: str) -> str:
 
 def digits(rng: random.Random, width: int) -> str:
     return "".join(str(rng.randrange(10)) for _ in range(width))
+
+
+def office_cns(record, name: str, ibge: str) -> str:
+    """The CNS of a registry office: the same for each record that names the same office, or the CNS
+    that the caller requires, so that the matrícula and the printed CNS agree."""
+    required = record.required_values("office.cns") if hasattr(record, "required_values") else None
+    return min(required) if required else stable_digits(6, "cns", name, ibge)
+
+
+def matricula(cns: str, year: int, livro: str, book: int, page: int, term: int) -> str:
+    body = f"{cns}0155{year:04d}{livro}{book:05d}{page:03d}{term:07d}"
+    return body + matricula_check_digits(body)
 
 
 def cpf_digits(rng: random.Random) -> str:
@@ -756,7 +769,7 @@ def guardian(record, rng: random.Random) -> dict[str, Any]:
 def twin(record, rng: random.Random) -> dict[str, Any]:
     if not record.value("birth.twins"):
         return {"twin.name_matricula": None}
-    newborn_name, matricula = record.value("newborn.name"), record.value("registration.matricula")
+    newborn_name, registration_matricula = record.value("newborn.name"), record.value("registration.matricula")
     sex = rng.choice(("F", "M"))
     name = newborn_name
     for _ in range(128):
@@ -765,8 +778,8 @@ def twin(record, rng: random.Random) -> dict[str, Any]:
             break
     else:
         raise ValueError("Não foi possível gerar um gêmeo distinto após 128 tentativas")
-    sibling = matricula[:23] + f"{int(matricula[23:30]) % 9999999 + 1:07d}" + digits(rng, 2)
-    return {"twin.name_matricula": f"{name}, {format_matricula(sibling)}"}
+    body = registration_matricula[:23] + f"{int(registration_matricula[23:30]) % 9999999 + 1:07d}"
+    return {"twin.name_matricula": f"{name}, {format_matricula(body + matricula_check_digits(body))}"}
 
 
 def parents(record, rng: random.Random) -> dict[str, Any]:
@@ -823,11 +836,10 @@ def registration(record, rng: random.Random) -> dict[str, Any]:
     weights = office_weights(born_in, lives_in, 0.6, 0.35)
     office = pick_profile(record, rng, "registration.office", weights, ("municipality", "uf"))
     name = record.pick(rng, "registration.office.name", REGISTRY_OFFICE_NAMES)
-    term = f"{rng.randint(1, 250000):07d}"
-    matricula = "".join((stable_digits(6, "cns", name, office["ibge"]), "01", "55", f"{day.year:04d}", "1",
-                         f"{rng.randint(1, 400):05d}", f"{rng.randint(1, 300):03d}", term, digits(rng, 2)))
+    term = rng.randint(1, 250000)
+    code = matricula(office_cns(record, name, office["ibge"]), day.year, "1", rng.randint(1, 400), rng.randint(1, 300), term)
     return {
-        "registration.date": day, "registration.number": str(int(term)), "registration.matricula": matricula,
+        "registration.date": day, "registration.number": str(term), "registration.matricula": code,
         "registration.dnv_number": record.draw("registration.dnv_number", rng,
                                                lambda: DNV_TEST_PREFIX + digits(rng, 8) + digits(rng, 1)),
         "registration.office.name": name, "registration.office.municipality": office["city"],
@@ -1287,17 +1299,18 @@ def death_registration(record, rng: random.Random) -> dict[str, Any]:
     residence_profile = profile_of(record, "deceased.residence")
     office = pick_profile(record, rng, "death_registration.office",
                           office_weights(death_profile, residence_profile, 0.75, 0.18), ("municipality", "uf"))
+    office_name = record.pick(rng, "death_registration.office.name", REGISTRY_OFFICE_NAMES)
     values = {
         "death_registration.date": day,
         "death_registration.number": record.draw("death_registration.number", rng, lambda: str(rng.randint(1, 250000))),
-        "death_registration.office.name": record.pick(rng, "death_registration.office.name", REGISTRY_OFFICE_NAMES),
+        "death_registration.office.name": office_name,
         "death_registration.office.municipality": office["city"], "death_registration.office.uf": office["uf"],
         "death_registration.place.summary": f"{office['city']} - {office['uf']}",
     }
     sex = rng.choice(("F", "M"))
     values["death_registration.declarant_name"] = record.draw("death_registration.declarant_name", rng,
                                                                lambda: person_name(record, rng, sex))
-    values["death_registration.matricula"] = build_matricula(rng, day.year, "4")
+    values["death_registration.matricula"] = build_matricula(rng, office_cns(record, office_name, office["ibge"]), day.year, "4")
     values["death_registration.witness1_name"] = record.draw("death_registration.witness1_name", rng,
                                                               lambda: person_name(record, rng, rng.choice(("F", "M"))))
     values["death_registration.witness2_name"] = record.draw("death_registration.witness2_name", rng,
@@ -1344,10 +1357,8 @@ def certifier(record, rng: random.Random) -> dict[str, Any]:
     }
 
 
-def build_matricula(rng: random.Random, year: int, livro: str) -> str:
-    term = f"{rng.randint(1, 250000):07d}"
-    return "".join((digits(rng, 6), "01", "55", f"{year:04d}", livro, f"{rng.randint(1, 400):05d}",
-                    f"{rng.randint(1, 300):03d}", term, digits(rng, 2)))
+def build_matricula(rng: random.Random, cns: str, year: int, livro: str) -> str:
+    return matricula(cns, year, livro, rng.randint(1, 400), rng.randint(1, 300), rng.randint(1, 250000))
 
 
 def burial(record, rng: random.Random) -> dict[str, Any]:
@@ -1456,7 +1467,8 @@ def marriage_registration(record, rng: random.Random) -> dict[str, Any]:
     span = DateSpan(start, min(start + timedelta(days=60), EVENT_END))
     day = record.pick(rng, "marriage_registration.date", span,
                       [10 if index == 0 else 4 if index <= 5 else 0.3 for index in range(len(span))])
-    return {"marriage_registration.date": day, "marriage_registration.matricula": build_matricula(rng, day.year, "2")}
+    return {"marriage_registration.date": day,
+            "marriage_registration.matricula": build_matricula(rng, record.value("office.cns"), day.year, "2")}
 
 
 CLERK_ROLES = ("OFICIAL DE REGISTRO CIVIL", "OFICIAL SUBSTITUTO", "ESCREVENTE AUTORIZADO", "ESCREVENTE SUBSTITUTO")
@@ -1469,15 +1481,18 @@ def office(record, rng: random.Random) -> dict[str, Any]:
     context = record.context
     if context == "certidao_nascimento":
         municipality, uf = record.value("registration.office.municipality"), record.value("registration.office.uf")
+        name = record.value("registration.office.name")
     elif context == "declaracao_obito":
         municipality, uf = record.value("death_registration.office.municipality"), record.value("death_registration.office.uf")
+        name = record.value("death_registration.office.name")
     else:
         chosen = rng.choice(LOCATION_PROFILES)
         municipality, uf = chosen["city"], chosen["uf"]
+        name = rng.choice(REGISTRY_OFFICE_NAMES)
     profile = next(item for item in LOCATION_PROFILES if item["city"] == municipality)
     number = house_number(record, rng, "office.address_number")
     return {
-        "office.cns": record.draw("office.cns", rng, lambda: digits(rng, 6)),
+        "office.cns": office_cns(record, name, profile["ibge"]),
         "office.official_name": record.draw("office.official_name", rng, lambda: person_name(record, rng, rng.choice(("F", "M")))),
         "office.city_uf": f"{municipality} - {uf}",
         "office.address": (f"{profile['street']}, nº {number}, {profile['neighborhood']}, "
@@ -1491,9 +1506,14 @@ def certificate(record, rng: random.Random) -> dict[str, Any]:
         start = record.value(OFFICE_REGISTRATION_DATE_KEYS[context])
     else:
         start = max((record.value(key) for key in OFFICE_REGISTRATION_DATE_KEYS.values()), default=EVENT_START)
-    span = DateSpan(start, min(start + timedelta(days=5 * 365), EVENT_END))
-    day = record.pick(rng, "certificate.issue_date", span,
-                      [8 if index <= 30 else 2 if index <= 365 else 0.2 for index in range(len(span))])
+    if start >= MATRICULA_START:
+        span = DateSpan(start, min(start + timedelta(days=5 * 365), EVENT_END))
+        weights = [8 if index <= 30 else 2 if index <= 365 else 0.2 for index in range(len(span))]
+    else:
+        # The certidão with a matrícula exists only from 2010 (Provimento CNJ 3/2009): a copy of an
+        # older registration is issued at a date between 2010 and the reference date.
+        span, weights = DateSpan(MATRICULA_START, EVENT_END), None
+    day = record.pick(rng, "certificate.issue_date", span, weights)
     sex = rng.choice(("F", "M"))
     city_uf = record.value("office.city_uf")
     return {

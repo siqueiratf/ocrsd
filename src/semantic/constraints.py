@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from typing import Any, Callable, Mapping
 
 from src.field_rules import format_date
+from src.semantic.present import matricula_check_digits
 from src.semantic.data import ANOMALY_CODES, LOCATION_PROFILES, OCCUPATION_CODES, occupation_cbo_for
 from src.semantic.registry import REGISTRY
 
@@ -15,6 +16,7 @@ ADDRESS_PREFIXES = ("birth.place", "mother.residence", "deceased.residence", "de
                     "spouse2.naturalidade", "parent1.naturalidade", "parent2.naturalidade")
 SEXES = frozenset({"M", "F"})
 REFERENCE_END = date(2025, 12, 31)
+MATRICULA_START = date(2010, 1, 1)
 EVENT_DATES = ("birth.date", "filling.date", "registration.date", "death.date", "death_registration.date",
               "marriage.date", "marriage_registration.date", "certificate.issue_date")
 MANDATORY_SEPARATION_AGE = 70
@@ -189,6 +191,8 @@ def _matricula(values: Mapping[str, Any]) -> str | None:
         return f"o ano da matrícula ({matricula[10:14]}) difere do ano do registro ({values['registration.date'].year})"
     if matricula[14] != "1":
         return "a matrícula de nascimento usa o livro A (tipo 1)"
+    if matricula[30:] != matricula_check_digits(matricula[:30]):
+        return "os dígitos verificadores da matrícula não conferem (módulo 11)"
     if values["registration.number"] != str(int(matricula[23:30])):
         return "o número do registro precisa coincidir com o termo da matrícula"
     return None
@@ -238,6 +242,8 @@ def _matricula_livro(key: str, date_key: str, livro: str, title: str) -> Constra
             return f"o ano da matrícula ({matricula[10:14]}) difere do ano do registro ({values[date_key].year})"
         if matricula[14] != livro:
             return f"a matrícula de {title} usa o livro código {livro}"
+        if matricula[30:] != matricula_check_digits(matricula[:30]):
+            return "os dígitos verificadores da matrícula não conferem (módulo 11)"
         return None
     return Constraint(f"matricula_coerente:{key}", (key, date_key), (REGISTRY[key].entity,), check)
 
@@ -411,6 +417,9 @@ CONSTRAINTS: tuple[Constraint, ...] = (
     Constraint("registro_de_casamento_apos_celebracao", ("marriage_registration.date", "marriage.date"), ("marriage_registration",),
                lambda values: None if values["marriage_registration.date"] >= values["marriage.date"]
                else "o registro do casamento é anterior à celebração"),
+    Constraint("emissao_com_matricula", ("certificate.issue_date",), ("certificate",),
+               lambda values: None if values["certificate.issue_date"] >= MATRICULA_START
+               else "a certidão com matrícula só existe a partir de 2010"),
     _issue_after("registration.date"), _issue_after("death_registration.date"), _issue_after("marriage_registration.date"),
     Constraint("endereco_do_oficio_coerente", ("office.address", "office.city_uf"), ("office",), _office_address_coherent),
     Constraint("resumo_de_emissao_coerente", ("certificate.issue_summary", "office.city_uf", "certificate.issue_date"),

@@ -64,6 +64,16 @@ def format_matricula(digits: str) -> str:
             f"{digits[20:23]}.{digits[23:30]}-{digits[30:]}")
 
 
+def matricula_check_digits(body: str) -> str:
+    """The two check digits of a CNJ matrícula (Provimento CNJ 3/2009): modulo 11 over the 30 digits with
+    the weights 2..10, 0, 1, 2... and then over the 31 digits with the weights 1..10, 0, 1...; a
+    remainder of 10 gives 1."""
+    first = sum(int(digit) * ((index + 2) % 11) for index, digit in enumerate(body)) % 11
+    first = 1 if first == 10 else first
+    second = sum(int(digit) * ((index + 1) % 11) for index, digit in enumerate(body + str(first))) % 11
+    return f"{first}{1 if second == 10 else second}"
+
+
 def _identifier(kind: str, digits: str) -> list[str]:
     if kind == "cpf":
         return [f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}", digits]
