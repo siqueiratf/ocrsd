@@ -128,6 +128,8 @@ class JobStore:
             for column in ("records", "replay_of"):
                 if column not in columns:
                     db.execute(f"ALTER TABLE jobs ADD COLUMN {column} TEXT")
+            if "bytes" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN bytes INTEGER")
             analysis_columns = {row[1] for row in db.execute("PRAGMA table_info(analyses)")}
             for column, definition in (("page", "INTEGER NOT NULL DEFAULT 1"), ("context", "TEXT"), ("mapping_id", "TEXT NOT NULL DEFAULT 'default'"),
                                        ("model_version", "INTEGER"), ("mapping_revision", "TEXT"), ("pdf_sha256", "TEXT"),
@@ -227,8 +229,8 @@ class JobStore:
                 raise ServiceError(429, "queue_full", "Fila cheia; tente mais tarde")
             if db.execute("SELECT COUNT(*) FROM jobs WHERE client=? AND created_at>?", (client_hash, now - 3600)).fetchone()[0] >= self.settings.jobs_per_hour:
                 raise ServiceError(429, "rate_limit", "Limite horário de jobs atingido")
-            reserved, reserved_count = db.execute("SELECT COALESCE(SUM(total),0), COUNT(*) FROM jobs WHERE status != 'expired'").fetchone()
-            reserved_budget = reserved_count * self.settings.max_job_bytes + reserved * self.settings.job_bytes_per_document
+            active = db.execute("SELECT id,status,total,bytes FROM jobs WHERE status != 'expired'").fetchall()
+            reserved_budget = sum(self.job_reservation(row) for row in active)
             new_budget = self.settings.job_byte_budget(options.count)
             if reserved_budget + new_budget + self.cache_bytes() > self.settings.max_storage_bytes:
                 raise ServiceError(429, "storage_quota", "Armazenamento reservado esgotado; aguarde a expiração")
@@ -369,22 +371,45 @@ class JobStore:
             db.execute("UPDATE jobs SET artifacts=?,completed=?,updated_at=? WHERE id=?",
                        (json.dumps(artifacts), completed, time.time(), identifier))
 
+    def job_reservation(self, row: dict) -> int:
+        if row["status"] in ("queued", "running"):
+            return self.settings.max_job_bytes + row["total"] * self.settings.job_bytes_per_document
+        return row["bytes"] if row["bytes"] is not None else self.directory_bytes(row["id"])
+
+    def directory_bytes(self, identifier: str) -> int:
+        directory = self.directory(identifier)
+        if not directory.is_dir():
+            return 0
+        return sum(path.stat().st_size for path in directory.rglob("*") if path.is_file())
+
     def finish(self, identifier: str, status: str, error: str | None = None, artifacts: list | None = None) -> None:
         now = time.time()
+        size = self.directory_bytes(identifier)
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT cancel_requested,artifacts FROM jobs WHERE id=?", (identifier,)).fetchone()
             if row[0]:
                 status, error = "cancelled", None
-            db.execute("UPDATE jobs SET status=?,error=?,artifacts=?,updated_at=?,finished_at=?,expires_at=? WHERE id=?",
+            db.execute("UPDATE jobs SET status=?,error=?,artifacts=?,updated_at=?,finished_at=?,expires_at=?,bytes=? WHERE id=?",
                        (status, error, json.dumps(artifacts if artifacts is not None else json.loads(row["artifacts"])), now, now,
-                        now + self.settings.retention_hours * 3600, identifier))
+                        now + self.settings.retention_hours * 3600, size, identifier))
 
     def cancel(self, identifier: str) -> dict:
         with self.connection() as db:
             db.execute("UPDATE jobs SET cancel_requested=1, status=CASE WHEN status='queued' THEN 'cancelled' ELSE status END, updated_at=? WHERE id=? AND status IN ('queued','running')",
                        (time.time(), identifier))
         return self.get(identifier)
+
+    def delete_job(self, identifier: str) -> None:
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT status FROM jobs WHERE id=?", (identifier,)).fetchone()
+            if not row:
+                raise ServiceError(404, "not_found", "Job não encontrado")
+            if row["status"] not in ("succeeded", "failed", "cancelled", "expired"):
+                raise ServiceError(409, "job_active", "Cancele o job antes de excluí-lo")
+            db.execute("UPDATE jobs SET status='expired',artifacts='[]',bytes=0 WHERE id=?", (identifier,))
+        shutil.rmtree(self.directory(identifier), ignore_errors=True)
 
     def recover(self) -> None:
         with self.connection() as db:

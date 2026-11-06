@@ -120,7 +120,7 @@ def build_collection() -> dict:
         "handwriting_preview": "Gerar amostras de escrita", "realism_preview": "Comparar realismo",
         "configurations": "Listar configurações", "create_configuration": "Salvar configuração",
         "delete_configuration": "Excluir configuração", "validate": "Validar geração", "submit": "Criar dataset",
-        "jobs": "Histórico de gerações", "job": "Aguardar conclusão", "cancel": "Cancelar job", "results": "Listar artefatos",
+        "jobs": "Histórico de gerações", "job": "Aguardar conclusão", "cancel": "Cancelar job", "delete_job": "Excluir job", "results": "Listar artefatos",
         "artifact": "Baixar artefato", "shares": "Listar links", "create_share": "Criar link controlado",
         "revoke_share": "Revogar link", "shared": "Abrir resultado compartilhado", "shared_artifact": "Abrir artefato compartilhado",
     }

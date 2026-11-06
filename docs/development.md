@@ -105,7 +105,7 @@ cache de modelos entre jobs. A implantação fornecida utiliza CPU.
 | `OCRSD_MAX_JOB_BYTES` | 268435456 | Tamanho-base por job em bytes (256 MiB), incluindo ZIP e temporários; somado a `count * OCRSD_JOB_BYTES_PER_DOCUMENT` |
 | `OCRSD_JOB_BYTES_PER_DOCUMENT` | 4194304 | Bytes adicionais de orçamento por documento solicitado no job (4 MiB) |
 | `OCRSD_MAX_UPLOAD_BYTES` | 12582912 | Limite do template PDF enviado; 12 MiB |
-| `OCRSD_MAX_STORAGE_BYTES` | 4294967296 | Reserva de saídas: 4 GiB; a reserva de cada job escala com `count`, então o número de jobs não expirados simultâneos varia |
+| `OCRSD_MAX_STORAGE_BYTES` | 4294967296 | Reserva de saídas: 4 GiB. Jobs na fila ou em execução reservam o pior caso (`OCRSD_MAX_JOB_BYTES` + `count * OCRSD_JOB_BYTES_PER_DOCUMENT`); jobs terminados (sucesso, falha ou cancelados) contam o tamanho real em disco, medido uma vez ao terminar e guardado na coluna `bytes` |
 | `OCRSD_MIN_FREE_BYTES` | 536870912 | Margem livre mínima; 512 MiB |
 | `OCRSD_MEMORY_MB` | 4096 | Limite de espaço virtual do subprocesso, além do cgroup |
 | `OCRSD_NEURAL_ENABLED` | false no código; true no exemplo de deploy | Requer habilitação e pesos completos instalados pelo administrador |
@@ -198,6 +198,9 @@ capacidades. `POST /api/v1/generation/validate` valida a configuração;
 `POST /api/v1/jobs` retorna a chave; consultas, cancelamento, resultados e artefatos
 exigem `Authorization: Bearer <chave>`. `download=false` entrega PDF inline.
 Resultados incompletos retornam 409; expirados, 410; acessos com chave incorreta, 404.
+`DELETE /api/v1/jobs/{job_id}` remove um job terminado (mesma autorização) e libera
+sua reserva de armazenamento de uma vez; jobs na fila ou em execução retornam 409 e
+devem ser cancelados antes.
 Erros da aplicação seguem `{"error":{"code":"...","message":"..."}}`.
 POST exige JSON e Content-Length. Corpos comuns têm limite de 32 KiB, mapas de 128 KiB
 e cadastro de modelo permite o PDF base64 dentro do limite configurado. O servidor

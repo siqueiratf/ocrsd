@@ -265,6 +265,62 @@ class WebTests(unittest.TestCase):
         self.settings.max_storage_bytes = self.settings.max_job_bytes
         self.assertEqual(self.client.post("/api/v1/jobs", json=self.options.model_dump()).json()["error"]["code"], "storage_quota")
 
+    def test_finished_jobs_reserve_real_bytes_not_worst_case(self):
+        job, headers = self.submit()
+        self.store.finish(job["id"], "succeeded", artifacts=[])
+        directory = self.store.directory(job["id"])
+        directory.mkdir(exist_ok=True)
+        (directory / "output.pdf").write_bytes(b"x" * 1000)
+        with self.store.connection() as db:
+            db.execute("UPDATE jobs SET bytes=? WHERE id=?", (1000, job["id"]))
+        self.settings.max_storage_bytes = self.settings.job_byte_budget(self.options.count) + 10_000
+        response = self.client.post("/api/v1/jobs", json=self.options.model_dump())
+        self.assertEqual(response.status_code, 202, response.text)
+
+    def test_many_finished_small_jobs_do_not_block_submit(self):
+        self.settings.jobs_per_hour = 10**6
+        for _ in range(20):
+            job, _ = self.submit()
+            self.store.finish(job["id"], "succeeded", artifacts=[])
+            with self.store.connection() as db:
+                db.execute("UPDATE jobs SET bytes=? WHERE id=?", (1024, job["id"]))
+        response = self.client.post("/api/v1/jobs", json=self.options.model_dump())
+        self.assertEqual(response.status_code, 202, response.text)
+
+    def test_queued_and_running_jobs_still_reserve_worst_case(self):
+        self.submit()
+        self.settings.max_storage_bytes = self.settings.max_job_bytes
+        self.assertEqual(self.client.post("/api/v1/jobs", json=self.options.model_dump()).json()["error"]["code"], "storage_quota")
+
+    def test_finished_job_without_stored_bytes_falls_back_to_directory_size(self):
+        job, _ = self.submit()
+        self.store.finish(job["id"], "succeeded", artifacts=[])
+        with self.store.connection() as db:
+            db.execute("UPDATE jobs SET bytes=NULL WHERE id=?", (job["id"],))
+        directory = self.store.directory(job["id"])
+        directory.mkdir(exist_ok=True)
+        (directory / "output.pdf").write_bytes(b"x" * 2048)
+        self.assertEqual(self.store.directory_bytes(job["id"]), 2048)
+        self.settings.max_storage_bytes = self.settings.job_byte_budget(self.options.count) + 10_000
+        response = self.client.post("/api/v1/jobs", json=self.options.model_dump())
+        self.assertEqual(response.status_code, 202, response.text)
+
+    def test_delete_job_removes_finished_job_and_rejects_active_or_unauthorized(self):
+        job, headers = self.submit()
+        self.assertEqual(self.client.request("DELETE", f'/api/v1/jobs/{job["id"]}', headers=headers).status_code, 409)
+        self.store.finish(job["id"], "succeeded", artifacts=[])
+        directory = self.store.directory(job["id"])
+        directory.mkdir(exist_ok=True)
+        (directory / "output.pdf").write_bytes(b"x")
+        other, other_headers = self.submit()
+        self.store.finish(other["id"], "succeeded", artifacts=[])
+        self.assertEqual(self.client.request("DELETE", f'/api/v1/jobs/{job["id"]}', headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.request("DELETE", f'/api/v1/jobs/{job["id"]}').status_code, 401)
+        response = self.client.request("DELETE", f'/api/v1/jobs/{job["id"]}', headers=headers)
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(directory.exists())
+        self.assertEqual(self.client.get(f'/api/v1/jobs/{job["id"]}', headers=headers).json()["status"], "expired")
+
     def test_count_limit_depends_on_the_writing_model(self):
         self.assertIsNone(self.settings.max_count)
         catalog = Catalog(self.settings)

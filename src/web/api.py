@@ -389,6 +389,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def cancel(row: Annotated[dict, Depends(authorized)]):
         return store.response(store.cancel(row["id"]))
 
+    @app.delete("/api/v1/jobs/{job_id}", status_code=204, tags=["Jobs"])
+    async def delete_job(row: Annotated[dict, Depends(authorized)]):
+        store.delete_job(row["id"])
+
     @app.get("/api/v1/jobs/{job_id}/results", response_model=Results, tags=["Resultados"])
     async def results(row: Annotated[dict, Depends(authorized)]):
         return Results(artifacts=store.artifacts(row))

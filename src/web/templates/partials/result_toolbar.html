@@ -7,5 +7,6 @@
     {% if job.status == 'succeeded' and not result.problem %}<button type="button" class="btn btn-sm" hx-get="/resultados/{{ job.id }}/compartilhar" hx-target="#modal">{{ icon('share') }}Compartilhar</button>{% endif %}
     {% if job.options %}<button type="button" class="btn btn-sm" hx-post="/resultados/{{ job.id }}/reutilizar" hx-swap="none">{{ icon('reload') }}Reutilizar configuração</button>{% endif %}
     <button type="button" class="icon-btn" hx-get="/resultados/{{ job.id }}/detalhes" hx-target="#modal" aria-label="Detalhes do dataset" data-tooltip="Detalhes">{{ icon('settings') }}</button>
+    {% if job.status not in ACTIVE %}<button type="button" class="icon-btn is-danger" hx-post="/resultados/{{ job.id }}/excluir" hx-confirm="Excluir o dataset “{{ job.name }}”? Esta ação remove os documentos gerados e não pode ser desfeita." aria-label="Excluir dataset" data-tooltip="Excluir dataset">{{ icon('trash') }}</button>{% endif %}
   </div>
 </header>

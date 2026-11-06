@@ -1314,6 +1314,12 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
         owned_job(owner_id, job_id)
         return render(request, "partials/result_name.html", job=store.detail(store.cancel(job_id)))
 
+    @router.post("/resultados/{job_id}/excluir")
+    async def result_delete(job_id: Identifier, owner_id: Owner):
+        owned_job(owner_id, job_id)
+        store.delete_job(job_id)
+        return Response(headers={"HX-Redirect": "/resultados"})
+
     @router.post("/resultados/{job_id}/renomear")
     async def result_rename(request: Request, job_id: Identifier, owner_id: Owner):
         name = text(await request.form(), "nome")
