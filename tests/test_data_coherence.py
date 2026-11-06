@@ -67,5 +67,19 @@ class MatriculaTests(unittest.TestCase):
                         self.assertGreaterEqual(issued, values[key], document)
 
 
+class CoupleTests(unittest.TestCase):
+    def test_same_sex_couples_marry_only_from_2013_05_16(self):
+        for document in ("certidao_casamento", "certidao_casamento_cnj"):
+            for values, record in records(document):
+                sexes = record._links["marriage.couple"]
+                if sexes[0] == sexes[1]:
+                    self.assertGreaterEqual(values["marriage.date"], date(2013, 5, 16))
+
+    def test_same_sex_share_is_small(self):
+        from src.semantic.generators import couple_sexes
+        same = sum(len(set(couple_sexes(SemanticRecord(seed, "certidao_casamento")))) == 1 for seed in range(20000))
+        self.assertTrue(20 <= same <= 100, same)
+
+
 if __name__ == "__main__":
     unittest.main()

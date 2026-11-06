@@ -1395,8 +1395,27 @@ SPOUSE_NATIONALITY_WEIGHTS = (1,)
 MARITAL_STATUS_BEFORE = ("SOLTEIRO(A)", "DIVORCIADO(A)", "VIÚVO(A)")
 
 
+SAME_SEX_MARRIAGE_START = date(2013, 5, 16)  # CNJ Resolução 175/2013
+SAME_SEX_MARRIAGE_SHARE = 0.01
+
+
+def couple_sexes(record) -> tuple[str, str]:
+    """The sexes of the two spouses, drawn together. A same-sex couple marries only from
+    SAME_SEX_MARRIAGE_START, at about SAME_SEX_MARRIAGE_SHARE of the marriages of that period."""
+    def draw(rng: random.Random) -> tuple[str, str]:
+        required = record.required_values("marriage.date") if hasattr(record, "required_values") else None
+        later = (EVENT_END - SAME_SEX_MARRIAGE_START).days / (EVENT_END - EVENT_START).days
+        share = SAME_SEX_MARRIAGE_SHARE * later / (1 - SAME_SEX_MARRIAGE_SHARE + SAME_SEX_MARRIAGE_SHARE * later)
+        if required is not None and not any(day >= SAME_SEX_MARRIAGE_START for day in required):
+            share = 0.0
+        if rng.random() < share:
+            return rng.choice((("F", "F"), ("M", "M")))
+        return rng.choice((("F", "M"), ("M", "F")))
+    return record.link("marriage.couple", draw)
+
+
 def _spouse(record, rng: random.Random, prefix: str) -> dict[str, Any]:
-    sex = rng.choice(("F", "M"))
+    sex = couple_sexes(record)[int(prefix[-1]) - 1]
     name = record.draw(f"{prefix}.name", rng, lambda: person_name(record, rng, sex))
     nationality = record.pick(rng, f"{prefix}.nationality", SPOUSE_NATIONALITIES, SPOUSE_NATIONALITY_WEIGHTS)
     profile = pick_profile(record, rng, f"{prefix}.naturalidade", parts=("municipality", "uf"))
@@ -1443,7 +1462,8 @@ def _spouse_marital_status(rng: random.Random, record, prefix: str, age: int) ->
 
 
 def marriage(record, rng: random.Random) -> dict[str, Any]:
-    day = record.pick(rng, "marriage.date", DateSpan(EVENT_START, EVENT_END))
+    same_sex = len(set(couple_sexes(record))) == 1
+    day = record.pick(rng, "marriage.date", DateSpan(SAME_SEX_MARRIAGE_START if same_sex else EVENT_START, EVENT_END))
     age1, born1 = age_and_birth_date(record, rng, "spouse1", day, SPOUSE_AGES, SPOUSE_AGE_WEIGHTS)
     age2, born2 = age_and_birth_date(record, rng, "spouse2", day, SPOUSE_AGES, SPOUSE_AGE_WEIGHTS)
     if max(age1, age2) >= MANDATORY_SEPARATION_AGE:
