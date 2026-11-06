@@ -168,9 +168,9 @@ class SyntheticValueTests(unittest.TestCase):
 
     def test_font_handwriting_output_is_pinned(self):
         cases = (
-            (render_handwritten_text, ("Ana Silva", 300, 40), {}, "42d346b747b4a098b4e5b28a4743c06c86b06c416233e846486f76d115797db0", 0.2540188673529882),
-            (render_handwritten_text, ("Ana Silva", 300, 40), {"medium": "pen"}, "67243d2f0ed49db9e0d01582172634c0046c64be5d9d2db75a8369c1690ed2ca", 0.4771800584595053),
-            (render_handwritten_numeric, ("58001", 180, 40), {}, "788cdf1cde25a07afbd8eabec467685dc57274de4276d7728006c1b34ff1b168", 0.7614225289864733),
+            (render_handwritten_text, ("Ana Silva", 300, 40), {}, "ab72c35a7764c3dd89544553cf8cc7aca49f0106316ba2da31c0023654f8ebef", 0.2540188673529882),
+            (render_handwritten_text, ("Ana Silva", 300, 40), {"medium": "pen"}, "f7393c3610ca64c988985a829a50df034baea8c98c16982a28259119b02dfd48", 0.4771800584595053),
+            (render_handwritten_numeric, ("58001", 180, 40), {}, "261c55de206b6f67a9a1c5dd9525f839a9f127fabc23a63fb8a75d59a91ada87", 0.7614225289864733),
         )
         for render, args, options, digest, next_value in cases:
             rng = random.Random(4242)

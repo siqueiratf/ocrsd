@@ -91,6 +91,7 @@ TYPED_RIGHT_PAD_PT = 1.0
 # for a natural "person started writing near the edge" look, not literally flush.
 HANDWRITING_LEFT_PAD_HEIGHT_FRAC = 0.12
 HANDWRITING_MIN_LEFT_PAD_PX = 2
+HANDWRITING_MAX_SQUASH = 1.25  # maximum horizontal compression of a font handwriting line
 
 
 @functools.lru_cache(maxsize=16)
@@ -367,8 +368,8 @@ def _handwriting_font(fontfile: str, size: int) -> ImageFont.FreeTypeFont:
 
 
 @functools.lru_cache(maxsize=512)
-def _glyph_outline(character: str, height: int, font_size: int, stroke: int, fontfile: str) -> Image.Image | None:
-    """Return the cropped 4x glyph mask. Callers must not change the image in place."""
+def _glyph_outline(character: str, height: int, font_size: int, stroke: int, fontfile: str) -> tuple[Image.Image, float] | None:
+    """Return the cropped 4x glyph mask and the y of its centre below the baseline. Callers must not change the image in place."""
     scale = 4
     font = _handwriting_font(fontfile, font_size)
     bbox = font.getbbox(character or " ", stroke_width=1)
@@ -381,17 +382,22 @@ def _glyph_outline(character: str, height: int, font_size: int, stroke: int, fon
     crop = glyph.getbbox()
     if crop is None:
         return None
-    return glyph.crop((max(0, crop[0]-4), max(0, crop[1]-4), min(glyph.width, crop[2]+4), min(glyph.height, crop[3]+4)))
+    box = (max(0, crop[0]-4), max(0, crop[1]-4), min(glyph.width, crop[2]+4), min(glyph.height, crop[3]+4))
+    ascent, descent = font.getmetrics()
+    baseline = glyph.height // 2 + (ascent - descent) / 2
+    return glyph.crop(box), (box[1] + box[3]) / 2 - baseline
 
 
 def _render_glyph(character: str, height: int, style: HandwritingStyle,
                   rng: random.Random, intensity: float, medium: str = "pen",
-                  font_family: str = DEFAULT_FONT_FAMILY) -> Image.Image:
+                  font_family: str = DEFAULT_FONT_FAMILY) -> tuple[Image.Image, float]:
+    """Return the glyph mask and the y of its centre below the baseline."""
     scale = 4
-    glyph = _glyph_outline(character, height, max(12, round(height * scale * 1.08 * style.size_scale)),
+    outline = _glyph_outline(character, height, max(12, round(height * scale * 1.08 * style.size_scale)),
                            max(0, 1 + style.stroke_bias), str(font_path(font_family)))
-    if glyph is None:
-        return Image.new("L", (max(1, round(height * 0.3)), height), 0)
+    if outline is None:
+        return Image.new("L", (max(1, round(height * 0.3)), height), 0), -height / 2
+    glyph, centre = outline
     width_factor = style.width_scale * rng.uniform(1 - 0.10*intensity, 1 + 0.10*intensity)
     glyph = glyph.resize((max(1, round(glyph.width * width_factor)), glyph.height), Image.Resampling.LANCZOS)
     angle = style.rotation + rng.uniform(-3.2, 3.2) * intensity
@@ -410,7 +416,7 @@ def _render_glyph(character: str, height: int, style: HandwritingStyle,
     return glyph.resize(
         (max(1, round(glyph.width / scale)), max(1, round(glyph.height / scale))),
         Image.Resampling.LANCZOS,
-    )
+    ), centre / scale
 
 
 def render_handwritten_text(text: str, width: int, height: int, rng: random.Random,
@@ -427,22 +433,32 @@ def render_handwritten_text(text: str, width: int, height: int, rng: random.Rand
     style = style or random_handwriting_style(rng, intensity, medium=medium)
     glyphs = [_render_glyph(character, height, style, rng, intensity, medium=medium, font_family=font_family) for character in text]
     gap = max(0, round(height * 0.025 * style.spacing_scale))
-    content_width = sum(glyph.width for glyph in glyphs) + gap * max(0, len(glyphs)-1)
-    mask = Image.new("L", (max(width, content_width + 4), height), 0)
-    cursor = 2
-    for glyph in glyphs:
+    content_width = sum(glyph.width for glyph, _ in glyphs) + gap * max(0, len(glyphs)-1)
+    cursor, placed = 2, []
+    for glyph, centre in glyphs:
         baseline = round(style.baseline_bias * height + rng.uniform(-0.045, 0.045) * height * intensity)
-        y = (height - glyph.height) // 2 + baseline
-
-
-        mask.paste(glyph, (cursor, y))
+        # Put the glyph centre at its distance below the shared baseline, thus descenders and
+        # marks such as "," "." "º" keep their height in the line.
+        y = (height - glyph.height) // 2 + baseline if len(text) <= 1 else round(centre - glyph.height / 2) + baseline
+        placed.append((glyph, cursor, y))
         cursor += glyph.width + gap
-    crop = mask.getbbox()
+    top = min((y for _, _, y in placed), default=0)
+    line = Image.new("L", (max(width, content_width + 4), max(height, max((y + glyph.height for glyph, _, y in placed), default=0) - top)), 0)
+    for glyph, x, y in placed:
+        line.paste(glyph, (x, y - top if len(text) > 1 else y))
+    crop = line.getbbox()
+    mask = Image.new("L", (width, height), 0)
     if crop is not None:
-        content = mask.crop((0, 0, min(mask.width, max(cursor, crop[2]+2)), height))
-        if content.width > width:
-            content = content.resize((width, height), Image.Resampling.LANCZOS)
-        mask = Image.new("L", (width, height), 0)
+        if len(text) <= 1:
+            content = line.crop((0, 0, min(line.width, max(cursor, crop[2]+2)), height))
+        else:
+            content = line.crop((0, max(0, crop[1]-1), min(line.width, max(cursor, crop[2]+2)), min(line.height, crop[3]+1)))
+        # Make the line smaller as one unit to fit the field height. Squash it horizontally
+        # to a maximum of HANDWRITING_MAX_SQUASH, and make it smaller as one unit after that.
+        shrink = min(1.0, height / content.height, width * HANDWRITING_MAX_SQUASH / content.width)
+        target = (min(width, max(1, round(content.width * shrink))), min(height, max(1, round(content.height * shrink))))
+        if target != content.size:
+            content = content.resize(target, Image.Resampling.LANCZOS)
         if len(text) <= 1:
             # Single characters are composite digit-box cells or checkbox marks
             # (one glyph per box): centring is correct there, like a person filling
@@ -455,7 +471,7 @@ def render_handwritten_text(text: str, width: int, height: int, rng: random.Rand
             # fields -- vs. the typed-text/real-form norm of a small left margin).
             left_pad = max(round(HANDWRITING_LEFT_PAD_HEIGHT_FRAC * height), HANDWRITING_MIN_LEFT_PAD_PX)
             x0 = min(left_pad, max(0, width - content.width))
-        mask.paste(content, (x0, 0))
+        mask.paste(content, (x0, min(max(0, (height - content.height) // 2 + round(style.baseline_bias * height)), height - content.height)))
     rgba = Image.new("RGBA", (width, height), (*style.ink, 0))
     rgba.putalpha(mask)
     return rgba
