@@ -57,7 +57,7 @@
         </a>
         <a class="repo-stars" href="https://github.com/siqueiratf/ocrsd" target="_blank" rel="noopener" title="Deixe uma estrela no GitHub" aria-label="Deixar uma estrela no GitHub">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
-          <span hx-get="/github/estrelas" hx-trigger="load" hx-swap="outerHTML"></span>
+          <span hx-get="/github/estrelas" hx-trigger="load" hx-swap="outerHTML" data-contagem-estrelas></span>
         </a>
         <a class="repo-contribute" href="https://github.com/siqueiratf/ocrsd/issues" target="_blank" rel="noopener" title="Contribuir: relatar um problema ou sugerir uma melhoria no GitHub" aria-label="Contribuir no GitHub"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></a>
         {% if OCRSD_COMMIT %}

@@ -154,6 +154,13 @@
       .catch(() => { label.textContent = 'Use Ctrl+C' })
   }
 
+  document.addEventListener('htmx:beforeSwap', event => {
+    if (event.detail.isError && event.detail.elt.matches?.('[data-contagem-estrelas]')) {
+      event.detail.shouldSwap = false
+      event.detail.isError = false
+    }
+  })
+
   document.addEventListener('htmx:afterSwap', event => {
     const dialog = modal()
     if (event.detail.target === dialog && dialog.childElementCount && !dialog.open) dialog.showModal()
