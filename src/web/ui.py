@@ -364,10 +364,13 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
             state["original_model_unavailable"] = True
         return state
 
+    def legacy(model_id: str) -> bool:
+        return model_id in catalog.types and catalog.types[model_id].legacy
+
     def model_groups(types: list[dict], current: dict | None) -> list[dict]:
         by_org: dict[str, dict] = {}
         for item in types:
-            if not item["builtin"]:
+            if not item["builtin"] or (legacy(item["id"]) and item is not current):
                 continue
             org = item["orgao"] or {"key": "outros", "sigla": "Outros", "nome": "Outros"}
             group = by_org.setdefault(org["key"], {"key": org["key"], "sigla": org["sigla"], "nome": org["nome"], "docs": []})
@@ -653,6 +656,8 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
     def gallery(owner_id: str) -> list[dict]:
         items = []
         for model in catalog.document_models(store.list_models(owner_id)):
+            if model.builtin and legacy(model.id):
+                continue
             mappings = [path.stem for path in catalog.types[model.id].mappings] if model.builtin else [model.mapping_id]
             items.append({"model": model, "mappings": mappings, "composed": not model.builtin and store.layout(model.id) is not None})
         return items
@@ -1724,7 +1729,7 @@ def mount_ui(app: FastAPI, settings: Settings, store, catalog: Catalog, probe=No
 
     @router.get("/ferramentas/realismo")
     async def realism_page(request: Request, owner_id: PageOwner):
-        return render(request, "realism_page.html", page="ferramentas", types=catalog.document_types(store.list_models(owner_id)))
+        return render(request, "realism_page.html", page="ferramentas", types=[item for item in catalog.document_types(store.list_models(owner_id)) if not legacy(item["id"])])
 
     @router.post("/ferramentas/realismo")
     async def realism_compare(request: Request, owner_id: Owner):

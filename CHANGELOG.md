@@ -2,6 +2,10 @@
 
 ## [Não publicado]
 
+- Novo status `legado` no catálogo: o modelo continua gerando para jobs antigos e para a CLI,
+  mas some da Galeria de Modelos, da etapa 1 da geração e da ferramenta de realismo. A
+  certidão de nascimento do Provimento CNJ nº 63/2017 passa a ser legada.
+
 ## [V1.0.0] — 2026-10-26
 
 Marco de produção da plataforma web no servidor 2. O histórico anterior de tags

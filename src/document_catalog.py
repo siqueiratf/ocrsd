@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 CATALOG_FILENAME = "catalogo.json"
-STATUSES = {"disponivel", "planejado"}
+STATUSES = {"disponivel", "planejado", "legado"}
 PRIORITIES = {"alta", "media", "baixa"}
 
 
@@ -69,7 +69,7 @@ def catalog_issues(catalog: dict, discovered_types: dict) -> list[str]:
         variante_de = entry.get("variante_de")
         if variante_de is not None and variante_de not in documentos:
             issues.append(f"Documento {key}: variante_de aponta para um documento inexistente “{variante_de}”")
-        if status == "disponivel" and key not in discovered_types and not variante_de:
+        if status in {"disponivel", "legado"} and key not in discovered_types and not variante_de:
             issues.append(f"Documento {key}: marcado como disponível, mas não há pasta em documents/{key}")
     for key in discovered_types:
         if key not in documentos:

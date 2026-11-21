@@ -75,6 +75,11 @@ class DocumentType:
         return value.strip() if isinstance(value, str) and value.strip() else "padrao_fonte_natural"
 
     @property
+    def legacy(self) -> bool:
+        """A legacy model still generates (old jobs, CLI), but the web pages do not list it."""
+        return self.catalog_entry.get("status") == "legado"
+
+    @property
     def active_mapping(self) -> Path:
         name = self.metadata.get("active_mapping")
         return next((path for path in self.mappings if path.stem == name), self.mappings[0])

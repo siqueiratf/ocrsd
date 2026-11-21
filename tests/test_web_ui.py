@@ -92,6 +92,19 @@ class InterfaceTests(unittest.TestCase):
         self.assertNotIn(f"/modelos/{model_id}/excluir", self.page("/modelos").text)
         self.assertEqual(self.hx("POST", "/modelos/dnv/excluir").status_code, 404)
 
+    def test_legacy_models_are_hidden_but_still_open(self):
+        legacy = "Modelo anterior de certidão de nascimento"
+        gallery = self.page("/modelos").text
+        self.assertIn("Certidão de Nascimento (CNJ 2024)", gallery)
+        self.assertNotIn(legacy, gallery)
+        wizard = self.page("/geracao").text
+        self.assertIn("modelo=certidao_nascimento_cnj", wizard)
+        self.assertNotIn('modelo=certidao_nascimento"', wizard)
+        realism = self.page("/ferramentas/realismo").text
+        self.assertIn('value="certidao_nascimento_cnj"', realism)
+        self.assertNotIn('value="certidao_nascimento"', realism)
+        self.assertIn(legacy, self.page("/geracao?modelo=certidao_nascimento").text)
+
     def test_unsupported_do_cause_is_visible_but_cannot_be_generated(self):
         first = self.page("/geracao?modelo=do").text
         draft = re.search(r'name="draft_id" value="([0-9a-f]+)"', first).group(1)
@@ -116,7 +129,7 @@ class InterfaceTests(unittest.TestCase):
         self.assertIn("default-src 'self'", first.headers["content-security-policy"])
         self.assertEqual(first.headers["x-frame-options"], "SAMEORIGIN")
         self.assertIn("Galeria de Modelos", first.text)
-        self.assertIn('href="/geracao?modelo=certidao_nascimento"', first.text)
+        self.assertIn('href="/geracao?modelo=certidao_nascimento_cnj"', first.text)
         self.assertNotIn("set-cookie", self.page("/modelos").headers)
         for path, heading in (("/geracao", "Nova geração de dataset"), ("/resultados", "Resultados"),
                               ("/presets/escrita", "Presets de Escrita")):
